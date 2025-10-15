@@ -1,0 +1,22 @@
+{
+  "mcpServers": {
+    "mcp-server-computer": {
+      "command": "java",
+      "args": [
+        "-Dfile.encoding=utf-8",
+        "-Dspring.ai.mcp.server.stdio=true",
+        "-jar",
+        "/Users/tricoqiang/mcp/mcp-server-weixin-1.0.0.jar"
+      ]
+    },
+    "mcp-server-computer-2": {
+      "command": "java",
+      "args": [
+        "-Dfile.encoding=utf-8",
+        "-Dspring.ai.mcp.server.stdio=true",
+        "-jar",
+        "/Users/tricoqiang/mcp/mcp-server-csdn-1.0.0.jar"
+      ]
+    }
+  }
+}

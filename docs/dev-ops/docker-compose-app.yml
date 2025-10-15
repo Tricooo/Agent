@@ -3,17 +3,49 @@ version: '3.8'
 # docker-compose -f docker-compose-app.yml up -d
 # 你需要修改system为你自身系统的仓库名
 services:
-  ai-agent:
-    image: system/ai-agent:1.0-SNAPSHOT
-    container_name: ai-agent
-    restart: on-failure
+  # MCP 服务，CSDN 发帖，注意 CSDN_API_COOKIE 修改为你的。
+  mcp-server-csdn-app:
+    # 课程代码：https://gitcode.net/KnowledgePlanet/mcp-server-csdn
+    #    image: fuzhengwei/mcp-server-csdn-app:1.1
+    image: registry.cn-hangzhou.aliyuncs.com/fuzhengwei/mcp-server-csdn-app:1.1
+    container_name: mcp-server-csdn-app
+    restart: always
     ports:
-      - "8091:8091"
-    environment:
-      - TZ=PRC
-      - SERVER_PORT=8091
+      - "8101:8101"
     volumes:
       - ./log:/data/log
+    environment:
+      - TZ=PRC
+      - SERVER_PORT=8101
+      - CSDN_API_CATEGORIES=Java场景面试宝典
+      - CSDN_API_COOKIE=uuid_tt_dd=10_30711822260-1753780562956-907787
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - my-network
+
+  # 课程代码：https://gitcode.net/KnowledgePlanet/mcp-server-weixin
+  # MCP 服务，微信公众号通知，注意 environment 下的微信配置修改为你的 https://mp.weixin.qq.com/debug/cgi-bin/sandboxinfo?action=showinfo&t=sandbox/index
+  mcp-server-weixin-app:
+    #    image: fuzhengwei/mcp-server-weixin-app:1.1
+    image: registry.cn-hangzhou.aliyuncs.com/fuzhengwei/mcp-server-weixin-app:1.1
+    container_name: mcp-server-weixin-app
+    restart: always
+    ports:
+      - "8102:8102"
+    volumes:
+      - ./log:/data/log
+    environment:
+      - TZ=PRC
+      - SERVER_PORT=8102
+      - WEIXIN_API_ORIGINAL_ID=gh_cb56e2abc0da
+      - WEIXIN_API_APP_ID=wx4ccc45c754b558c8
+      - WEIXIN_API_APP_SECRET=7004d800d75cf25036fc4ebaae58ea87
+      - WEIXIN_API_TEMPLATE_ID=6sxR0vqg4vbX4kquhm2KVYkDs_jdPpF2vw18THEhzas
+      - WEIXIN_API_TOUSER=o-9Ie2GklMnfpZ9gPSXSaeTt73O4
     logging:
       driver: "json-file"
       options:
