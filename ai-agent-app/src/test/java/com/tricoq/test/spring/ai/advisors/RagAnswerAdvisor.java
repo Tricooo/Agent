@@ -25,6 +25,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * rag顾问
+ */
 public class RagAnswerAdvisor implements BaseAdvisor {
 
     private final VectorStore vectorStore;
@@ -34,28 +37,56 @@ public class RagAnswerAdvisor implements BaseAdvisor {
     public RagAnswerAdvisor(VectorStore vectorStore, SearchRequest searchRequest) {
         this.vectorStore = vectorStore;
         this.searchRequest = searchRequest;
-        this.userTextAdvise = "\nContext information is below, surrounded by ---------------------\n\n---------------------\n{question_answer_context}\n---------------------\n\nGiven the context and provided history information and not prior knowledge,\nreply to the user comment. If the answer is not in the context, inform\nthe user that you can't answer the question.\n";
+        //TODO 约束性很强的prompt最好放在SystemMessage合适
+        this.userTextAdvise = """
+                
+                Context information is below, surrounded by ---------------------
+                
+                ---------------------
+                {question_answer_context}
+                ---------------------
+                
+                Given the context and provided history information and not prior knowledge,
+                reply to the user comment. If the answer is not in the context, inform
+                the user that you can't answer the question.
+                """;
     }
 
+    /**
+     * 模型调用前修改请求，加入文档上下文
+     *
+     * @param chatClientRequest
+     * @param advisorChain
+     * @return
+     */
     @Override
     public ChatClientRequest before(ChatClientRequest chatClientRequest, AdvisorChain advisorChain) {
-        HashMap<String, Object> context = new HashMap(chatClientRequest.context());
-
+        //复制上下文 防止修改原始上下文
+        Map<String, Object> context = new HashMap(chatClientRequest.context());
+        //提取用户问题
         String userText = chatClientRequest.prompt().getUserMessage().getText();
         String advisedUserText = userText + System.lineSeparator() + this.userTextAdvise;
 
         String query = (new PromptTemplate(userText)).render();
 
-        SearchRequest searchRequestToUse = SearchRequest.from(this.searchRequest).query(query).filterExpression(this.doGetFilterExpression(context)).build();
+        //使用用户问题构造一个带有过滤条件的请求
+        SearchRequest searchRequestToUse = SearchRequest.from(this.searchRequest).query(query)
+                .filterExpression(this.doGetFilterExpression(context)).build();
         List<Document> documents = this.vectorStore.similaritySearch(searchRequestToUse);
         context.put("qa_retrieved_documents", documents);
 
+        //documentContext 很长时要做裁剪/摘要（Top-K、去重、截断），否则可能超长或稀释关键信息
         String documentContext = documents.stream().map(Document::getText).collect(Collectors.joining(System.lineSeparator()));
         Map<String, Object> advisedUserParams = new HashMap(chatClientRequest.context());
         advisedUserParams.put("question_answer_context", documentContext);
 
         return ChatClientRequest.builder()
-                .prompt(Prompt.builder().messages(new UserMessage(advisedUserText), new AssistantMessage(JSON.toJSONString(advisedUserParams))).build())
+                .prompt(Prompt.builder().messages(new UserMessage(advisedUserText),
+                        //这条可以省去以节省token，以为context已经将占位符替换，模型可以拿到上下文
+                        //AssistantMessage 用于在 Prompt 中表示助手（AI 模型）先前“说过”的内容
+                        new AssistantMessage(JSON.toJSONString(advisedUserParams)))
+                        .build())
+                //这里会替换掉占位符为真实文本
                 .context(advisedUserParams)
                 .build();
     }
@@ -94,7 +125,10 @@ public class RagAnswerAdvisor implements BaseAdvisor {
     }
 
     protected Filter.Expression doGetFilterExpression(Map<String, Object> context) {
-        return context.containsKey("qa_filter_expression") && StringUtils.hasText(context.get("qa_filter_expression").toString()) ? (new FilterExpressionTextParser()).parse(context.get("qa_filter_expression").toString()) : this.searchRequest.getFilterExpression();
+        return context.containsKey("qa_filter_expression") &&
+                StringUtils.hasText(context.get("qa_filter_expression").toString()) ?
+                (new FilterExpressionTextParser()).parse(context.get("qa_filter_expression").toString()) :
+                this.searchRequest.getFilterExpression();
     }
 
 }
