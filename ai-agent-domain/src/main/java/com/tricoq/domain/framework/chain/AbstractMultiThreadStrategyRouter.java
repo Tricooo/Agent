@@ -1,4 +1,4 @@
-package com.tricoq.domain.agent.strategy;
+package com.tricoq.domain.framework.chain;
 
 import lombok.Getter;
 import lombok.Setter;

@@ -1,4 +1,4 @@
-package com.tricoq.domain.agent.strategy;
+package com.tricoq.domain.framework.chain;
 
 /**
  * 赋予节点路由到别的节点的能力

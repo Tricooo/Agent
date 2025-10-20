@@ -1,4 +1,4 @@
-package com.tricoq.domain.agent.strategy;
+package com.tricoq.domain.framework.chain;
 
 /**
  * 赋予节点处理自身的数据的能力
