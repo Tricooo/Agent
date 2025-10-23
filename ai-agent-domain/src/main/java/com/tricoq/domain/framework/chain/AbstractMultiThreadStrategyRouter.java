@@ -15,6 +15,7 @@ public abstract class AbstractMultiThreadStrategyRouter<T, D, R> implements Stra
                                                                             StrategyMapper<T, D, R> {
     @Getter
     @Setter
+    @SuppressWarnings("unchecked")
     private StrategyHandler<T, D, R> defaultHandler = StrategyHandler.DEFAULT;
 
     protected R router(T requestParam, D dynamicContext) {

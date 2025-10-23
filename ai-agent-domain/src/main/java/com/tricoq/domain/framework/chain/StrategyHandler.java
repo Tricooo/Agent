@@ -9,7 +9,12 @@ package com.tricoq.domain.framework.chain;
 @FunctionalInterface
 public interface StrategyHandler<T, D, R> {
 
+    @SuppressWarnings("rawtypes")
     StrategyHandler DEFAULT = (t, d) -> null;
+
+//    static <T,D,R> StrategyHandler<T, D, R> defaultStrategyHandler() {
+//        return (t, d) -> null;
+//    }
 
     R apply(T requestParam, D dynamicContext);
 }
