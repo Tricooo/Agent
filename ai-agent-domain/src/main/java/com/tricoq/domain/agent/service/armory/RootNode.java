@@ -31,6 +31,8 @@ public class RootNode extends AbstractArmorySupport {
 
     private final List<ILoadDataStrategy> strategies;
 
+    private final AiClientApiNode aiClientApiNode;
+
     private Map<AiAgentEnumVO, ILoadDataStrategy> byEnum;
 
     @PostConstruct
@@ -71,6 +73,6 @@ public class RootNode extends AbstractArmorySupport {
 
     @Override
     public StrategyHandler<ArmoryCommandEntity, DefaultArmoryStrategyFactory.DynamicContext, String> get(ArmoryCommandEntity requestParam, DefaultArmoryStrategyFactory.DynamicContext dynamicContext) {
-        return getDefaultHandler();
+        return aiClientApiNode;
     }
 }
