@@ -1,6 +1,7 @@
 package com.tricoq.domain.agent.service.armory.business.data;
 
 import com.tricoq.domain.agent.model.entity.ArmoryCommandEntity;
+import com.tricoq.domain.agent.model.valobj.AiAgentEnumVO;
 import com.tricoq.domain.agent.service.armory.factory.DefaultArmoryStrategyFactory;
 
 /**
@@ -10,4 +11,6 @@ import com.tricoq.domain.agent.service.armory.factory.DefaultArmoryStrategyFacto
 public interface ILoadDataStrategy {
 
     void loadData(ArmoryCommandEntity entity, DefaultArmoryStrategyFactory.DynamicContext dynamicContext);
+
+    AiAgentEnumVO support();
 }
