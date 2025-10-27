@@ -37,17 +37,17 @@ public abstract class AbstractMultiThreadStrategyRouter<T, D, R> implements Stra
     /**
      * 异步加载数据
      *
-     * @param requestParam
-     * @param dynamicContext
+     * @param requestParam 请求参数
+     * @param dynamicContext 链路上下文
      */
     protected abstract void multiThread(T requestParam, D dynamicContext);
 
     /**
      * 节点自身处理逻辑
      *
-     * @param requestParam
-     * @param dynamicContext
-     * @return
+     * @param requestParam 请求参数
+     * @param dynamicContext 链路上下文
+     * @return 结果
      */
     protected abstract R doApply(T requestParam, D dynamicContext);
 }

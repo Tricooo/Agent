@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 /**
  * 聊天模型配置，值对象
  * @author xiaofuge bugstack.cn @小傅哥
@@ -36,4 +38,8 @@ public class AiClientModelVO {
      */
     private String modelType;
 
+    /**
+     * 工具 mcp ids
+     */
+    private List<String> toolMcpIds;
 }

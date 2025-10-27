@@ -40,7 +40,10 @@ public class DefaultArmoryStrategyFactory {
             dataObjects.put(key, value);
         }
 
+        @SuppressWarnings("unchecked")
         public <T> T getValue(String key){
+            //如果想要没有warning的转换集合，必须每个元素调用cast进行转换，但是这样性能耗费较大
+            //如果能够通过编码规避这种可能的报错，直接忽略就好
             return (T) dataObjects.get(key);
         }
     }
