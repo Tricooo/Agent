@@ -4,6 +4,7 @@ import com.tricoq.infrastructure.dao.po.AiClientToolMcp;
 import org.apache.ibatis.annotations.Mapper;
 
 import java.util.List;
+import java.util.Set;
 
 /**
  * MCP客户端配置表 DAO
@@ -88,4 +89,11 @@ public interface IAiClientToolMcpDao {
      */
     List<AiClientToolMcp> queryEnabledMcps();
 
+    /**
+     * 查询mcp客户端配置集合
+     *
+     * @param mcpToolIds mcp id集合
+     * @return MCP客户端配置列表
+     */
+    List<AiClientToolMcp> queryByMcpIdsEnabled(Set<String> mcpToolIds);
 }

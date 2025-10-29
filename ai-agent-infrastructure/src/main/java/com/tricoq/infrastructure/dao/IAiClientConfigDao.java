@@ -79,6 +79,14 @@ public interface IAiClientConfigDao {
     List<AiClientConfig> queryBySourceTypeAndId(String sourceType, String sourceId);
 
     /**
+     * 根据源类型和源ID查询AI客户端配置
+     * @param sourceType 源类型
+     * @param sourceIds 源ID集合
+     * @return AI客户端配置对象列表
+     */
+    List<AiClientConfig> queryBySourceTypeAndIdsEnabled(String sourceType, List<String> sourceIds);
+
+    /**
      * 根据目标类型和目标ID查询AI客户端配置
      * @param targetType 目标类型
      * @param targetId 目标ID
@@ -97,5 +105,4 @@ public interface IAiClientConfigDao {
      * @return AI客户端配置对象列表
      */
     List<AiClientConfig> queryAll();
-
 }

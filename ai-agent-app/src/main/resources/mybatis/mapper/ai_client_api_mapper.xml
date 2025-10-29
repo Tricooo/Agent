@@ -77,5 +77,15 @@
         FROM ai_client_api
         ORDER BY create_time DESC
     </select>
+    <select id="queryByApiIdsEnabled" resultMap="AiClientApiMap">
+        SELECT id, api_id, base_url, api_key, completions_path, embeddings_path, status, create_time, update_time
+        FROM ai_client_api
+        <where>
+            status = 1 AND api_id IN
+            <foreach collection="apiIds" item="apiId" separator="," close=")" open="(">
+                #{apiId}
+            </foreach>
+        </where>
+    </select>
 
 </mapper>

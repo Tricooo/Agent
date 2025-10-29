@@ -95,5 +95,13 @@
         FROM ai_client_config
         ORDER BY create_time DESC
     </select>
+    <select id="queryBySourceTypeAndIdsEnabled" resultMap="AiClientConfigMap">
+        SELECT id, source_type, source_id, target_type, target_id, ext_param, status, create_time, update_time
+        FROM ai_client_config
+        WHERE source_type = #{sourceType} AND status = 1 AND source_id in
+        <foreach collection="sourceIds" item="sourceId" separator="," open="(" close=")">
+            #{sourceId}
+        </foreach>
+    </select>
 
 </mapper>

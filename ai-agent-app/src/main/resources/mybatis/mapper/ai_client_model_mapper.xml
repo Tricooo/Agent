@@ -88,5 +88,15 @@
         FROM ai_client_model
         ORDER BY create_time DESC
     </select>
+    <select id="queryByIds" resultMap="AiClientModelMap">
+        SELECT id, model_id, api_id, model_name, model_type, status, create_time, update_time
+        FROM ai_client_model
+        <where>
+            model_id in
+            <foreach collection="modelIds" item="modelId" open="(" close=")" separator=",">
+                #{modelId}
+            </foreach>
+        </where>
+    </select>
 
 </mapper>

@@ -84,5 +84,14 @@
         WHERE advisor_type = #{advisorType}
         ORDER BY order_num ASC, create_time DESC
     </select>
+    <select id="queryByAdvisorIdsEnabled" resultMap="AiClientAdvisorMap">
+        SELECT id, advisor_id, advisor_name, advisor_type, order_num, ext_param, status, create_time, update_time
+        FROM ai_client_advisor
+        WHERE status = 1 AND advisor_id IN
+        <foreach collection="advisorIds" open="(" close=")" separator="," item="advisorId">
+            #{advisorId}
+        </foreach>
+        ORDER BY order_num ASC, create_time DESC
+    </select>
 
 </mapper>

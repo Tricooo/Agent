@@ -85,5 +85,14 @@
         FROM ai_client_system_prompt
         ORDER BY create_time DESC
     </select>
+    <select id="queryByIdsPromptsEnabled" resultMap="aiClientSystemPromptMap">
+        SELECT id, prompt_id, prompt_name, prompt_content, description, status, create_time, update_time
+        FROM ai_client_system_prompt
+        WHERE status = 1 AND prompt_id IN
+        <foreach collection="systemPromptIds" item="systemPromptId" separator="," close=")" open="(">
+            #{systemPromptId}
+        </foreach>
+        ORDER BY create_time DESC
+    </select>
 
 </mapper>

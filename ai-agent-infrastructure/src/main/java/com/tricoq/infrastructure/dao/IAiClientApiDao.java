@@ -3,6 +3,7 @@ package com.tricoq.infrastructure.dao;
 import com.tricoq.infrastructure.dao.po.AiClientApi;
 import org.apache.ibatis.annotations.Mapper;
 
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -74,4 +75,10 @@ public interface IAiClientApiDao {
      */
     List<AiClientApi> queryAll();
 
+    /**
+     * 批量查询AI客户端API配置
+     * @param apiIds API ID集合
+     * @return AI客户端API配置列表
+     */
+    List<AiClientApi> queryByApiIdsEnabled(Collection<String> apiIds);
 }

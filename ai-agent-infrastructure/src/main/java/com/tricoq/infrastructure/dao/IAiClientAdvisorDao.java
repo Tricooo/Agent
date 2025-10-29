@@ -5,6 +5,7 @@ import com.tricoq.infrastructure.dao.po.AiClientAdvisor;
 import org.apache.ibatis.annotations.Mapper;
 
 import java.util.List;
+import java.util.Set;
 
 /**
  * 顾问配置表 DAO
@@ -83,4 +84,11 @@ public interface IAiClientAdvisorDao {
      */
     List<AiClientAdvisor> queryByAdvisorType(String advisorType);
 
+    /**
+     * 批量查询顾问配置
+     *
+     * @param advisorIds 顾问id集合
+     * @return 顾问配置列表
+     */
+    List<AiClientAdvisor> queryByAdvisorIdsEnabled(Set<String> advisorIds);
 }

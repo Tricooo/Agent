@@ -4,7 +4,9 @@ package com.tricoq.infrastructure.dao;
 import com.tricoq.infrastructure.dao.po.AiClientSystemPrompt;
 import org.apache.ibatis.annotations.Mapper;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Set;
 
 /**
  * 系统提示词配置表 DAO
@@ -65,4 +67,11 @@ public interface IAiClientSystemPromptDao {
      */
     List<AiClientSystemPrompt> queryAll();
 
+    /**
+     * 批量查询系统提示词
+     *
+     * @param systemPromptIds 提示词id集合
+     * @return 提示词配置集合
+     */
+    List<AiClientSystemPrompt> queryByIdsPromptsEnabled(Collection<String> systemPromptIds);
 }
