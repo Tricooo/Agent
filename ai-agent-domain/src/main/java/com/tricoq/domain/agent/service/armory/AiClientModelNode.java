@@ -8,6 +8,7 @@ import com.tricoq.domain.agent.service.armory.factory.DefaultArmoryStrategyFacto
 import com.tricoq.domain.framework.chain.StrategyHandler;
 import io.modelcontextprotocol.client.McpSyncClient;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.mcp.SyncMcpToolCallbackProvider;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
@@ -48,18 +49,19 @@ public class AiClientModelNode extends AbstractArmorySupport {
                 throw new RuntimeException("mode 2 api is null");
             }
 
-            List<String> toolMcpIds = modelNode.getToolMcpIds();
-            List<McpSyncClient> list = toolMcpIds.stream().map(id ->
-                    (McpSyncClient) getBean(AiAgentEnumVO.AI_CLIENT_TOOL_MCP.getBeanName(id))).toList();
+            //mcpTools应该在chatClient层配置，chatModel应该是作为通用工具，得保证灵活性
+//            List<String> toolMcpIds = modelNode.getToolMcpIds();
+//            List<McpSyncClient> list = toolMcpIds.stream().map(id ->
+//                    (McpSyncClient) getBean(AiAgentEnumVO.AI_CLIENT_TOOL_MCP.getBeanName(id))).toList();
 
-            OpenAiChatModel chatModel = OpenAiChatModel.builder()
+            ChatModel chatModel = OpenAiChatModel.builder()
                     .openAiApi(openAiApi)
                     .defaultOptions(OpenAiChatOptions.builder()
                             .model(modelNode.getModelName())
-                            .toolCallbacks(new SyncMcpToolCallbackProvider(list).getToolCallbacks())
+//                            .toolCallbacks(new SyncMcpToolCallbackProvider(list).getToolCallbacks())
                             .build())
                     .build();
-            registerBean(beanName(modelNode.getModelId()), OpenAiChatModel.class, chatModel);
+            registerBean(beanName(modelNode.getModelId()), ChatModel.class, chatModel);
         }
         return router(requestParam, dynamicContext);
     }

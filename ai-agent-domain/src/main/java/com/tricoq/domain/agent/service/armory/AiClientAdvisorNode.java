@@ -51,7 +51,7 @@ public class AiClientAdvisorNode extends AbstractArmorySupport {
             Advisor advisor = createClientAdvisor(advisorVO);
             registerBean(beanName(advisorVO.getAdvisorId()), Advisor.class, advisor);
         }
-        return "";
+        return router(requestParam, dynamicContext);
     }
 
     private Advisor createClientAdvisor(AiClientAdvisorVO advisorVO) {

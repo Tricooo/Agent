@@ -1,13 +1,11 @@
 package com.tricoq.domain.agent.service.armory.factory.element;
 
-import com.alibaba.fastjson.JSON;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.api.AdvisorChain;
 import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisorChain;
 import org.springframework.ai.chat.client.advisor.api.StreamAdvisorChain;
-import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -55,9 +53,6 @@ public class RagAnswerAdvisor implements BaseAdvisor {
 
     /**
      * Logic to be executed before the rest of the advisor chain is called.
-     *
-     * @param chatClientRequest
-     * @param advisorChain
      */
     @Override
     public ChatClientRequest before(ChatClientRequest chatClientRequest, AdvisorChain advisorChain) {
@@ -104,9 +99,6 @@ public class RagAnswerAdvisor implements BaseAdvisor {
 
     /**
      * Logic to be executed after the rest of the advisor chain is called.
-     *
-     * @param chatClientResponse
-     * @param advisorChain
      */
     @Override
     public ChatClientResponse after(ChatClientResponse chatClientResponse, AdvisorChain advisorChain) {

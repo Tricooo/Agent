@@ -8,6 +8,7 @@ import com.tricoq.domain.agent.model.valobj.AiClientToolMcpVO;
 import com.tricoq.domain.agent.model.valobj.AiClientVO;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * @author trico qiang
@@ -21,7 +22,7 @@ public interface IAgentRepository {
 
     List<AiClientToolMcpVO> queryAiClientToolMcpVOByClientIds(List<String> clientIdList);
 
-    List<AiClientSystemPromptVO> queryAiClientSystemPromptVOByClientIds(List<String> clientIdList);
+    Map<String,AiClientSystemPromptVO> queryAiClientSystemPromptVOByClientIds(List<String> clientIdList);
 
     List<AiClientAdvisorVO> queryAiClientAdvisorVOByClientIds(List<String> clientIdList);
 
