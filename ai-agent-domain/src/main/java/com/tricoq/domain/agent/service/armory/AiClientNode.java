@@ -73,7 +73,7 @@ public class AiClientNode extends AbstractArmorySupport {
                         .filter(Objects::nonNull)
                         .toList();
                 if (CollectionUtils.isNotEmpty(mcpTools)) {
-                    clientBuilder.defaultToolCallbacks(new SyncMcpToolCallbackProvider(mcpTools));
+                    clientBuilder.defaultToolCallbacks(new SyncMcpToolCallbackProvider(mcpTools).getToolCallbacks());
                 }
             }
 

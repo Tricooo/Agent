@@ -6,10 +6,9 @@ import com.tricoq.domain.agent.model.valobj.AiAgentEnumVO;
 import com.tricoq.domain.agent.model.valobj.AiClientModelVO;
 import com.tricoq.domain.agent.service.armory.factory.DefaultArmoryStrategyFactory;
 import com.tricoq.domain.framework.chain.StrategyHandler;
-import io.modelcontextprotocol.client.McpSyncClient;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.ai.mcp.SyncMcpToolCallbackProvider;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
@@ -24,7 +23,10 @@ import java.util.List;
  */
 @Component
 @Slf4j
+@RequiredArgsConstructor
 public class AiClientModelNode extends AbstractArmorySupport {
+
+    private final AiClientAdvisorNode aiClientAdvisorNode;
 
     /**
      * 节点自身处理逻辑
@@ -78,6 +80,6 @@ public class AiClientModelNode extends AbstractArmorySupport {
 
     @Override
     public StrategyHandler<ArmoryCommandEntity, DefaultArmoryStrategyFactory.DynamicContext, String> get(ArmoryCommandEntity requestParam, DefaultArmoryStrategyFactory.DynamicContext dynamicContext) {
-        return null;
+        return aiClientAdvisorNode;
     }
 }

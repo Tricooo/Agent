@@ -94,7 +94,7 @@
     <select id="queryByMcpIdsEnabled" resultMap="AiClientToolMcpMap">
         SELECT id, mcp_id, mcp_name, transport_type, transport_config, request_timeout, status, create_time, update_time
         FROM ai_client_tool_mcp
-        WHERE status = 1 AND
+        WHERE status = 1 AND mcp_id IN
         <foreach collection="mcpToolIds" open="(" close=")" separator="," item="mcpToolId">
             #{mcpToolId}
         </foreach>

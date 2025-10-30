@@ -30,7 +30,6 @@ public class DefaultArmoryStrategyFactory {
 
     @Builder
     @NoArgsConstructor
-    @AllArgsConstructor
     @Data
     public static class DynamicContext {
 

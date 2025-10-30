@@ -66,7 +66,7 @@ public class AgentRepository implements IAgentRepository {
             return List.of();
         }
         //linkedHashSet和distinct都会保持去重后元素的顺序
-        Set<String> clientIdSet = new LinkedHashSet<>(clientIdList);
+        Set<String> clientIdSet = new HashSet<>(clientIdList);
         //mybatis默认会返回空集合 如果用stream处理无需判空
         List<AiClientConfig> aiClientConfigs = aiClientConfigDao
                 .queryBySourceTypeAndIdsEnabled(AiAgentEnumVO.AI_CLIENT.getCode(), clientIdSet);
@@ -104,7 +104,7 @@ public class AgentRepository implements IAgentRepository {
         if (CollectionUtils.isEmpty(clientIdList)) {
             return List.of();
         }
-        Set<String> clientIdSet = new LinkedHashSet<>(clientIdList);
+        Set<String> clientIdSet = new HashSet<>(clientIdList);
         List<AiClientConfig> aiClientConfigs = aiClientConfigDao
                 .queryBySourceTypeAndIdsEnabled(AiAgentEnumVO.AI_CLIENT.getCode(), clientIdSet);
         Set<String> modelIds = aiClientConfigs.stream()
@@ -131,7 +131,7 @@ public class AgentRepository implements IAgentRepository {
         if (CollectionUtils.isEmpty(clientIdList)) {
             return List.of();
         }
-        Set<String> clientIdSet = new LinkedHashSet<>(clientIdList);
+        Set<String> clientIdSet = new HashSet<>(clientIdList);
         List<AiClientConfig> aiClientConfigs = aiClientConfigDao
                 .queryBySourceTypeAndIdsEnabled(AiAgentEnumVO.AI_CLIENT.getCode(), clientIdSet);
         Set<String> mcpToolIds = aiClientConfigs.stream()
@@ -180,7 +180,7 @@ public class AgentRepository implements IAgentRepository {
         if (CollectionUtils.isEmpty(clientIdList)) {
             return Map.of();
         }
-        Set<String> clientIdSet = new LinkedHashSet<>(clientIdList);
+        Set<String> clientIdSet = new HashSet<>(clientIdList);
         List<AiClientConfig> aiClientConfigs = aiClientConfigDao
                 .queryBySourceTypeAndIdsEnabled(AiAgentEnumVO.AI_CLIENT.getCode(), clientIdSet);
         Set<String> systemPromptIds = aiClientConfigs.stream()
@@ -207,7 +207,7 @@ public class AgentRepository implements IAgentRepository {
         if (CollectionUtils.isEmpty(clientIdList)) {
             return List.of();
         }
-        Set<String> clientIdSet = new LinkedHashSet<>(clientIdList);
+        Set<String> clientIdSet = new HashSet<>(clientIdList);
         List<AiClientConfig> aiClientConfigs = aiClientConfigDao
                 .queryBySourceTypeAndIdsEnabled(AiAgentEnumVO.AI_CLIENT.getCode(), clientIdSet);
         Set<String> advisorIds = aiClientConfigs.stream()
@@ -254,7 +254,7 @@ public class AgentRepository implements IAgentRepository {
         if (CollectionUtils.isEmpty(clientIdList)) {
             return List.of();
         }
-        Set<String> clientIdSet = new LinkedHashSet<>(clientIdList);
+        Set<String> clientIdSet = new HashSet<>(clientIdList);
         List<AiClientConfig> aiClientConfigs = aiClientConfigDao
                 .queryBySourceTypeAndIdsEnabled(AiAgentEnumVO.AI_CLIENT.getCode(), clientIdSet);
         Map<String, List<AiClientConfig>> clientId2ConfigMap = aiClientConfigs.stream()
