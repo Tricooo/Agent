@@ -78,5 +78,14 @@
         FROM ai_client
         ORDER BY create_time DESC
     </select>
+    <select id="queryByClientIdEnabled" resultMap="AiClientMap">
+        SELECT id, client_id, client_name, description, status, create_time, update_time
+        FROM ai_client
+        WHERE status = 1 AND client_id IN
+        <foreach collection="clientIds" item="clientId" separator="," close=")" open="(">
+            #{clientId}
+        </foreach>
+        ORDER BY create_time DESC
+    </select>
 
 </mapper>

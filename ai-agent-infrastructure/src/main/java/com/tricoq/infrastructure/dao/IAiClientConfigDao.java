@@ -4,6 +4,7 @@ package com.tricoq.infrastructure.dao;
 import com.tricoq.infrastructure.dao.po.AiClientConfig;
 import org.apache.ibatis.annotations.Mapper;
 
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -84,7 +85,7 @@ public interface IAiClientConfigDao {
      * @param sourceIds 源ID集合
      * @return AI客户端配置对象列表
      */
-    List<AiClientConfig> queryBySourceTypeAndIdsEnabled(String sourceType, List<String> sourceIds);
+    List<AiClientConfig> queryBySourceTypeAndIdsEnabled(String sourceType, Collection<String> sourceIds);
 
     /**
      * 根据目标类型和目标ID查询AI客户端配置
