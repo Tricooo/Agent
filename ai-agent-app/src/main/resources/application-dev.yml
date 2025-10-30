@@ -47,7 +47,7 @@ spring:
       api-key: AIzaSyDelP1Jj3nafFT9MKY2FocvZVi2aCE5pcE
       chat:
         options:
-          model: gemini-2.5-flash
+          model: gemini-flash-latest
         completions-path: /chat/completions
       embedding:
         options:

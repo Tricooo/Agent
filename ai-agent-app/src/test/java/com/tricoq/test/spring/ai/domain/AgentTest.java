@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -98,7 +99,7 @@ public class AgentTest {
         String content = chatClient.prompt(Prompt.builder()
                 .messages(new UserMessage(
                         """
-                                有哪些工具可以使用
+                                搜寻你可以使用的工具，并列出来有哪些工具可以使用
                                 """))
                 .build()).call().content();
 
