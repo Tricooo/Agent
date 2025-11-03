@@ -2,7 +2,7 @@ package com.tricoq.domain.agent.service.armory;
 
 import com.alibaba.fastjson.JSON;
 import com.tricoq.domain.agent.model.entity.ArmoryCommandEntity;
-import com.tricoq.domain.agent.model.valobj.AiAgentEnumVO;
+import com.tricoq.domain.agent.model.valobj.enums.AiAgentEnumVO;
 import com.tricoq.domain.agent.model.valobj.AiClientSystemPromptVO;
 import com.tricoq.domain.agent.model.valobj.AiClientVO;
 import com.tricoq.domain.agent.service.armory.factory.DefaultArmoryStrategyFactory;

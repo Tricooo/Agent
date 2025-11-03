@@ -1,5 +1,6 @@
 package com.tricoq.domain.agent.adapter.repository;
 
+import com.tricoq.domain.agent.model.valobj.AiAgentClientFlowConfigVO;
 import com.tricoq.domain.agent.model.valobj.AiClientAdvisorVO;
 import com.tricoq.domain.agent.model.valobj.AiClientApiVO;
 import com.tricoq.domain.agent.model.valobj.AiClientModelVO;
@@ -31,4 +32,6 @@ public interface IAgentRepository {
     List<AiClientApiVO> queryAiClientApiVOListByModelIds(List<String> modelIdList);
 
     List<AiClientModelVO> queryAiClientModelVOByModelIds(List<String> modelIdList);
+
+    Map<String,AiAgentClientFlowConfigVO> queryAiAgentFlowConfigByAgentId(String agentId);
 }

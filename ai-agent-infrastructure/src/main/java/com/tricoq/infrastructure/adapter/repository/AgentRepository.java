@@ -2,13 +2,15 @@ package com.tricoq.infrastructure.adapter.repository;
 
 import com.alibaba.fastjson2.TypeReference;
 import com.tricoq.domain.agent.adapter.repository.IAgentRepository;
-import com.tricoq.domain.agent.model.valobj.AiAgentEnumVO;
+import com.tricoq.domain.agent.model.valobj.AiAgentClientFlowConfigVO;
+import com.tricoq.domain.agent.model.valobj.enums.AiAgentEnumVO;
 import com.tricoq.domain.agent.model.valobj.AiClientAdvisorVO;
 import com.tricoq.domain.agent.model.valobj.AiClientApiVO;
 import com.tricoq.domain.agent.model.valobj.AiClientModelVO;
 import com.tricoq.domain.agent.model.valobj.AiClientSystemPromptVO;
 import com.tricoq.domain.agent.model.valobj.AiClientToolMcpVO;
 import com.tricoq.domain.agent.model.valobj.AiClientVO;
+import com.tricoq.infrastructure.dao.IAiAgentFlowConfigDao;
 import com.tricoq.infrastructure.dao.IAiClientAdvisorDao;
 import com.tricoq.infrastructure.dao.IAiClientApiDao;
 import com.tricoq.infrastructure.dao.IAiClientConfigDao;
@@ -16,6 +18,7 @@ import com.tricoq.infrastructure.dao.IAiClientDao;
 import com.tricoq.infrastructure.dao.IAiClientModelDao;
 import com.tricoq.infrastructure.dao.IAiClientSystemPromptDao;
 import com.tricoq.infrastructure.dao.IAiClientToolMcpDao;
+import com.tricoq.infrastructure.dao.po.AiAgentFlowConfig;
 import com.tricoq.infrastructure.dao.po.AiClient;
 import com.tricoq.infrastructure.dao.po.AiClientAdvisor;
 import com.tricoq.infrastructure.dao.po.AiClientApi;
@@ -28,9 +31,7 @@ import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.stereotype.Repository;
 import org.springframework.util.StringUtils;
 
-import javax.servlet.Filter;
 import java.util.HashSet;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -59,6 +60,8 @@ public class AgentRepository implements IAgentRepository {
     private final IAiClientSystemPromptDao aiClientSystemPromptDao;
 
     private final IAiClientAdvisorDao aiClientAdvisorDao;
+
+    private final IAiAgentFlowConfigDao aiAgentFlowConfigDao;
 
     @Override
     public List<AiClientApiVO> queryAiClientApiVOListByClientIds(List<String> clientIdList) {
@@ -332,5 +335,27 @@ public class AgentRepository implements IAgentRepository {
                 .modelName(model.getModelName())
                 .modelType(model.getModelType())
                 .build()).toList();
+    }
+
+    @Override
+    public Map<String, AiAgentClientFlowConfigVO> queryAiAgentFlowConfigByAgentId(String agentId) {
+        if (!StringUtils.hasText(agentId)) {
+            return Map.of();
+        }
+        List<AiAgentFlowConfig> configs = aiAgentFlowConfigDao.queryByAgentId(agentId);
+        if (configs.isEmpty()) {
+            return Map.of();
+        }
+        return configs.stream()
+                .map(flowConfig -> AiAgentClientFlowConfigVO.builder()
+                        .clientId(flowConfig.getClientId())
+                        .sequence(flowConfig.getSequence())
+                        .clientType(flowConfig.getClientType())
+                        .clientName(flowConfig.getClientName())
+                        .build())
+                .collect(Collectors
+                        .toMap(AiAgentClientFlowConfigVO::getClientType,
+                                Function.identity(),
+                                (v1, v2) -> v1));
     }
 }

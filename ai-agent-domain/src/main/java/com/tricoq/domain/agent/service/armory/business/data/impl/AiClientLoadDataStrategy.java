@@ -2,7 +2,7 @@ package com.tricoq.domain.agent.service.armory.business.data.impl;
 
 import com.tricoq.domain.agent.adapter.repository.IAgentRepository;
 import com.tricoq.domain.agent.model.entity.ArmoryCommandEntity;
-import com.tricoq.domain.agent.model.valobj.AiAgentEnumVO;
+import com.tricoq.domain.agent.model.valobj.enums.AiAgentEnumVO;
 import com.tricoq.domain.agent.model.valobj.AiClientAdvisorVO;
 import com.tricoq.domain.agent.model.valobj.AiClientApiVO;
 import com.tricoq.domain.agent.model.valobj.AiClientModelVO;

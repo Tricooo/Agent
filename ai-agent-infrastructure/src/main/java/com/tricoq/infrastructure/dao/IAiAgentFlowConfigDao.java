@@ -54,7 +54,7 @@ public interface IAiAgentFlowConfigDao {
      * @param agentId 智能体ID
      * @return 智能体-客户端关联配置列表
      */
-    List<AiAgentFlowConfig> queryByAgentId(Long agentId);
+    List<AiAgentFlowConfig> queryByAgentId(String agentId);
 
     /**
      * 根据客户端ID查询关联配置列表

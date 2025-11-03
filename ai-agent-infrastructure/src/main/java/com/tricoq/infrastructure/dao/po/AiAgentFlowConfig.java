@@ -26,12 +26,16 @@ public class AiAgentFlowConfig {
     /**
      * 智能体ID
      */
-    private Long agentId;
+    private String agentId;
 
     /**
      * 客户端ID
      */
-    private Long clientId;
+    private String clientId;
+
+    private String clientName;
+
+    private String clientType;
 
     /**
      * 序列号(执行顺序)

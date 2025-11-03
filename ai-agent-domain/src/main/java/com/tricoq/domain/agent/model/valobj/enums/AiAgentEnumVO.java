@@ -1,4 +1,4 @@
-package com.tricoq.domain.agent.model.valobj;
+package com.tricoq.domain.agent.model.valobj.enums;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;

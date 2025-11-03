@@ -393,7 +393,7 @@ public class AutoAgentTest {
         // 配置参数
         int maxSteps = 6; // 最大执行步数
         String userInput = "搜索小傅哥，技术项目列表。编写成一份文档，说明不同项目的学习目标，以及不同阶段的伙伴应该学习哪个项目。";
-        userInput = "搜索 springboot AI 相关知识，生成3个主要内容章节。每个章节要包括课程内容和配套示例代码。并发对应章节创建对md文档。";
+        userInput = "搜索 springboot AI 相关知识，生成3个主要内容章节。每个章节要包括课程内容和配套示例代码。并发创建对应章节md文档，方便小白伙伴学习。";
         String sessionId = "dynamic-execution-" + System.currentTimeMillis();
         
         log.info("=== 动态多轮执行测试开始 ====");
