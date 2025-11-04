@@ -44,7 +44,7 @@ spring:
   ai:
     openai:
       base-url: https://generativelanguage.googleapis.com/v1beta/openai
-      api-key: AIzaSyDelP1Jj3nafFT9MKY2FocvZVi2aCE5pcE
+      api-key: AIzaSyBUmEoiDlom1595xI684MH_cZFcra6jD4E
       chat:
         options:
           model: gemini-flash-latest
@@ -56,6 +56,14 @@ spring:
       client:
         stdio:
           servers-configuration: classpath:/config/mcp-servers-config.json
+    agent:
+      auto-config:
+        enabled: true
+        client-ids:
+          - 3101
+          - 3102
+          - 3103
+          - 3104
 
 # MyBatis 配置【如需使用记得打开】
 #mybatis:

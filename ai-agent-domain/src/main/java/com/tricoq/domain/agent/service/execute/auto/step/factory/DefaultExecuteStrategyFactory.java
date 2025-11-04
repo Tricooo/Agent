@@ -1,14 +1,15 @@
-package com.tricoq.domain.agent.service.execute.factory;
+package com.tricoq.domain.agent.service.execute.auto.step.factory;
 
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
 import com.tricoq.domain.agent.model.valobj.AiAgentClientFlowConfigVO;
-import com.tricoq.domain.agent.service.execute.RootExecuteNode;
+import com.tricoq.domain.agent.service.execute.auto.step.RootExecuteNode;
 import com.tricoq.domain.framework.chain.StrategyHandler;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter;
 
 import java.util.Map;
 
@@ -34,13 +35,14 @@ public class DefaultExecuteStrategyFactory {
         private final String originalUserInput;
         private final Map<String, AiAgentClientFlowConfigVO> flowConfigMap;
         private String currentTask;
-        private boolean isCompleted = false;
-        private String executeHistory;
-        private Integer step = 1;
-        private Integer maxStep = 1;
+        private boolean isCompleted;
+        private Integer step;
+        private Integer maxStep;
         private StringBuilder executionHistory;
         private String analyzeResult;
         private String executeResult;
         private String supervisionResult;
+        private String finalSummary;
+        private ResponseBodyEmitter emitter;
     }
 }

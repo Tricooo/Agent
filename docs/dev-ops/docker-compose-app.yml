@@ -18,7 +18,7 @@ services:
       - TZ=PRC
       - SERVER_PORT=8101
       - CSDN_API_CATEGORIES=Java场景面试宝典
-      - CSDN_API_COOKIE=uuid_tt_dd=10_30711822260-1753780562956-907787
+      - CSDN_API_COOKIE=uuid_tt_dd=10_30711822260-1753780562956-907787; dc_sid=679859beba87263329cfcbabd7b3a78c; fid=20_61703058310-1753780576219-820826; c_segment=11; _ga=GA1.1.1487385057.1753780578; _ga_7W1N0GEY1P=GS2.1.s1753780577$o1$g1$t1753780609$j28$l0$h0; UN=m0_47953424; p_uid=U010000; SESSION=fcf4df47-c595-4388-bb35-42950c9239cf; UserName=m0_47953424; UserInfo=8a3cffb1a2de47b49a0a472ecd0d541d; UserToken=8a3cffb1a2de47b49a0a472ecd0d541d; UserNick=Tricot; AU=848; BT=1758166263634; c_first_ref=www.google.com; c_first_page=https%3A//www.csdn.net/; c_ab_test=1; vip_auto_popup=1; csdn_newcert_m0_47953424=1; _ga_JJBD2VG1H7=GS2.1.s1760424054$o1$g0$t1760424054$j60$l0$h0; _clck=1dqyofi%5E2%5Eg05%5E0%5E2036; c_page_id=default; creative_btn_mp=3; dc_session_id=10_1760433424943.440421; _clsk=1uuqp3a%5E1760433421472%5E2%5E0%5En.clarity.ms%2Fcollect; log_Id_view=3; log_Id_click=2; c_pref=https%3A//www.csdn.net/; c_ref=https%3A//blog.csdn.net/m0_47953424%3Ftype%3Dlately; c_dsid=11_1760433426995.426083; dc_tos=t4474j
     logging:
       driver: "json-file"
       options:

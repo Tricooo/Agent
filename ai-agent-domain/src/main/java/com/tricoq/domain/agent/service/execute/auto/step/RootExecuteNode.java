@@ -1,15 +1,14 @@
-package com.tricoq.domain.agent.service.execute;
+package com.tricoq.domain.agent.service.execute.auto.step;
 
 import com.tricoq.domain.agent.adapter.repository.IAgentRepository;
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
 import com.tricoq.domain.agent.model.valobj.AiAgentClientFlowConfigVO;
-import com.tricoq.domain.agent.service.execute.factory.DefaultExecuteStrategyFactory;
+import com.tricoq.domain.agent.service.execute.auto.step.factory.DefaultExecuteStrategyFactory;
 import com.tricoq.domain.framework.chain.StrategyHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -46,6 +45,7 @@ public class RootExecuteNode extends AbstractExecuteSupport {
                 .flowConfigMap(configs)
                 .maxStep(requestParam.getMaxSteps())
                 .executionHistory(new StringBuilder())
+                .step(1)
                 .build();
         return router(requestParam, dynamicContext);
     }
