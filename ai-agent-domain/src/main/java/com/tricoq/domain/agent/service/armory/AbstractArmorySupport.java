@@ -13,6 +13,8 @@ import org.springframework.context.ApplicationContext;
 import javax.annotation.Resource;
 
 /**
+ * 增强层
+ *
  * @author trico qiang
  * @date 10/23/25
  */
@@ -25,9 +27,6 @@ public abstract class AbstractArmorySupport
 
     /**
      * 异步加载数据
-     *
-     * @param requestParam
-     * @param dynamicContext
      */
     @Override
     protected void multiThread(ArmoryCommandEntity requestParam, DefaultArmoryStrategyFactory.DynamicContext dynamicContext) {
@@ -35,11 +34,11 @@ public abstract class AbstractArmorySupport
     }
 
     protected String beanName(String id) {
-        return null;
+        throw new UnsupportedOperationException();
     }
 
     protected String dataName() {
-        return null;
+        throw new UnsupportedOperationException();
     }
 
     protected synchronized <T> void registerBean(String beanName, Class<T> clazz, T instance) {

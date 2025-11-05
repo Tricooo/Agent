@@ -1,12 +1,14 @@
 package com.tricoq.domain.agent.model.valobj.enums;
 
 import com.tricoq.domain.agent.model.valobj.AiClientAdvisorVO;
+import com.tricoq.domain.agent.service.armory.factory.element.RagAnswerAdvisor;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.ai.chat.client.advisor.PromptChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
+import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 
 import java.util.HashMap;
@@ -33,7 +35,15 @@ public enum AiClientAdvisorTypeEnumVO {
     RAG_ANSWER("RagAnswer", "知识库") {
         @Override
         public Advisor createAdvisor(AiClientAdvisorVO aiClientAdvisorVO, VectorStore vectorStore) {
-            return null;
+            AiClientAdvisorVO.RagAnswer ragAnswer = aiClientAdvisorVO.getRagAnswer();
+            if (ragAnswer == null) {
+                return null;
+            }
+            SearchRequest searchRequest = SearchRequest.builder()
+                    .filterExpression(StringUtils.defaultIfEmpty(ragAnswer.getFilterExpression(), StringUtils.EMPTY))
+                    .topK(ragAnswer.getTopK())
+                    .build();
+            return new RagAnswerAdvisor(vectorStore,searchRequest);
         }
     };
 

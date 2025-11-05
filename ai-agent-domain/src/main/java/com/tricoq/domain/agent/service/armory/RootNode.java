@@ -33,11 +33,12 @@ public class RootNode extends AbstractArmorySupport {
 
     private final AiClientApiNode aiClientApiNode;
 
-    private Map<AiAgentEnumVO, ILoadDataStrategy> byEnum;
+    private Map<AiAgentEnumVO, ILoadDataStrategy> enum2DataStrategyMap;
 
     @PostConstruct
     public void init() {
-        byEnum = strategies.stream().collect(Collectors.toUnmodifiableMap(ILoadDataStrategy::support, Function.identity()));
+        enum2DataStrategyMap = strategies.stream()
+                .collect(Collectors.toUnmodifiableMap(ILoadDataStrategy::support, Function.identity()));
     }
 
     /**
@@ -57,13 +58,13 @@ public class RootNode extends AbstractArmorySupport {
         AiAgentEnumVO enumVO = Optional.ofNullable(AiAgentEnumVO.getByCode(requestParam.getCommandType()))
                 //用 异常 代替静默 return，至少要打日志，避免悄悄丢请求
                 .orElseThrow(() -> new IllegalArgumentException("不存在的指令类型: " + requestParam.getCommandType()));
-        ILoadDataStrategy strategy = Optional.ofNullable(byEnum.get(enumVO))
+        ILoadDataStrategy strategy = Optional.ofNullable(enum2DataStrategyMap.get(enumVO))
                 .orElseThrow(() -> new IllegalStateException("没有此策略实体: " + enumVO));
         strategy.loadData(requestParam, dynamicContext);
     }
 
     /**
-     * 节点自身处理逻辑
+     * 自身处理逻辑
      */
     @Override
     protected String doApply(ArmoryCommandEntity requestParam, DefaultArmoryStrategyFactory.DynamicContext dynamicContext) {

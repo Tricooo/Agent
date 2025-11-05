@@ -7,10 +7,12 @@ import com.tricoq.domain.framework.chain.StrategyHandler;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter;
 
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -31,14 +33,18 @@ public class DefaultExecuteStrategyFactory {
     @Builder
     @AllArgsConstructor
     public static class ExecuteContext {
-
+        @NonNull
         private final String originalUserInput;
-        private final Map<String, AiAgentClientFlowConfigVO> flowConfigMap;
+        @Builder.Default
+        private final Map<String, AiAgentClientFlowConfigVO> flowConfigMap = new HashMap<>();
         private String currentTask;
-        private boolean isCompleted;
-        private Integer step;
+        @Builder.Default
+        private boolean isCompleted = false;
+        @Builder.Default
+        private Integer step = 1;
         private Integer maxStep;
-        private StringBuilder executionHistory;
+        @Builder.Default
+        private StringBuilder executionHistory  = new StringBuilder();
         private String analyzeResult;
         private String executeResult;
         private String supervisionResult;

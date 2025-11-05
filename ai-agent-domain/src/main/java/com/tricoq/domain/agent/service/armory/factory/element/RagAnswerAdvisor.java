@@ -25,6 +25,9 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
+ * RAG 顾问
+ * 提供上传文档/个人知识库检索的能力
+ *
  * @author trico qiang
  * @date 10/28/25
  */

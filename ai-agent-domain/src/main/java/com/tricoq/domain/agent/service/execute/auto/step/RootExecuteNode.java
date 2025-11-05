@@ -39,14 +39,7 @@ public class RootExecuteNode extends AbstractExecuteSupport {
         log.info("会话ID: {}", requestParam.getSessionId());
 
         Map<String, AiAgentClientFlowConfigVO> configs = agentRepository.queryAiAgentFlowConfigByAgentId(requestParam.getAgentId());
-        dynamicContext = DefaultExecuteStrategyFactory.ExecuteContext.builder()
-                .originalUserInput(requestParam.getUserInput())
-                .currentTask(requestParam.getUserInput())
-                .flowConfigMap(configs)
-                .maxStep(requestParam.getMaxSteps())
-                .executionHistory(new StringBuilder())
-                .step(1)
-                .build();
+        dynamicContext.getFlowConfigMap().putAll(configs);
         return router(requestParam, dynamicContext);
     }
 

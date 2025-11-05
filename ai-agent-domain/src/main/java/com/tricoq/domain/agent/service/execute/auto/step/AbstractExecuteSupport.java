@@ -64,7 +64,7 @@ public class AbstractExecuteSupport extends
         ResponseBodyEmitter emitter = dynamicContext.getEmitter();
         if (null != emitter) {
             try {
-                emitter.send("data:" + JSON.toJSONString(resultEntity) + "\n\n");
+                emitter.send("data: " + JSON.toJSONString(resultEntity) + "\n\n");
             }catch (Exception e) {
                 log.error("发送SSE结果失败：{}", e.getMessage(), e);
             }

@@ -10,8 +10,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter;
 
-import java.io.IOException;
-
 /**
  *
  *
@@ -44,7 +42,7 @@ public class AutoAgentExecuteStrategy implements IExecuteStrategy {
         try {
             AutoAgentExecuteResultEntity completeResult = AutoAgentExecuteResultEntity
                     .createCompleteResult(commandEntity.getSessionId());
-            String response = "data:" + JSON.toJSONString(completeResult) + "\n\n";
+            String response = "data: " + JSON.toJSONString(completeResult) + "\n\n";
             emitter.send(response);
         } catch (Exception e) {
             log.error("发送完成标识失败：{}", e.getMessage(), e);

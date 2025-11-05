@@ -10,7 +10,7 @@ package com.tricoq.domain.framework.chain;
 public interface StrategyHandler<T, D, R> {
 
     @SuppressWarnings("rawtypes")
-    StrategyHandler DEFAULT = (t, d) -> null;
+    StrategyHandler DEFAULT = (t, d) -> "End";
 
 //    static <T,D,R> StrategyHandler<T, D, R> defaultStrategyHandler() {
 //        return (t, d) -> null;
