@@ -78,7 +78,8 @@ public class Step4LogExecutionSummaryNode extends AbstractExecuteSupport {
             String summaryPrompt = getSummaryPrompt(requestParameter, dynamicContext, isCompleted);
 
             // 获取对话客户端 - 使用任务分析客户端进行总结
-            AiAgentClientFlowConfigVO aiAgentClientFlowConfigVO = dynamicContext.getFlowConfigMap().get(AiClientTypeEnumVO.RESPONSE_ASSISTANT.getCode());
+            AiAgentClientFlowConfigVO aiAgentClientFlowConfigVO = dynamicContext.getFlowConfigMap()
+                    .get(AiClientTypeEnumVO.RESPONSE_ASSISTANT.getCode());
             ChatClient chatClient = getBean(AiAgentEnumVO.AI_CLIENT.getBeanName(aiAgentClientFlowConfigVO.getClientId()));
 
             String summaryResult = chatClient
@@ -99,7 +100,9 @@ public class Step4LogExecutionSummaryNode extends AbstractExecuteSupport {
         }
     }
 
-    private static String getSummaryPrompt(ExecuteCommandEntity requestParameter, DefaultExecuteStrategyFactory.ExecuteContext dynamicContext, boolean isCompleted) {
+    private static String getSummaryPrompt(ExecuteCommandEntity requestParameter,
+                                           DefaultExecuteStrategyFactory.ExecuteContext dynamicContext,
+                                           boolean isCompleted) {
         String summaryPrompt;
         if (isCompleted) {
             summaryPrompt = String.format("""

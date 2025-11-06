@@ -1,6 +1,5 @@
 package com.tricoq.domain.agent.service.execute.auto.step;
 
-import com.alibaba.fastjson2.JSON;
 import com.tricoq.domain.agent.model.entity.AutoAgentExecuteResultEntity;
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
 import com.tricoq.domain.agent.model.valobj.AiAgentClientFlowConfigVO;
@@ -14,7 +13,6 @@ import org.apache.commons.collections4.MapUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Component;
-import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter;
 
 import java.util.Map;
 import java.util.Optional;
@@ -36,12 +34,14 @@ public class Step1AnalyzeNode extends AbstractExecuteSupport {
      * @return 结果
      */
     @Override
-    protected String doApply(ExecuteCommandEntity requestParam, DefaultExecuteStrategyFactory.ExecuteContext dynamicContext) {
+    protected String doApply(ExecuteCommandEntity requestParam,
+                             DefaultExecuteStrategyFactory.ExecuteContext dynamicContext) {
         Map<String, AiAgentClientFlowConfigVO> flowConfigMap = dynamicContext.getFlowConfigMap();
         if (MapUtils.isEmpty(flowConfigMap)) {
             throw new RuntimeException("flowConfig is invalid");
         }
-        AiAgentClientFlowConfigVO flowConfig = Optional.ofNullable(flowConfigMap.get(AiClientTypeEnumVO.TASK_ANALYZER_CLIENT.getCode()))
+        AiAgentClientFlowConfigVO flowConfig = Optional
+                .ofNullable(flowConfigMap.get(AiClientTypeEnumVO.TASK_ANALYZER_CLIENT.getCode()))
                 .orElseThrow(() -> new IllegalArgumentException("没有此 client"));
         ChatClient analyzeClient = Optional
                 .ofNullable((ChatClient) getBean(AiAgentEnumVO.AI_CLIENT.getBeanName(flowConfig.getClientId())))
@@ -56,7 +56,7 @@ public class Step1AnalyzeNode extends AbstractExecuteSupport {
         // 第一阶段：任务分析
         log.info("\n📊 阶段1: 任务状态分析");
         String analysisPrompt = String.format("""
-                        **原始用户需求:** %s
+                       **原始用户需求:** %s
                         
                         **当前执行步骤:** 第 %d 步 (最大 %d 步)
                         
@@ -65,7 +65,19 @@ public class Step1AnalyzeNode extends AbstractExecuteSupport {
                         
                         **当前任务:** %s
                         
-                        请分析当前任务状态，评估执行进度，并制定下一步策略。
+                        **分析要求:**
+                        请深入分析用户的具体需求，制定明确的执行策略：
+                        1. 理解用户真正想要什么（如：具体的学习计划、项目列表、技术方案等）
+                        2. 分析需要哪些具体的执行步骤（如：搜索信息、检索项目、生成内容等）
+                        3. 制定能够产生实际结果的执行策略
+                        4. 确保策略能够直接回答用户的问题
+                        
+                        **输出格式要求:**
+                        任务状态分析: [当前任务完成情况的详细分析]
+                        执行历史评估: [对已完成工作的质量和效果评估]
+                        下一步策略: [具体的执行计划，包括需要调用的工具和生成的内容]
+                        完成度评估: [0-100]%%
+                        任务状态: [CONTINUE/COMPLETED]
                         """,
                 requestParam.getUserInput(),
                 step,

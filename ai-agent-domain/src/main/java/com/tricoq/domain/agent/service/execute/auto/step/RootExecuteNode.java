@@ -32,19 +32,22 @@ public class RootExecuteNode extends AbstractExecuteSupport {
      * @return 结果
      */
     @Override
-    protected String doApply(ExecuteCommandEntity requestParam, DefaultExecuteStrategyFactory.ExecuteContext dynamicContext) {
+    protected String doApply(ExecuteCommandEntity requestParam,
+                             DefaultExecuteStrategyFactory.ExecuteContext dynamicContext) {
         log.info("=== 动态多轮执行测试开始 ====");
         log.info("用户输入: {}", requestParam.getUserInput());
         log.info("最大执行步数: {}", requestParam.getMaxSteps());
         log.info("会话ID: {}", requestParam.getSessionId());
 
-        Map<String, AiAgentClientFlowConfigVO> configs = agentRepository.queryAiAgentFlowConfigByAgentId(requestParam.getAgentId());
+        Map<String, AiAgentClientFlowConfigVO> configs = agentRepository
+                .queryAiAgentFlowConfigByAgentId(requestParam.getAgentId());
         dynamicContext.getFlowConfigMap().putAll(configs);
         return router(requestParam, dynamicContext);
     }
 
     @Override
-    public StrategyHandler<ExecuteCommandEntity, DefaultExecuteStrategyFactory.ExecuteContext, String> get(ExecuteCommandEntity requestParam, DefaultExecuteStrategyFactory.ExecuteContext dynamicContext) {
+    public StrategyHandler<ExecuteCommandEntity, DefaultExecuteStrategyFactory.ExecuteContext, String> get(
+            ExecuteCommandEntity requestParam, DefaultExecuteStrategyFactory.ExecuteContext dynamicContext) {
         return step1AnalyzeNode;
     }
 }
