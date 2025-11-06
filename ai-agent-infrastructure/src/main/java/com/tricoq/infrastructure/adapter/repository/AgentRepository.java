@@ -352,6 +352,7 @@ public class AgentRepository implements IAgentRepository {
                         .sequence(flowConfig.getSequence())
                         .clientType(flowConfig.getClientType())
                         .clientName(flowConfig.getClientName())
+                        .stepPrompt(flowConfig.getStepPrompt())
                         .build())
                 .collect(Collectors
                         .toMap(AiAgentClientFlowConfigVO::getClientType,

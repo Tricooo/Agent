@@ -42,6 +42,8 @@ public class AiAgentFlowConfig {
      */
     private Integer sequence;
 
+    private String stepPrompt;
+
     /**
      * 创建时间
      */

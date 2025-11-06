@@ -50,26 +50,6 @@ public class Step3QualitySupervisorNode extends AbstractExecuteSupport {
         }
         // 第三阶段：质量监督
         log.info("\n🔍 阶段3: 质量监督检查");
-        String supervisionPrompt = String.format("""
-                **用户原始需求:** %s
-                
-                **执行结果:** %s
-                
-                **监督要求:**
-                请严格评估执行结果是否真正满足了用户的原始需求：
-                1. 检查是否直接回答了用户的问题
-                2. 评估内容的完整性和实用性
-                3. 确认是否提供了用户期望的具体结果（如学习计划、项目列表等）
-                4. 判断是否只是描述过程而没有给出实际答案
-                
-                **输出格式:**
-                需求匹配度: [执行结果与用户原始需求的匹配程度分析]
-                内容完整性: [内容是否完整、具体、实用]
-                问题识别: [发现的问题和不足，特别是是否偏离了用户真正的需求]
-                改进建议: [具体的改进建议，确保能直接满足用户需求]
-                质量评分: [1-10分的质量评分]
-                是否通过: [PASS/FAIL/OPTIMIZE]
-                """, originalUserInput, executeResult);
 
         AiAgentClientFlowConfigVO flowConfig = Optional
                 .ofNullable(flowConfigMap.get(AiClientTypeEnumVO.QUALITY_SUPERVISOR_CLIENT.getCode()))
@@ -78,12 +58,14 @@ public class Step3QualitySupervisorNode extends AbstractExecuteSupport {
                 .ofNullable((ChatClient) getBean(AiAgentEnumVO.AI_CLIENT.getBeanName(flowConfig.getClientId())))
                 .orElseThrow(() -> new IllegalArgumentException("不存在的任务分析 client"));
 
+        String supervisionPrompt = String.format(flowConfig.getStepPrompt(), originalUserInput, executeResult);
+
         String supervisionResult = Optional.ofNullable(qualitySupervisorClient
                 .prompt(supervisionPrompt)
                 .advisors(a -> a
                         .param(CHAT_MEMORY_CONVERSATION_ID_KEY, requestParam.getSessionId())
                         .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 80))
-                .call().content()).orElseThrow(()->new RuntimeException("分析任务执行失败"));
+                .call().content()).orElseThrow(() -> new RuntimeException("分析任务执行失败"));
 
         Integer step = dynamicContext.getStep();
         parseSupervisionResult(dynamicContext, supervisionResult, requestParam.getSessionId());
@@ -179,7 +161,9 @@ public class Step3QualitySupervisorNode extends AbstractExecuteSupport {
 
         for (String line : lines) {
             line = line.trim();
-            if (line.isEmpty()) continue;
+            if (line.isEmpty()) {
+                continue;
+            }
 
             if (line.contains("质量评估:")) {
                 // 发送前一个部分的内容

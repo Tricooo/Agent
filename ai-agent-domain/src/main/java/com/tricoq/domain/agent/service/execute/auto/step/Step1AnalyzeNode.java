@@ -55,30 +55,7 @@ public class Step1AnalyzeNode extends AbstractExecuteSupport {
 
         // 第一阶段：任务分析
         log.info("\n📊 阶段1: 任务状态分析");
-        String analysisPrompt = String.format("""
-                       **原始用户需求:** %s
-                        
-                        **当前执行步骤:** 第 %d 步 (最大 %d 步)
-                        
-                        **历史执行记录:**
-                        %s
-                        
-                        **当前任务:** %s
-                        
-                        **分析要求:**
-                        请深入分析用户的具体需求，制定明确的执行策略：
-                        1. 理解用户真正想要什么（如：具体的学习计划、项目列表、技术方案等）
-                        2. 分析需要哪些具体的执行步骤（如：搜索信息、检索项目、生成内容等）
-                        3. 制定能够产生实际结果的执行策略
-                        4. 确保策略能够直接回答用户的问题
-                        
-                        **输出格式要求:**
-                        任务状态分析: [当前任务完成情况的详细分析]
-                        执行历史评估: [对已完成工作的质量和效果评估]
-                        下一步策略: [具体的执行计划，包括需要调用的工具和生成的内容]
-                        完成度评估: [0-100]%%
-                        任务状态: [CONTINUE/COMPLETED]
-                        """,
+        String analysisPrompt = String.format(flowConfig.getStepPrompt(),
                 requestParam.getUserInput(),
                 step,
                 dynamicContext.getMaxStep(),
