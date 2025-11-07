@@ -43,7 +43,7 @@ public class FlowAgentMCPTest {
                         .build())
                 .defaultOptions(OpenAiChatOptions.builder()
                         .model("gemini-flash-latest")
-                        .toolCallbacks(new SyncMcpToolCallbackProvider(stdioMcpClientElasticsearch()).getToolCallbacks())
+                        .toolCallbacks(new SyncMcpToolCallbackProvider(stdioMcpClient_Grafana()).getToolCallbacks())
                         .build())
                 .build();
 
@@ -111,6 +111,34 @@ public class FlowAgentMCPTest {
         System.out.println("SSE MCP Initialized: " + init);
 
         return mcpSyncClient;
+    }
+
+    public McpSyncClient stdioMcpClient_Grafana() {
+        Map<String, String> env = new HashMap<>();
+        env.put("GRAFANA_URL", "http://127.0.0.1:9200");
+        env.put("GRAFANA_API_KEY", "sa-liergou-e58852b4-25bb-482b-bbc8-564e0c56f5ac");
+
+        var stdioParams = ServerParameters.builder("docker")
+                .args("run",
+                        "--rm",
+                        "-i",
+                        "-e",
+                        "GRAFANA_URL",
+                        "-e",
+                        "GRAFANA_API_KEY",
+                        "mcp/grafana",
+                        "-t",
+                        "stdio")
+                .env(env)
+                .build();
+
+        var mcpClient = McpClient.sync(new StdioClientTransport(stdioParams))
+                .requestTimeout(Duration.ofSeconds(100)).build();
+
+        var init = mcpClient.initialize();
+        log.info("Stdio MCP Initialized: {}", init);
+
+        return mcpClient;
     }
 
 }

@@ -67,7 +67,8 @@ public class RagAnswerAdvisor implements BaseAdvisor {
         String advisedUserText = userText + System.lineSeparator() + userTextAdvisor;
 
         //这里填充userText的占位符，但是目前还没用到
-        String query = new PromptTemplate(userText).render();
+//        String query = new PromptTemplate(userText).render();
+        String query = userText;
 
         SearchRequest request = SearchRequest.from(searchRequest).query(query)
                 .filterExpression(doGetFilterExpression(context)).build();
