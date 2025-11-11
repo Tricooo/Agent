@@ -1,6 +1,5 @@
 package com.tricoq.test.spring.ai;
 
-import com.tricoq.domain.agent.service.armory.factory.element.RagAnswerAdvisor;
 import io.modelcontextprotocol.client.McpClient;
 import io.modelcontextprotocol.client.McpSyncClient;
 import io.modelcontextprotocol.client.transport.HttpClientSseClientTransport;
@@ -20,7 +19,6 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.ToolCallbackProvider;
-import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.pgvector.PgVectorStore;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.junit4.SpringRunner;
@@ -37,7 +35,7 @@ import java.util.regex.Pattern;
 @Slf4j
 @RunWith(SpringRunner.class)
 @SpringBootTest
-public class FlowAgentTest {
+public class OpenAiFlowAgentTest {
 
     private ChatModel chatModel;
     private ChatClient planningChatClient;
@@ -56,11 +54,12 @@ public class FlowAgentTest {
     @Before
     public void init() {
         OpenAiApi openAiApi = OpenAiApi.builder()
-                .baseUrl("https://generativelanguage.googleapis.com/v1beta/openai")
-                .apiKey("AIzaSyBUmEoiDlom1595xI684MH_cZFcra6jD4E")
+                .baseUrl("https://chatapi.nloli.xyz/v1")
+                .apiKey("sk-")
                 .completionsPath("/chat/completions")
                 .embeddingsPath("/embeddings")
                 .build();
+
         ToolCallback[] callbacks = ArrayUtils
                 .addAll(new SyncMcpToolCallbackProvider(sseMcpClient_BaiduSearch()).getToolCallbacks(),
                         tools.getToolCallbacks());
@@ -68,7 +67,7 @@ public class FlowAgentTest {
         chatModel = OpenAiChatModel.builder()
                 .openAiApi(openAiApi)
                 .defaultOptions(OpenAiChatOptions.builder()
-                        .model("gemini-flash-lite-latest")
+                        .model("gpt-4.1")
                         .maxTokens(5000)
                         .toolCallbacks(callbacks)
                         .build())
@@ -114,11 +113,13 @@ public class FlowAgentTest {
                                 MessageWindowChatMemory.builder()
                                         .maxMessages(50)
                                         .build()
-                        ).build(),
-                        new RagAnswerAdvisor(vectorStore, SearchRequest.builder()
-                                .topK(5)
-                                .filterExpression("knowledge == 'article'")
-                                .build()))
+                        ).build()
+//                        new RagAnswerAdvisor(vectorStore, SearchRequest.builder()
+//                                .topK(5)
+//                                .filterExpression("knowledge == 'article'")
+//                                .build())
+                )
+
                 .build();
 
         // 初始化执行器客户端
@@ -181,11 +182,12 @@ public class FlowAgentTest {
                                 MessageWindowChatMemory.builder()
                                         .maxMessages(20)
                                         .build()
-                        ).build(),
-                        new RagAnswerAdvisor(vectorStore, SearchRequest.builder()
-                                .topK(5)
-                                .filterExpression("knowledge == 'article'")
-                                .build()))
+                        ).build()
+//                        new RagAnswerAdvisor(vectorStore, SearchRequest.builder()
+//                                .topK(5)
+//                                .filterExpression("knowledge == 'article'")
+//                                .build())
+                )
                 .build();
 
         // 初始化MCP工具客户端

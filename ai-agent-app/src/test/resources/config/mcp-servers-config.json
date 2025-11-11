@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "mcp-server-computer": {
+    "weixin": {
       "command": "java",
       "args": [
         "-Dfile.encoding=utf-8",
@@ -9,7 +9,7 @@
         "/Users/tricoqiang/mcp/mcp-server-weixin-1.0.0.jar"
       ]
     },
-    "mcp-server-computer-2": {
+    "csdn": {
       "command": "java",
       "args": [
         "-Dfile.encoding=utf-8",
