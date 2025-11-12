@@ -55,7 +55,7 @@ public class OpenAiFlowAgentTest {
     public void init() {
         OpenAiApi openAiApi = OpenAiApi.builder()
                 .baseUrl("https://chatapi.nloli.xyz/v1")
-                .apiKey("sk-")
+                .apiKey("sk-dBpUzndjLj7qZJ2E7FdfgFfZ5Nx8G7NKcAPn5RUJDcHlbgQH")
                 .completionsPath("/chat/completions")
                 .embeddingsPath("/embeddings")
                 .build();

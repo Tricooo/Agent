@@ -4,7 +4,7 @@ version: '3.9'
 services:
   # 数据采集
   prometheus:
-    image: prom/prometheus:v2.47.2
+    image: bitnami/prometheus:2.47.2
     container_name: prometheus
     restart: always
     ports:
@@ -28,10 +28,10 @@ services:
       - ./grafana:/etc/grafana
     environment:
       - GF_DATABASE_TYPE=mysql
-      - GF_DATABASE_HOST=host.docker.internal:13306
+      - GF_DATABASE_HOST=host.docker.internal:3306
       - GF_DATABASE_NAME=grafana
       - GF_DATABASE_USER=root
-      - GF_DATABASE_PASSWORD=123456
+      - GF_DATABASE_PASSWORD=12345678
     networks:
       - my-network
 
