@@ -4,6 +4,7 @@ import com.alibaba.fastjson.JSON;
 import com.tricoq.api.IAiAgentService;
 import com.tricoq.api.dto.AutoAgentRequestDTO;
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
+import com.tricoq.domain.agent.service.IAgentDispatchService;
 import com.tricoq.domain.agent.service.execute.IExecuteStrategy;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -29,17 +30,10 @@ import java.util.concurrent.ThreadPoolExecutor;
 @RequestMapping("/api/v1/agent")
 @CrossOrigin(origins = "*", allowedHeaders = "*", methods = {RequestMethod.GET, RequestMethod.POST, RequestMethod.OPTIONS})
 @Slf4j
+@RequiredArgsConstructor
 public class AiAgentService implements IAiAgentService {
 
-    private final IExecuteStrategy executeStrategy;
-
-    private final ThreadPoolExecutor executor;
-
-    public AiAgentService(@Qualifier("autoAgentExecuteStrategy") IExecuteStrategy executeStrategy,
-                          ThreadPoolExecutor executor) {
-        this.executeStrategy = executeStrategy;
-        this.executor = executor;
-    }
+    private final IAgentDispatchService agentDispatchService;
 
     @PostMapping("/auto_agent")
     @Override
@@ -60,24 +54,8 @@ public class AiAgentService implements IAiAgentService {
                     .userInput(request.getMessage())
                     .build();
 
-            executor.execute(() -> {
-                try {
-                    executeStrategy.execute(command, emitter);
-                } catch (Exception e) {
-                    log.error("AutoAgent执行异常：{}", e.getMessage(), e);
-                    try {
-                        emitter.send("执行异常：" + e.getMessage());
-                    } catch (Exception ex) {
-                        log.error("发送异常信息失败：{}", ex.getMessage(), ex);
-                    }
-                } finally {
-                    try {
-                        emitter.complete();
-                    } catch (Exception e) {
-                        log.error("完成流式输出失败：{}", e.getMessage(), e);
-                    }
-                }
-            });
+            agentDispatchService.dispatch(command, emitter);
+
             return emitter;
         } catch (Exception e) {
             log.error("AutoAgent请求处理异常：{}", e.getMessage(), e);

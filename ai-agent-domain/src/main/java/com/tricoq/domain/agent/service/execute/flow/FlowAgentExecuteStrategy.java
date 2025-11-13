@@ -1,4 +1,4 @@
-package com.tricoq.domain.agent.service.execute.flow.step;
+package com.tricoq.domain.agent.service.execute.flow;
 
 import com.alibaba.fastjson.JSON;
 import com.tricoq.domain.agent.model.entity.AutoAgentExecuteResultEntity;
