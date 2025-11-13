@@ -3,6 +3,7 @@ package com.tricoq.infrastructure.dao;
 
 import com.tricoq.infrastructure.dao.po.AiClientAdvisor;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
 import java.util.Set;
@@ -90,5 +91,5 @@ public interface IAiClientAdvisorDao {
      * @param advisorIds 顾问id集合
      * @return 顾问配置列表
      */
-    List<AiClientAdvisor> queryByAdvisorIdsEnabled(Set<String> advisorIds);
+    List<AiClientAdvisor> queryByAdvisorIdsEnabled(@Param("advisorIds") Set<String> advisorIds);
 }

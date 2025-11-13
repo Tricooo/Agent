@@ -20,7 +20,7 @@ import java.util.Map;
 @Component
 @RequiredArgsConstructor
 @Slf4j
-public class RootNode extends AbstractExecuteSupport {
+public class RootFlowNode extends AbstractExecuteSupport {
 
     private final IAgentRepository agentRepository;
 

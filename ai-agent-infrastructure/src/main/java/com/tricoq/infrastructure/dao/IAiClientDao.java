@@ -3,6 +3,7 @@ package com.tricoq.infrastructure.dao;
 
 import com.tricoq.infrastructure.dao.po.AiClient;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
 
 import java.util.Collection;
 import java.util.List;
@@ -90,5 +91,5 @@ public interface IAiClientDao {
      * @param clientIds 客户端id集合
      * @return AI客户端配置列表
      */
-    List<AiClient> queryByClientIdEnabled(Collection<String> clientIds);
+    List<AiClient> queryByClientIdEnabled(@Param("clientIds") Collection<String> clientIds);
 }

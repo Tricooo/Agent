@@ -94,7 +94,7 @@ public class AiClientToolMcpNode extends AbstractArmorySupport {
             case "stdio" -> {
                 AiClientToolMcpVO.TransportConfigStdio configStdio = vo.getTransportConfigStdio();
                 var stdioMap = configStdio.getStdio();
-                AiClientToolMcpVO.TransportConfigStdio.Stdio stdio = stdioMap.get(vo.getMcpName());
+                AiClientToolMcpVO.TransportConfigStdio.Stdio stdio = stdioMap.get(vo.getMcpId());
                 ServerParameters parameters = ServerParameters.builder(stdio.getCommand())
                         .env(stdio.getEnv())
                         .args(stdio.getArgs())

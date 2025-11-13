@@ -3,13 +3,13 @@ package com.tricoq.infrastructure.adapter.repository;
 import com.alibaba.fastjson2.TypeReference;
 import com.tricoq.domain.agent.adapter.repository.IAgentRepository;
 import com.tricoq.domain.agent.model.valobj.AiAgentClientFlowConfigVO;
-import com.tricoq.domain.agent.model.valobj.enums.AiAgentEnumVO;
 import com.tricoq.domain.agent.model.valobj.AiClientAdvisorVO;
 import com.tricoq.domain.agent.model.valobj.AiClientApiVO;
 import com.tricoq.domain.agent.model.valobj.AiClientModelVO;
 import com.tricoq.domain.agent.model.valobj.AiClientSystemPromptVO;
 import com.tricoq.domain.agent.model.valobj.AiClientToolMcpVO;
 import com.tricoq.domain.agent.model.valobj.AiClientVO;
+import com.tricoq.domain.agent.model.valobj.enums.AiAgentEnumVO;
 import com.tricoq.infrastructure.dao.IAiAgentFlowConfigDao;
 import com.tricoq.infrastructure.dao.IAiClientAdvisorDao;
 import com.tricoq.infrastructure.dao.IAiClientApiDao;
@@ -31,6 +31,7 @@ import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.stereotype.Repository;
 import org.springframework.util.StringUtils;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -38,6 +39,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * @author trico qiang
@@ -118,14 +120,23 @@ public class AgentRepository implements IAgentRepository {
         if (modelIds.isEmpty()) {
             return List.of();
         }
+        List<AiClientConfig> modelConfigs = aiClientConfigDao
+                .queryBySourceTypeAndIdsEnabled(AiAgentEnumVO.AI_CLIENT_MODEL.getCode(), modelIds);
+        Map<String, List<AiClientConfig>> toolMcpIdMap = modelConfigs.stream()
+                .filter(config ->
+                        config.getTargetType().equals(AiAgentEnumVO.AI_CLIENT_TOOL_MCP.getCode()))
+                .collect(Collectors.groupingBy(AiClientConfig::getSourceId));
         List<AiClientModel> models = aiClientModelDao.queryByIds(modelIds);
-        return models.stream().map(model -> AiClientModelVO.builder()
-                        .modelId(model.getModelId())
-                        .apiId(model.getApiId())
-                        .modelName(model.getModelName())
-                        .modelType(model.getModelType())
-                        //.toolMcpIds(toolMcpIds)
-                        .build())
+        return models.stream().map(model -> {
+                    List<String> mcpIds = toolMcpIdMap.get(model.getModelId()).stream().map(AiClientConfig::getTargetId).toList();
+                    return AiClientModelVO.builder()
+                            .modelId(model.getModelId())
+                            .apiId(model.getApiId())
+                            .modelName(model.getModelName())
+                            .modelType(model.getModelType())
+                            .toolMcpIds(mcpIds)
+                            .build();
+                })
                 .toList();
     }
 
@@ -134,18 +145,36 @@ public class AgentRepository implements IAgentRepository {
         if (CollectionUtils.isEmpty(clientIdList)) {
             return List.of();
         }
+        //查找client对应的tool_mcp
         Set<String> clientIdSet = new HashSet<>(clientIdList);
         List<AiClientConfig> aiClientConfigs = aiClientConfigDao
                 .queryBySourceTypeAndIdsEnabled(AiAgentEnumVO.AI_CLIENT.getCode(), clientIdSet);
-        Set<String> mcpToolIds = aiClientConfigs.stream()
+        Set<String> clientMcpIdSet = aiClientConfigs.stream()
                 .filter(config ->
                         config.getTargetType().equals(AiAgentEnumVO.AI_CLIENT_TOOL_MCP.getCode()))
                 .map(AiClientConfig::getTargetId)
                 .collect(Collectors.toSet());
-        if (mcpToolIds.isEmpty()) {
-            return List.of();
+
+        //查找model对应的tool_mcp
+        Set<String> modelIdSet = aiClientConfigs.stream()
+                .filter(config ->
+                        config.getTargetType().equals(AiAgentEnumVO.AI_CLIENT_MODEL.getCode()))
+                .map(AiClientConfig::getTargetId)
+                .collect(Collectors.toSet());
+        List<AiClientConfig> modelConfigs = new ArrayList<>();
+        if (!modelIdSet.isEmpty()) {
+            modelConfigs.addAll(aiClientConfigDao
+                    .queryBySourceTypeAndIdsEnabled(AiAgentEnumVO.AI_CLIENT_MODEL.getCode(), modelIdSet));
         }
-        List<AiClientToolMcp> mcps = aiClientToolMcpDao.queryByMcpIdsEnabled(mcpToolIds);
+        Set<String> modelMcpIdSet = modelConfigs.stream()
+                .filter(config ->
+                        config.getTargetType().equals(AiAgentEnumVO.AI_CLIENT_TOOL_MCP.getCode()))
+                .map(AiClientConfig::getTargetId)
+                .collect(Collectors.toSet());
+        Set<String> mcpIdSet = Stream.of(clientMcpIdSet, modelMcpIdSet)
+                .flatMap(Set::stream)
+                .collect(Collectors.toSet());
+        List<AiClientToolMcp> mcps = aiClientToolMcpDao.queryByMcpIdsEnabled(mcpIdSet);
         return mcps.stream().map(mcp -> {
             String transportConfig = mcp.getTransportConfig();
             if (!StringUtils.hasText(transportConfig)) {
@@ -281,7 +310,7 @@ public class AgentRepository implements IAgentRepository {
                 }
                 List<String> targetIds = configs.stream().map(AiClientConfig::getTargetId).toList();
                 switch (type) {
-                    case "mcp" -> {
+                    case "tool_mcp" -> {
                         aiClientVO.setMcpIdList(targetIds);
                     }
                     case "advisor" -> {

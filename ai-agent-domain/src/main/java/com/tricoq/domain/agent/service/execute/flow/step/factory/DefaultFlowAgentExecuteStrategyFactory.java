@@ -2,8 +2,7 @@ package com.tricoq.domain.agent.service.execute.flow.step.factory;
 
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
 import com.tricoq.domain.agent.model.valobj.AiAgentClientFlowConfigVO;
-import com.tricoq.domain.agent.service.execute.auto.step.factory.DefaultExecuteStrategyFactory;
-import com.tricoq.domain.agent.service.execute.flow.step.RootNode;
+import com.tricoq.domain.agent.service.execute.flow.step.RootFlowNode;
 import com.tricoq.domain.framework.chain.StrategyHandler;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -26,10 +25,10 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class DefaultFlowAgentExecuteStrategyFactory {
 
-    private final RootNode rootNode;
+    private final RootFlowNode rootFlowNode;
 
     public StrategyHandler<ExecuteCommandEntity, DefaultFlowAgentExecuteStrategyFactory.DynamicContext, String> strategy() {
-        return rootNode;
+        return rootFlowNode;
     }
 
     @Data

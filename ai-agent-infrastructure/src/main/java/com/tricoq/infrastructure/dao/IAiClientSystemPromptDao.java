@@ -3,6 +3,7 @@ package com.tricoq.infrastructure.dao;
 
 import com.tricoq.infrastructure.dao.po.AiClientSystemPrompt;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
 
 import java.util.Collection;
 import java.util.List;
@@ -73,5 +74,5 @@ public interface IAiClientSystemPromptDao {
      * @param systemPromptIds 提示词id集合
      * @return 提示词配置集合
      */
-    List<AiClientSystemPrompt> queryByIdsPromptsEnabled(Collection<String> systemPromptIds);
+    List<AiClientSystemPrompt> queryByIdsPromptsEnabled(@Param("systemPromptIds") Collection<String> systemPromptIds);
 }

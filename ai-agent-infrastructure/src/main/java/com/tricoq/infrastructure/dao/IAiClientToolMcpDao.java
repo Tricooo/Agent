@@ -2,6 +2,7 @@ package com.tricoq.infrastructure.dao;
 
 import com.tricoq.infrastructure.dao.po.AiClientToolMcp;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
 import java.util.Set;
@@ -95,5 +96,5 @@ public interface IAiClientToolMcpDao {
      * @param mcpToolIds mcp id集合
      * @return MCP客户端配置列表
      */
-    List<AiClientToolMcp> queryByMcpIdsEnabled(Set<String> mcpToolIds);
+    List<AiClientToolMcp> queryByMcpIdsEnabled(@Param("mcpToolIds") Set<String> mcpToolIds);
 }

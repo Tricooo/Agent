@@ -35,10 +35,10 @@ public class Step4ExecuteStepsNode extends AbstractExecuteSupport {
             AiAgentClientFlowConfigVO aiAgentClientFlowConfigVO = dynamicContext.getConfigMap().get(AiClientTypeEnumVO.EXECUTOR_CLIENT.getCode());
 
             // 获取规划客户端
-            ChatClient executorChatClient = getBean(aiAgentClientFlowConfigVO.getClientId());
+            ChatClient executorChatClient = getChatClient(aiAgentClientFlowConfigVO.getClientId());
 
             // 从动态上下文获取解析的步骤
-            Map<String, String> stepsMap = dynamicContext.getValue("stepsMap");
+            Map<String, String> stepsMap = dynamicContext.getStepsMap();
 
             if (stepsMap == null || stepsMap.isEmpty()) {
                 return "步骤映射为空，无法执行";
