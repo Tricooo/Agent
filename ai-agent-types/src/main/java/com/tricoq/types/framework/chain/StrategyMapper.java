@@ -1,4 +1,4 @@
-package com.tricoq.domain.framework.chain;
+package com.tricoq.types.framework.chain;
 
 /**
  * 赋予节点路由到别的节点的能力

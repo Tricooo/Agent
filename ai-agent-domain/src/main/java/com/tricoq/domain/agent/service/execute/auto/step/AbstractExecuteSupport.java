@@ -4,12 +4,11 @@ import com.alibaba.fastjson.JSON;
 import com.tricoq.domain.agent.model.entity.AutoAgentExecuteResultEntity;
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
 import com.tricoq.domain.agent.service.execute.auto.step.factory.DefaultExecuteStrategyFactory;
-import com.tricoq.domain.framework.chain.AbstractMultiThreadStrategyRouter;
+import com.tricoq.types.framework.chain.AbstractMultiThreadStrategyRouter;
+import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationContext;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter;
-
-import javax.annotation.Resource;
 
 /**
  * @author trico qiang

@@ -2,7 +2,8 @@ package com.tricoq.domain.agent.service.armory;
 
 import com.tricoq.domain.agent.model.entity.ArmoryCommandEntity;
 import com.tricoq.domain.agent.service.armory.factory.DefaultArmoryStrategyFactory;
-import com.tricoq.domain.framework.chain.AbstractMultiThreadStrategyRouter;
+import com.tricoq.types.framework.chain.AbstractMultiThreadStrategyRouter;
+import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.beans.factory.support.AbstractBeanDefinition;
@@ -10,7 +11,6 @@ import org.springframework.beans.factory.support.BeanDefinitionBuilder;
 import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 import org.springframework.context.ApplicationContext;
 
-import javax.annotation.Resource;
 
 /**
  * 增强层

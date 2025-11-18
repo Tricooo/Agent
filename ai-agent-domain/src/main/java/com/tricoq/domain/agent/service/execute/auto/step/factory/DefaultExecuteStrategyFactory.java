@@ -3,7 +3,7 @@ package com.tricoq.domain.agent.service.execute.auto.step.factory;
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
 import com.tricoq.domain.agent.model.valobj.AiAgentClientFlowConfigVO;
 import com.tricoq.domain.agent.service.execute.auto.step.RootExecuteNode;
-import com.tricoq.domain.framework.chain.StrategyHandler;
+import com.tricoq.types.framework.chain.StrategyHandler;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

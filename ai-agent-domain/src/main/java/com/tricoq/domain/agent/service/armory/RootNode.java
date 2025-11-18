@@ -5,7 +5,7 @@ import com.tricoq.domain.agent.model.entity.ArmoryCommandEntity;
 import com.tricoq.domain.agent.model.valobj.enums.AiAgentEnumVO;
 import com.tricoq.domain.agent.service.armory.business.data.ILoadDataStrategy;
 import com.tricoq.domain.agent.service.armory.factory.DefaultArmoryStrategyFactory;
-import com.tricoq.domain.framework.chain.StrategyHandler;
+import com.tricoq.types.framework.chain.StrategyHandler;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

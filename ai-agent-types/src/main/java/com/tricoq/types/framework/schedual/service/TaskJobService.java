@@ -1,8 +1,8 @@
-package com.tricoq.domain.framework.schedual.service;
+package com.tricoq.types.framework.schedual.service;
 
 
-import com.tricoq.domain.framework.schedual.model.TaskScheduleVO;
-import com.tricoq.domain.framework.schedual.provider.ITaskDataProvider;
+import com.tricoq.types.framework.schedual.model.TaskScheduleVO;
+import com.tricoq.types.framework.schedual.provider.ITaskDataProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.DisposableBean;

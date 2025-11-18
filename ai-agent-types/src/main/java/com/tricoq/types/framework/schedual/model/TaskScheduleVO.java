@@ -1,4 +1,4 @@
-package com.tricoq.domain.framework.schedual.model;
+package com.tricoq.types.framework.schedual.model;
 
 import lombok.Data;
 

@@ -1,4 +1,4 @@
-package com.tricoq.domain.framework.chain;
+package com.tricoq.types.framework.chain;
 
 import lombok.Getter;
 import lombok.Setter;

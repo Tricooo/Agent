@@ -1,6 +1,6 @@
-package com.tricoq.domain.framework.schedual.service;
+package com.tricoq.types.framework.schedual.service;
 
-import com.tricoq.domain.framework.schedual.model.TaskScheduleVO;
+import com.tricoq.types.framework.schedual.model.TaskScheduleVO;
 
 /**
  * 任务调度服务接口

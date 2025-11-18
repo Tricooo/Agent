@@ -2,8 +2,7 @@ package com.tricoq.domain.agent.service.armory.factory;
 
 import com.tricoq.domain.agent.model.entity.ArmoryCommandEntity;
 import com.tricoq.domain.agent.service.armory.RootNode;
-import com.tricoq.domain.framework.chain.StrategyHandler;
-import lombok.AllArgsConstructor;
+import com.tricoq.types.framework.chain.StrategyHandler;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
