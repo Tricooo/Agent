@@ -1,4 +1,4 @@
-package com.tricoq.types.framework.schedual.config;
+package com.tricoq.types.framework.schedule.config;
 
 import lombok.Getter;
 import lombok.Setter;

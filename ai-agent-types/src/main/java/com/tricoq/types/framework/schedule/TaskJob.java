@@ -1,8 +1,8 @@
-package com.tricoq.types.framework.schedual;
+package com.tricoq.types.framework.schedule;
 
 
-import com.tricoq.types.framework.schedual.config.TaskJobAutoProperties;
-import com.tricoq.types.framework.schedual.service.ITaskJobService;
+import com.tricoq.types.framework.schedule.config.TaskJobAutoProperties;
+import com.tricoq.types.framework.schedule.service.ITaskJobService;
 import org.springframework.scheduling.annotation.Scheduled;
 
 /**

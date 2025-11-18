@@ -1,10 +1,10 @@
-package com.tricoq.types.framework.schedual.config;
+package com.tricoq.types.framework.schedule.config;
 
 
-import com.tricoq.types.framework.schedual.TaskJob;
-import com.tricoq.types.framework.schedual.provider.ITaskDataProvider;
-import com.tricoq.types.framework.schedual.service.ITaskJobService;
-import com.tricoq.types.framework.schedual.service.TaskJobService;
+import com.tricoq.types.framework.schedule.TaskJob;
+import com.tricoq.types.framework.schedule.provider.ITaskDataProvider;
+import com.tricoq.types.framework.schedule.service.ITaskJobService;
+import com.tricoq.types.framework.schedule.service.TaskJobService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;

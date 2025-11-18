@@ -1,8 +1,8 @@
-package com.tricoq.types.framework.schedual.provider;
+package com.tricoq.types.framework.schedule.provider;
 
 
 
-import com.tricoq.types.framework.schedual.model.TaskScheduleVO;
+import com.tricoq.types.framework.schedule.model.TaskScheduleVO;
 
 import java.util.List;
 
