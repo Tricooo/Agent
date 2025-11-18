@@ -1,6 +1,7 @@
 package com.tricoq.domain.agent.adapter.repository;
 
 import com.tricoq.domain.agent.model.valobj.AiAgentClientFlowConfigVO;
+import com.tricoq.domain.agent.model.valobj.AiAgentTaskScheduleVO;
 import com.tricoq.domain.agent.model.valobj.AiAgentVO;
 import com.tricoq.domain.agent.model.valobj.AiClientAdvisorVO;
 import com.tricoq.domain.agent.model.valobj.AiClientApiVO;
@@ -37,4 +38,9 @@ public interface IAgentRepository {
     Map<String,AiAgentClientFlowConfigVO> queryAiAgentFlowConfigByAgentId(String agentId);
 
     AiAgentVO queryAgentByAgentId(String agentId);
+
+    List<AiAgentTaskScheduleVO> queryAllValidTaskSchedule();
+
+    List<Long> queryAllInvalidTaskScheduleIds();
+
 }

@@ -1,6 +1,9 @@
 package com.tricoq.types.framework.schedule.model;
 
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
@@ -10,6 +13,9 @@ import java.util.function.Supplier;
  * @author trico qiang
  */
 @Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class TaskScheduleVO {
 
     /** 任务ID */

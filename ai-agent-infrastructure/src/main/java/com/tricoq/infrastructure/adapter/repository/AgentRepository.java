@@ -3,6 +3,7 @@ package com.tricoq.infrastructure.adapter.repository;
 import com.alibaba.fastjson2.TypeReference;
 import com.tricoq.domain.agent.adapter.repository.IAgentRepository;
 import com.tricoq.domain.agent.model.valobj.AiAgentClientFlowConfigVO;
+import com.tricoq.domain.agent.model.valobj.AiAgentTaskScheduleVO;
 import com.tricoq.domain.agent.model.valobj.AiAgentVO;
 import com.tricoq.domain.agent.model.valobj.AiClientAdvisorVO;
 import com.tricoq.domain.agent.model.valobj.AiClientApiVO;
@@ -13,6 +14,7 @@ import com.tricoq.domain.agent.model.valobj.AiClientVO;
 import com.tricoq.domain.agent.model.valobj.enums.AiAgentEnumVO;
 import com.tricoq.infrastructure.dao.IAiAgentDao;
 import com.tricoq.infrastructure.dao.IAiAgentFlowConfigDao;
+import com.tricoq.infrastructure.dao.IAiAgentTaskScheduleDao;
 import com.tricoq.infrastructure.dao.IAiClientAdvisorDao;
 import com.tricoq.infrastructure.dao.IAiClientApiDao;
 import com.tricoq.infrastructure.dao.IAiClientConfigDao;
@@ -22,6 +24,7 @@ import com.tricoq.infrastructure.dao.IAiClientSystemPromptDao;
 import com.tricoq.infrastructure.dao.IAiClientToolMcpDao;
 import com.tricoq.infrastructure.dao.po.AiAgent;
 import com.tricoq.infrastructure.dao.po.AiAgentFlowConfig;
+import com.tricoq.infrastructure.dao.po.AiAgentTaskSchedule;
 import com.tricoq.infrastructure.dao.po.AiClient;
 import com.tricoq.infrastructure.dao.po.AiClientAdvisor;
 import com.tricoq.infrastructure.dao.po.AiClientApi;
@@ -69,6 +72,8 @@ public class AgentRepository implements IAgentRepository {
     private final IAiAgentFlowConfigDao aiAgentFlowConfigDao;
 
     private final IAiAgentDao aiAgentDao;
+
+    private final IAiAgentTaskScheduleDao aiAgentTaskScheduleDao;
 
     @Override
     public List<AiClientApiVO> queryAiClientApiVOListByClientIds(List<String> clientIdList) {
@@ -313,18 +318,10 @@ public class AgentRepository implements IAgentRepository {
                 }
                 List<String> targetIds = configs.stream().map(AiClientConfig::getTargetId).toList();
                 switch (type) {
-                    case "tool_mcp" -> {
-                        aiClientVO.setMcpIdList(targetIds);
-                    }
-                    case "advisor" -> {
-                        aiClientVO.setAdvisorIdList(targetIds);
-                    }
-                    case "prompt" -> {
-                        aiClientVO.setPromptIdList(targetIds);
-                    }
-                    case "model" -> {
-                        aiClientVO.setModelId(targetIds.stream().findFirst().orElseThrow());
-                    }
+                    case "tool_mcp" -> aiClientVO.setMcpIdList(targetIds);
+                    case "advisor" -> aiClientVO.setAdvisorIdList(targetIds);
+                    case "prompt" -> aiClientVO.setPromptIdList(targetIds);
+                    case "model" -> aiClientVO.setModelId(targetIds.stream().findFirst().orElseThrow());
                 }
             });
             return aiClientVO;
@@ -403,5 +400,25 @@ public class AgentRepository implements IAgentRepository {
                 .strategy(aiAgent.getStrategy())
                 .status(aiAgent.getStatus())
                 .build();
+    }
+
+    @Override
+    public List<AiAgentTaskScheduleVO> queryAllValidTaskSchedule() {
+        List<AiAgentTaskSchedule> schedules = aiAgentTaskScheduleDao.queryAllValidTaskSchedule();
+        if (schedules.isEmpty()) {
+            return List.of();
+        }
+        return schedules.stream().map(taskSchedule -> AiAgentTaskScheduleVO.builder()
+                .id(taskSchedule.getId())
+                .agentId(taskSchedule.getAgentId())
+                .description(taskSchedule.getDescription())
+                .cronExpression(taskSchedule.getCronExpression())
+                .taskParam(taskSchedule.getTaskParam())
+                .build()).toList();
+    }
+
+    @Override
+    public List<Long> queryAllInvalidTaskScheduleIds() {
+        return aiAgentTaskScheduleDao.queryAllInvalidTaskScheduleIds();
     }
 }

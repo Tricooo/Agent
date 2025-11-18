@@ -74,5 +74,15 @@ public interface IAiAgentTaskScheduleDao {
      * @return 智能体任务调度配置列表
      */
     List<AiAgentTaskSchedule> queryAll();
+    /**
+     * 查询所有有效的任务调度配置
+     * @return 智能体任务调度配置列表
+     */
+    List<AiAgentTaskSchedule> queryAllValidTaskSchedule();
 
+    /**
+     * 查询所有无效的任务调度配置ID
+     * @return 无效任务调度配置ID列表
+     */
+    List<Long> queryAllInvalidTaskScheduleIds();
 }

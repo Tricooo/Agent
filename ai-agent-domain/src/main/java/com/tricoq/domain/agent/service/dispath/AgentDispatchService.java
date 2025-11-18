@@ -4,7 +4,7 @@ import com.tricoq.domain.agent.adapter.repository.IAgentRepository;
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
 import com.tricoq.domain.agent.model.valobj.AiAgentVO;
 import com.tricoq.domain.agent.service.IAgentDispatchService;
-import com.tricoq.domain.agent.service.execute.IExecuteStrategy;
+import com.tricoq.domain.agent.service.IExecuteStrategy;
 import com.tricoq.types.exception.BizException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
