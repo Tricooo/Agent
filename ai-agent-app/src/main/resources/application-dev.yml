@@ -74,3 +74,8 @@ logging:
   level:
     root: info
   config: classpath:logback-spring.xml
+
+wrench:
+  task:
+    job:
+      enabled: false

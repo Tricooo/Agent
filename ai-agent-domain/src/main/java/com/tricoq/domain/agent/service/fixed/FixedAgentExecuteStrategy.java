@@ -46,7 +46,9 @@ public class FixedAgentExecuteStrategy implements IExecuteStrategy {
 
         for (AiAgentClientFlowConfigVO config : aiAgentClientList) {
             ChatClient chatClient = getChatClientByClientId(config.getClientId());
-
+            //content 显式传递是为了agent之间的交互
+            //使用chat memory存储content是为了维持人和系统的连续性，用户一般只关系最终的执行结果，所以content可以只存最终结果
+            //用户请求是需要都存储的
             content = chatClient.prompt(requestParameter.getUserInput() + "，" + content)
                     .system(s -> s.param("current_date", LocalDate.now().toString()))
                     .advisors(a -> a
