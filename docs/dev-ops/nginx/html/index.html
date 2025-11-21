@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Auto Agent 智能体 - By Trico Qiang</title>
+    <title>AI Auto Agent 智能体 - By 小傅哥</title>
     <script src="js/3.4.17.js"></script>
     <script src="js/marked.min.js"></script>
     <script src="js/purify.min.js"></script>
@@ -417,7 +417,7 @@
             <div class="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
                 <span class="text-white font-bold text-sm">🤖</span>
             </div>
-            <h1 class="text-xl font-bold text-gray-800">AI Auto Agent By Trico Qiang</h1>
+            <h1 class="text-xl font-bold text-gray-800">AI Auto Agent By 小傅哥</h1>
         </div>
     </div>
 
@@ -524,13 +524,28 @@
             <div class="mb-3 p-2 bg-gray-50 rounded-lg">
                 <!-- 智能体选择区域 -->
                 <div class="flex items-center justify-between mb-1">
-                    <div class="flex items-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                        </svg>
-                        <a href="select-agent.html" class="flex items-center text-xs font-semibold text-gray-800 hover:text-primary-600 transition-colors">选择智能体 <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                        </svg></a>
+                    <div class="flex items-center gap-3">
+                        <div class="flex items-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                            </svg>
+                            <a href="select-agent.html" class="flex items-center text-xs font-semibold text-gray-800 hover:text-primary-600 transition-colors">选择智能体 <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                            </svg></a>
+                        </div>
+                        
+                        <!-- 智能体下拉选择框 -->
+                        <div class="relative">
+                            <select id="agentSelector" class="text-xs bg-white border border-gray-300 rounded-lg px-2 py-1 pr-6 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors duration-200 min-w-[150px]">
+                                <option value="">选择智能体...</option>
+                            </select>
+                            <div id="agentSelectorLoading" class="hidden absolute right-2 top-1/2 transform -translate-y-1/2">
+                                <svg class="animate-spin h-3 w-3 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                            </div>
+                        </div>
                     </div>
                     
                     <!-- 最大执行步数选择 -->
@@ -1355,15 +1370,11 @@
     // 智能体卡片点击事件
     document.querySelectorAll('.agent-card').forEach(card => {
         card.addEventListener('click', function() {
-            // 移除其他卡片的选中状态
-            document.querySelectorAll('.agent-card').forEach(c => c.classList.remove('selected'));
-            // 添加当前卡片的选中状态
-            this.classList.add('selected');
             // 获取选中的智能体ID
-            selectedAgentId = this.getAttribute('data-agent-id');
+            const agentId = this.getAttribute('data-agent-id');
             
-            // 更新下拉菜单中的案例选项
-            updateDropdownCases(selectedAgentId);
+            // 使用同步函数更新选择状态
+            syncAgentSelection(agentId);
         });
     });
     
@@ -1457,6 +1468,110 @@
     document.getElementById('newChatBtn').addEventListener('click', createNewChat);
     document.getElementById('clearAllChatsBtn').addEventListener('click', clearAllChats);
 
+    // 获取智能体列表数据
+    async function loadAvailableAgents() {
+        const agentSelector = document.getElementById('agentSelector');
+        const agentSelectorLoading = document.getElementById('agentSelectorLoading');
+        
+        try {
+            // 显示加载状态
+            agentSelectorLoading.style.display = 'inline-block';
+            agentSelector.disabled = true;
+            
+            const response = await fetch('http://localhost:8099/api/v1/agent/query_available_agents', {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error('获取智能体列表失败: ' + response.status);
+            }
+            
+            const result = await response.json();
+            
+            if (result.code === '0000' && result.data) {
+                // 清空现有选项（保留默认选项）
+                agentSelector.innerHTML = '<option value="">请选择智能体</option>';
+                
+                // 添加智能体选项
+                result.data.forEach(agent => {
+                    const option = document.createElement('option');
+                    option.value = agent.agentId;
+                    option.textContent = agent.agentName;
+                    option.setAttribute('data-description', agent.description || '');
+                    agentSelector.appendChild(option);
+                });
+                
+                console.log('智能体列表加载成功:', result.data);
+            } else {
+                console.error('获取智能体列表失败:', result.info || '未知错误');
+                // 显示错误提示
+                agentSelector.innerHTML = '<option value="">加载失败，请刷新重试</option>';
+            }
+        } catch (error) {
+            console.error('获取智能体列表错误:', error);
+            agentSelector.innerHTML = '<option value="">加载失败，请刷新重试</option>';
+        } finally {
+            // 隐藏加载状态
+            agentSelectorLoading.style.display = 'none';
+            agentSelector.disabled = false;
+        }
+    }
+
+    // 智能体选择事件处理
+    document.getElementById('agentSelector').addEventListener('change', function() {
+        const newSelectedAgentId = this.value;
+        const selectedOption = this.options[this.selectedIndex];
+        
+        if (newSelectedAgentId) {
+            // 更新全局选择的智能体ID
+            selectedAgentId = newSelectedAgentId;
+            currentChatHistory.agentId = newSelectedAgentId;
+            
+            // 获取智能体描述
+            const agentDescription = selectedOption.getAttribute('data-description');
+            console.log('选择智能体:', selectedOption.textContent, '描述:', agentDescription);
+            
+            // 同步更新智能体卡片的选择状态
+            document.querySelectorAll('.agent-card').forEach(card => {
+                card.classList.remove('selected');
+                if (card.getAttribute('data-agent-id') === newSelectedAgentId) {
+                    card.classList.add('selected');
+                }
+            });
+            
+            // 更新下拉菜单中的案例
+            updateDropdownCases(newSelectedAgentId);
+        } else {
+            selectedAgentId = null;
+            currentChatHistory.agentId = '';
+            
+            // 清除所有智能体卡片的选择状态
+            document.querySelectorAll('.agent-card').forEach(card => {
+                card.classList.remove('selected');
+            });
+            
+            // 清空案例下拉菜单
+            const dropdownContainer = document.getElementById('dropdownCaseContainer');
+            const defaultMessage = document.getElementById('dropdown-default-message');
+            dropdownContainer.innerHTML = '';
+            dropdownContainer.appendChild(defaultMessage);
+            defaultMessage.style.display = 'block';
+        }
+    });
+
+    // 更新智能体卡片点击事件，确保与下拉框同步
+    function syncAgentSelection(agentId) {
+        // 更新下拉框选择
+        const agentSelector = document.getElementById('agentSelector');
+        agentSelector.value = agentId || '';
+        
+        // 触发change事件以保持一致性
+        agentSelector.dispatchEvent(new Event('change'));
+    }
+
     // 页面加载完成后初始化
     window.addEventListener('load', function() {
         // 初始化当前对话历史
@@ -1471,6 +1586,9 @@
         
         // 加载并显示历史对话列表
         updateChatHistoryUI();
+        
+        // 加载智能体列表
+        loadAvailableAgents();
         
         document.getElementById('messageInput').focus();
         

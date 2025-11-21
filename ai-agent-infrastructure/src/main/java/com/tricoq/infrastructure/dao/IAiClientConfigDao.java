@@ -122,4 +122,17 @@ public interface IAiClientConfigDao {
      * @return AI客户端配置对象列表
      */
     List<AiClientConfig> queryAll();
+
+    /**
+     * 根据源类型、源ID、目标类型、目标ID查询AI客户端配置
+     * @param sourceType 源类型
+     * @param sourceId 源ID
+     * @param targetType 目标类型
+     * @param targetId 目标ID
+     * @return AI客户端配置对象列表
+     */
+    List<AiClientConfig> queryByConditions(@Param("sourceType") String sourceType,
+                                           @Param("sourceId") String sourceId,
+                                           @Param("targetType") String targetType,
+                                           @Param("targetId") String targetId);
 }

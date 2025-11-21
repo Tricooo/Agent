@@ -9,7 +9,7 @@ import java.time.LocalDateTime;
 
 /**
  * AI智能体配置表
- * @author bugstack虫洞栈
+ * @author trico qiang
  * @description AI智能体配置表 PO 对象
  */
 @Data

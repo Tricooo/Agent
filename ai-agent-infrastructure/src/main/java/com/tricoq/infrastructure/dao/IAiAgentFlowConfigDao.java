@@ -40,7 +40,7 @@ public interface IAiAgentFlowConfigDao {
      * @param agentId 智能体ID
      * @return 影响行数
      */
-    int deleteByAgentId(Long agentId);
+    int deleteByAgentId(String agentId);
 
     /**
      * 根据ID查询智能体-客户端关联配置

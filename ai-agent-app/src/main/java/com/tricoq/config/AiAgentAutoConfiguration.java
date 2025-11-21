@@ -2,7 +2,8 @@ package com.tricoq.config;
 
 import com.tricoq.domain.agent.model.entity.ArmoryCommandEntity;
 import com.tricoq.domain.agent.model.valobj.enums.AiAgentEnumVO;
-import com.tricoq.domain.agent.service.armory.factory.DefaultArmoryStrategyFactory;
+import com.tricoq.domain.agent.service.IArmoryService;
+import com.tricoq.domain.agent.service.armory.node.factory.DefaultArmoryStrategyFactory;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
@@ -30,7 +31,7 @@ public class AiAgentAutoConfiguration implements ApplicationListener<Application
 
     private final AiAgentAutoConfigProperties aiAgentAutoConfigProperties;
 
-    private final DefaultArmoryStrategyFactory defaultArmoryStrategyFactory;
+    private final IArmoryService armoryService;
 
     @Override
     public void onApplicationEvent(ApplicationReadyEvent event) {
@@ -52,16 +53,10 @@ public class AiAgentAutoConfiguration implements ApplicationListener<Application
 
             log.info("开始自动装配AI客户端，客户端ID列表: {}", clientIds);
 
-            var strategyHandler = Optional.ofNullable(defaultArmoryStrategyFactory.armoryStrategyHandler())
+            var strategyHandler = Optional.ofNullable(armoryService.acceptArmoryAllAvailableAgents())
                     .orElseThrow(() -> new RuntimeException("装配根节点不存在"));
 
-            String result = strategyHandler.apply(ArmoryCommandEntity.builder()
-                            .commandIdList(clientIds)
-                            .commandType(AiAgentEnumVO.AI_CLIENT.getCode())
-                            .build()
-                    , new DefaultArmoryStrategyFactory.DynamicContext());
-
-            log.info("AI Agent 自动装配完成，结果: {}", result);
+            log.info("AI Agent 自动装配完成，结果: {}", strategyHandler);
         } catch (Exception e) {
             log.error("AI Agent 自动装配失败", e);
         }

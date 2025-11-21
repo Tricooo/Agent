@@ -11,6 +11,7 @@ import com.tricoq.domain.agent.model.valobj.AiClientModelVO;
 import com.tricoq.domain.agent.model.valobj.AiClientSystemPromptVO;
 import com.tricoq.domain.agent.model.valobj.AiClientToolMcpVO;
 import com.tricoq.domain.agent.model.valobj.AiClientVO;
+import com.tricoq.domain.agent.model.valobj.AiRagOrderVO;
 import com.tricoq.domain.agent.model.valobj.enums.AiAgentEnumVO;
 import com.tricoq.infrastructure.dao.IAiAgentDao;
 import com.tricoq.infrastructure.dao.IAiAgentFlowConfigDao;
@@ -20,6 +21,7 @@ import com.tricoq.infrastructure.dao.IAiClientApiDao;
 import com.tricoq.infrastructure.dao.IAiClientConfigDao;
 import com.tricoq.infrastructure.dao.IAiClientDao;
 import com.tricoq.infrastructure.dao.IAiClientModelDao;
+import com.tricoq.infrastructure.dao.IAiClientRagOrderDao;
 import com.tricoq.infrastructure.dao.IAiClientSystemPromptDao;
 import com.tricoq.infrastructure.dao.IAiClientToolMcpDao;
 import com.tricoq.infrastructure.dao.po.AiAgent;
@@ -30,6 +32,7 @@ import com.tricoq.infrastructure.dao.po.AiClientAdvisor;
 import com.tricoq.infrastructure.dao.po.AiClientApi;
 import com.tricoq.infrastructure.dao.po.AiClientConfig;
 import com.tricoq.infrastructure.dao.po.AiClientModel;
+import com.tricoq.infrastructure.dao.po.AiClientRagOrder;
 import com.tricoq.infrastructure.dao.po.AiClientSystemPrompt;
 import com.tricoq.infrastructure.dao.po.AiClientToolMcp;
 import lombok.RequiredArgsConstructor;
@@ -74,6 +77,8 @@ public class AgentRepository implements IAgentRepository {
     private final IAiAgentDao aiAgentDao;
 
     private final IAiAgentTaskScheduleDao aiAgentTaskScheduleDao;
+
+    private final IAiClientRagOrderDao aiClientRagOrderDao;
 
     @Override
     public List<AiClientApiVO> queryAiClientApiVOListByClientIds(List<String> clientIdList) {
@@ -403,6 +408,26 @@ public class AgentRepository implements IAgentRepository {
     }
 
     @Override
+    public List<AiAgentClientFlowConfigVO> queryAiAgentClientsByAgentId(String aiAgentId) {
+        List<AiAgentClientFlowConfigVO> aiAgentClientFlowConfigVOS = new ArrayList<>();
+
+        List<AiAgentFlowConfig> flowConfigs = aiAgentFlowConfigDao.queryByAgentId(aiAgentId);
+        for (AiAgentFlowConfig flowConfig : flowConfigs) {
+            AiAgentClientFlowConfigVO configVO = AiAgentClientFlowConfigVO.builder()
+                    .clientId(flowConfig.getClientId())
+                    .clientName(flowConfig.getClientName())
+                    .clientType(flowConfig.getClientType())
+                    .sequence(flowConfig.getSequence())
+                    .stepPrompt(flowConfig.getStepPrompt())
+                    .build();
+
+            aiAgentClientFlowConfigVOS.add(configVO);
+        }
+
+        return aiAgentClientFlowConfigVOS;
+    }
+
+    @Override
     public List<AiAgentTaskScheduleVO> queryAllValidTaskSchedule() {
         List<AiAgentTaskSchedule> schedules = aiAgentTaskScheduleDao.queryAllValidTaskSchedule();
         if (schedules.isEmpty()) {
@@ -420,5 +445,31 @@ public class AgentRepository implements IAgentRepository {
     @Override
     public List<Long> queryAllInvalidTaskScheduleIds() {
         return aiAgentTaskScheduleDao.queryAllInvalidTaskScheduleIds();
+    }
+
+    @Override
+    public void createTagOrder(AiRagOrderVO aiRagOrderVO) {
+        AiClientRagOrder aiRagOrder = new AiClientRagOrder();
+        aiRagOrder.setRagName(aiRagOrderVO.getRagName());
+        aiRagOrder.setKnowledgeTag(aiRagOrderVO.getKnowledgeTag());
+        aiRagOrder.setStatus(1);
+        aiClientRagOrderDao.insert(aiRagOrder);
+    }
+
+    @Override
+    public List<AiAgentVO> queryAvailableAgents() {
+        List<AiAgent> aiAgents = aiAgentDao.queryEnabledAgents();
+        List<AiAgentVO> aiAgentVOS = new ArrayList<>();
+        for (AiAgent aiAgent : aiAgents) {
+            aiAgentVOS.add(AiAgentVO.builder()
+                    .agentId(aiAgent.getAgentId())
+                    .agentName(aiAgent.getAgentName())
+                    .description(aiAgent.getDescription())
+                    .channel(aiAgent.getChannel())
+                    .strategy(aiAgent.getStrategy())
+                    .status(aiAgent.getStatus())
+                    .build());
+        }
+        return aiAgentVOS;
     }
 }

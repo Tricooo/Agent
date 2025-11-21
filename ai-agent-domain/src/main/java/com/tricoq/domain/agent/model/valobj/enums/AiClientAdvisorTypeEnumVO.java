@@ -1,7 +1,7 @@
 package com.tricoq.domain.agent.model.valobj.enums;
 
 import com.tricoq.domain.agent.model.valobj.AiClientAdvisorVO;
-import com.tricoq.domain.agent.service.armory.factory.element.RagAnswerAdvisor;
+import com.tricoq.domain.agent.service.armory.node.factory.element.RagAnswerAdvisor;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import org.apache.commons.lang3.StringUtils;

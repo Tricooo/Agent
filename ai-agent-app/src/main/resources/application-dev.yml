@@ -59,10 +59,6 @@ spring:
     agent:
       auto-config:
         enabled: true
-        client-ids:
-          - 2101
-          - 2102
-          - 2103
 
 # MyBatis 配置【如需使用记得打开】
 #mybatis:

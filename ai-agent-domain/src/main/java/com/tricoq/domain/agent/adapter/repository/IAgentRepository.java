@@ -9,6 +9,7 @@ import com.tricoq.domain.agent.model.valobj.AiClientModelVO;
 import com.tricoq.domain.agent.model.valobj.AiClientSystemPromptVO;
 import com.tricoq.domain.agent.model.valobj.AiClientToolMcpVO;
 import com.tricoq.domain.agent.model.valobj.AiClientVO;
+import com.tricoq.domain.agent.model.valobj.AiRagOrderVO;
 
 import java.util.List;
 import java.util.Map;
@@ -39,8 +40,17 @@ public interface IAgentRepository {
 
     AiAgentVO queryAgentByAgentId(String agentId);
 
+    List<AiAgentClientFlowConfigVO> queryAiAgentClientsByAgentId(String aiAgentId);
+
     List<AiAgentTaskScheduleVO> queryAllValidTaskSchedule();
 
     List<Long> queryAllInvalidTaskScheduleIds();
 
+    void createTagOrder(AiRagOrderVO aiRagOrderVO);
+
+    /**
+     * 查询可用的智能体列表
+     * @return 可用的智能体列表
+     */
+    List<AiAgentVO> queryAvailableAgents();
 }

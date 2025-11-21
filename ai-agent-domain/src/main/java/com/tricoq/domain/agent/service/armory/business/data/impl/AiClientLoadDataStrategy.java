@@ -10,7 +10,7 @@ import com.tricoq.domain.agent.model.valobj.AiClientSystemPromptVO;
 import com.tricoq.domain.agent.model.valobj.AiClientToolMcpVO;
 import com.tricoq.domain.agent.model.valobj.AiClientVO;
 import com.tricoq.domain.agent.service.armory.business.data.ILoadDataStrategy;
-import com.tricoq.domain.agent.service.armory.factory.DefaultArmoryStrategyFactory;
+import com.tricoq.domain.agent.service.armory.node.factory.DefaultArmoryStrategyFactory;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;

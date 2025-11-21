@@ -1,6 +1,6 @@
 package com.tricoq.test.spring.ai;
 
-import com.tricoq.domain.agent.service.armory.factory.element.RagAnswerAdvisor;
+import com.tricoq.domain.agent.service.armory.node.factory.element.RagAnswerAdvisor;
 import io.modelcontextprotocol.client.McpClient;
 import io.modelcontextprotocol.client.McpSyncClient;
 import io.modelcontextprotocol.client.transport.HttpClientSseClientTransport;
