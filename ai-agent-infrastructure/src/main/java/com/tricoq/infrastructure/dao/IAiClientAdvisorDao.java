@@ -1,6 +1,7 @@
 package com.tricoq.infrastructure.dao;
 
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.tricoq.infrastructure.dao.po.AiClientAdvisor;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -14,7 +15,7 @@ import java.util.Set;
  * @description 顾问配置表数据访问对象
  */
 @Mapper
-public interface IAiClientAdvisorDao {
+public interface IAiClientAdvisorDao extends BaseMapper<AiClientAdvisor> {
 
     /**
      * 插入顾问配置

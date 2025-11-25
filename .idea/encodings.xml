@@ -3,8 +3,10 @@
   <component name="Encoding">
     <file url="file://$PROJECT_DIR$/ai-agent-api/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/ai-agent-api/src/main/resources" charset="UTF-8" />
-    <file url="file://$PROJECT_DIR$/ai-agent-app/src/main/java" charset="UTF-8" />
-    <file url="file://$PROJECT_DIR$/ai-agent-app/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/ai-agent-application/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/ai-agent-application/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/ai-agent-boot/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/ai-agent-boot/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/ai-agent-domain/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/ai-agent-domain/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/ai-agent-infrastructure/src/main/java" charset="UTF-8" />
@@ -15,5 +17,6 @@
     <file url="file://$PROJECT_DIR$/ai-agent-types/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/src/main/resources" charset="UTF-8" />
+    <file url="file:///src/main/resources" charset="UTF-8" />
   </component>
 </project>

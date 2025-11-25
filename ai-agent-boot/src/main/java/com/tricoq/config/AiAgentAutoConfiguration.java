@@ -45,14 +45,6 @@ public class AiAgentAutoConfiguration implements ApplicationListener<Application
                 return;
             }
 
-            List<String> clientIds = aiAgentAutoConfigProperties.getClientIds();
-            if (CollectionUtils.isEmpty(clientIds)) {
-                log.warn("AI Agent 自动装配配置的客户端ID列表为空");
-                return;
-            }
-
-            log.info("开始自动装配AI客户端，客户端ID列表: {}", clientIds);
-
             var strategyHandler = Optional.ofNullable(armoryService.acceptArmoryAllAvailableAgents())
                     .orElseThrow(() -> new RuntimeException("装配根节点不存在"));
 

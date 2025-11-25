@@ -49,6 +49,11 @@ public class AiAgentDrawConfigRequestDTO implements Serializable {
     private String configData;
 
     /**
+     * 前端将 configData 扁平后易于后端处理的版本
+     */
+    private String configExecData;
+
+    /**
      * 创建人
      */
     private String createBy;

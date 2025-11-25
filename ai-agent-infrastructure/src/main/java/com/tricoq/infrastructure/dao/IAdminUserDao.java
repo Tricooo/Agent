@@ -1,5 +1,6 @@
 package com.tricoq.infrastructure.dao;
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.tricoq.infrastructure.dao.po.AdminUser;
 import org.apache.ibatis.annotations.Mapper;
 
@@ -11,7 +12,7 @@ import java.util.List;
  * @description 管理员用户表数据访问对象
  */
 @Mapper
-public interface IAdminUserDao {
+public interface IAdminUserDao extends BaseMapper<AdminUser> {
 
     /**
      * 插入管理员用户

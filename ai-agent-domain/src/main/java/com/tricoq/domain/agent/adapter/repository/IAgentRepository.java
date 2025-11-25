@@ -1,56 +1,23 @@
 package com.tricoq.domain.agent.adapter.repository;
 
 import com.tricoq.domain.agent.model.valobj.AiAgentClientFlowConfigVO;
-import com.tricoq.domain.agent.model.valobj.AiAgentTaskScheduleVO;
 import com.tricoq.domain.agent.model.valobj.AiAgentVO;
-import com.tricoq.domain.agent.model.valobj.AiClientAdvisorVO;
-import com.tricoq.domain.agent.model.valobj.AiClientApiVO;
-import com.tricoq.domain.agent.model.valobj.AiClientModelVO;
-import com.tricoq.domain.agent.model.valobj.AiClientSystemPromptVO;
-import com.tricoq.domain.agent.model.valobj.AiClientToolMcpVO;
-import com.tricoq.domain.agent.model.valobj.AiClientVO;
-import com.tricoq.domain.agent.model.valobj.AiRagOrderVO;
 
 import java.util.List;
 import java.util.Map;
 
 /**
- * @author trico qiang
- * @date 10/23/25
+ * 智能体聚合仓储
  */
 public interface IAgentRepository {
 
-    List<AiClientApiVO> queryAiClientApiVOListByClientIds(List<String> clientIdList);
-
-    List<AiClientModelVO> queryAiClientModelVOByClientIds(List<String> clientIdList);
-
-    List<AiClientToolMcpVO> queryAiClientToolMcpVOByClientIds(List<String> clientIdList);
-
-    Map<String,AiClientSystemPromptVO> queryAiClientSystemPromptVOByClientIds(List<String> clientIdList);
-
-    List<AiClientAdvisorVO> queryAiClientAdvisorVOByClientIds(List<String> clientIdList);
-
-    List<AiClientVO> queryAiClientVOByClientIds(List<String> clientIdList);
-
-    List<AiClientApiVO> queryAiClientApiVOListByModelIds(List<String> modelIdList);
-
-    List<AiClientModelVO> queryAiClientModelVOByModelIds(List<String> modelIdList);
-
-    Map<String,AiAgentClientFlowConfigVO> queryAiAgentFlowConfigByAgentId(String agentId);
-
-    AiAgentVO queryAgentByAgentId(String agentId);
+    Map<String, AiAgentClientFlowConfigVO> queryAiAgentFlowConfigByAgentId(String agentId);
 
     List<AiAgentClientFlowConfigVO> queryAiAgentClientsByAgentId(String aiAgentId);
 
-    List<AiAgentTaskScheduleVO> queryAllValidTaskSchedule();
+    AiAgentVO queryAgentByAgentId(String agentId);
 
-    List<Long> queryAllInvalidTaskScheduleIds();
-
-    void createTagOrder(AiRagOrderVO aiRagOrderVO);
-
-    /**
-     * 查询可用的智能体列表
-     * @return 可用的智能体列表
-     */
     List<AiAgentVO> queryAvailableAgents();
+
+    int insertAiAgent(AiAgentVO aiAgent);
 }

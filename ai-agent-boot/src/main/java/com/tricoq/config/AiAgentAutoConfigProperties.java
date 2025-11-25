@@ -16,6 +16,4 @@ import java.util.List;
 public class AiAgentAutoConfigProperties {
 
     private boolean enabled = false;
-
-    private List<String> clientIds;
 }

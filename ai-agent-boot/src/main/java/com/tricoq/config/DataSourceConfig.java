@@ -1,8 +1,9 @@
 package com.tricoq.config;
 
+import com.baomidou.mybatisplus.extension.spring.MybatisSqlSessionFactoryBean;
 import com.zaxxer.hikari.HikariDataSource;
-import org.mybatis.spring.SqlSessionFactoryBean;
 import org.mybatis.spring.SqlSessionTemplate;
+import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -20,6 +21,7 @@ import java.util.Objects;
  * @author trico qiang
  */
 @Configuration
+@MapperScan("com.tricoq.infrastructure.dao")
 public class DataSourceConfig {
 
     @Bean("mysqlDataSource")
@@ -51,8 +53,8 @@ public class DataSourceConfig {
     }
 
     @Bean("sqlSessionFactory")
-    public SqlSessionFactoryBean sqlSessionFactory(@Qualifier("mysqlDataSource") DataSource mysqlDataSource) throws Exception {
-        SqlSessionFactoryBean sqlSessionFactoryBean = new SqlSessionFactoryBean();
+    public MybatisSqlSessionFactoryBean sqlSessionFactory(@Qualifier("mysqlDataSource") DataSource mysqlDataSource) throws Exception {
+        MybatisSqlSessionFactoryBean sqlSessionFactoryBean = new MybatisSqlSessionFactoryBean();
         sqlSessionFactoryBean.setDataSource(mysqlDataSource);
 
         // 设置MyBatis配置文件位置
@@ -66,7 +68,7 @@ public class DataSourceConfig {
     }
 
     @Bean("sqlSessionTemplate")
-    public SqlSessionTemplate sqlSessionTemplate(@Qualifier("sqlSessionFactory") SqlSessionFactoryBean sqlSessionFactory) throws Exception {
+    public SqlSessionTemplate sqlSessionTemplate(@Qualifier("sqlSessionFactory") MybatisSqlSessionFactoryBean sqlSessionFactory) throws Exception {
         return new SqlSessionTemplate(Objects.requireNonNull(sqlSessionFactory.getObject()));
     }
 

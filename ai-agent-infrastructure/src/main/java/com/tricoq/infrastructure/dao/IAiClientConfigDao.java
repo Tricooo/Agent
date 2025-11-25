@@ -1,6 +1,7 @@
 package com.tricoq.infrastructure.dao;
 
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.tricoq.infrastructure.dao.po.AiClientConfig;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -15,7 +16,7 @@ import java.util.List;
  * @description AI客户端统一关联配置表数据访问对象
  */
 @Mapper
-public interface IAiClientConfigDao {
+public interface IAiClientConfigDao extends BaseMapper<AiClientConfig> {
 
     /**
      * 插入AI客户端配置

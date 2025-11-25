@@ -2,6 +2,7 @@ package com.tricoq.infrastructure.dao;
 
 
 import com.tricoq.infrastructure.dao.po.AiAgent;
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
 
 import java.util.List;
@@ -12,7 +13,7 @@ import java.util.List;
  * @description AI智能体配置表数据访问对象
  */
 @Mapper
-public interface IAiAgentDao {
+public interface IAiAgentDao extends BaseMapper<AiAgent> {
 
     /**
      * 插入AI智能体配置

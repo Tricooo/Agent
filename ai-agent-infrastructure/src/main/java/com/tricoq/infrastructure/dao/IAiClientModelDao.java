@@ -1,6 +1,7 @@
 package com.tricoq.infrastructure.dao;
 
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.tricoq.infrastructure.dao.po.AiClientModel;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -14,7 +15,7 @@ import java.util.List;
  * @description 聊天模型配置表数据访问对象
  */
 @Mapper
-public interface IAiClientModelDao {
+public interface IAiClientModelDao extends BaseMapper<AiClientModel> {
 
     /**
      * 插入聊天模型配置

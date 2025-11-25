@@ -7,12 +7,10 @@ import com.tricoq.domain.agent.model.valobj.AiAgentVO;
 import com.tricoq.domain.agent.model.valobj.enums.AiAgentEnumVO;
 import com.tricoq.domain.agent.service.IArmoryService;
 import com.tricoq.domain.agent.service.armory.node.factory.DefaultArmoryStrategyFactory;
-import com.tricoq.types.framework.chain.StrategyHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * 装配服务
@@ -24,32 +22,31 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ArmoryService implements IArmoryService {
 
-    private final IAgentRepository repository;
+    private final IAgentRepository agentRepository;
 
     private final DefaultArmoryStrategyFactory defaultArmoryStrategyFactory;
 
     @Override
     public List<AiAgentVO> acceptArmoryAllAvailableAgents() {
-        List<AiAgentVO> aiAgentVOS = repository.queryAvailableAgents();
-        for (AiAgentVO aiAgentVO : aiAgentVOS) {
-            String agentId = aiAgentVO.getAgentId();
-            acceptArmoryAgent(agentId);
-        }
-        return aiAgentVOS;
+        List<AiAgentVO> aiAgents = agentRepository.queryAvailableAgents();
+        aiAgents.forEach(aiAgentVO -> acceptArmoryAgent(aiAgentVO.getAgentId()));
+        return aiAgents;
     }
 
     @Override
     public void acceptArmoryAgent(String agentId) {
-        List<AiAgentClientFlowConfigVO> aiAgentClientFlowConfigVOS = repository.queryAiAgentClientsByAgentId(agentId);
-        if (aiAgentClientFlowConfigVOS.isEmpty()) return;
+        List<AiAgentClientFlowConfigVO> flowConfigs = agentRepository.queryAiAgentClientsByAgentId(agentId);
+        if (flowConfigs.isEmpty()) {
+            return;
+        }
 
         // 获取客户端集合
-        List<String> commandIdList = aiAgentClientFlowConfigVOS.stream()
+        List<String> commandIdList = flowConfigs.stream()
                 .map(AiAgentClientFlowConfigVO::getClientId)
-                .collect(Collectors.toList());
+                .toList();
 
         try {
-            StrategyHandler<ArmoryCommandEntity, DefaultArmoryStrategyFactory.DynamicContext, String> armoryStrategyHandler =
+            var armoryStrategyHandler =
                     defaultArmoryStrategyFactory.armoryStrategyHandler();
 
             armoryStrategyHandler.apply(
@@ -65,7 +62,7 @@ public class ArmoryService implements IArmoryService {
 
     @Override
     public List<AiAgentVO> queryAvailableAgents() {
-        return repository.queryAvailableAgents();
+        return agentRepository.queryAvailableAgents();
     }
 
 }

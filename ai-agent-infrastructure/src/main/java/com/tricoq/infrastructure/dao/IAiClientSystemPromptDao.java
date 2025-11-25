@@ -1,6 +1,7 @@
 package com.tricoq.infrastructure.dao;
 
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.tricoq.infrastructure.dao.po.AiClientSystemPrompt;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -16,7 +17,7 @@ import java.util.Set;
  * @description 系统提示词配置表数据访问对象
  */
 @Mapper
-public interface IAiClientSystemPromptDao {
+public interface IAiClientSystemPromptDao extends BaseMapper<AiClientSystemPrompt> {
 
     /**
      * 插入系统提示词配置

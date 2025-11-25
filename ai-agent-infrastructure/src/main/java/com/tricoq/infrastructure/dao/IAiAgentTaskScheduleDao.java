@@ -1,6 +1,7 @@
 package com.tricoq.infrastructure.dao;
 
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.tricoq.infrastructure.dao.po.AiAgentTaskSchedule;
 import org.apache.ibatis.annotations.Mapper;
 
@@ -12,7 +13,7 @@ import java.util.List;
  * @description 智能体任务调度配置表数据访问对象
  */
 @Mapper
-public interface IAiAgentTaskScheduleDao {
+public interface IAiAgentTaskScheduleDao extends BaseMapper<AiAgentTaskSchedule> {
 
     /**
      * 插入智能体任务调度配置

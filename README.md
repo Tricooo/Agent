@@ -1,10 +1,13 @@
-# xfg-frame-archetype - DDD 脚手架 - @小傅哥 v2.2
+trigger（接口层）：HTTP/SSE/Job，仅做入参校验、鉴权、调用应用服务。
 
-- docker 使用文档：[https://bugstack.cn/md/road-map/docker.html](https://bugstack.cn/md/road-map/docker.html)
-- DDD 教程；
-  - [DDD 概念理论](https://bugstack.cn/md/road-map/ddd-guide-01.html)
-  - [DDD 建模方法](https://bugstack.cn/md/road-map/ddd-guide-02.html)
-  - [DDD 工程模型](https://bugstack.cn/md/road-map/ddd-guide-03.html)
-  - [DDD 架构设计](https://bugstack.cn/md/road-map/ddd.html)
-  - [DDD 建模案例](https://bugstack.cn/md/road-map/ddd-model.html)
+application（用例层）：编排用例/事务/权限/幂等，组合多个领域服务和仓储，屏蔽持久化细节。
 
+domain（领域层）：聚合、领域服务、领域事件，不碰技术细节；依赖抽象仓储接口。
+
+infrastructure（基础设施层）：仓储实现、外部系统/MCP/DB 适配、配置。
+
+types（共享内核）：通用异常、响应码、链式/调度框架。
+
+api（契约）：DTO/接口定义，供上层调用或第三方集成。
+
+boot (启动/组装模块) ：只负责 Application 启动和基础环境配置。

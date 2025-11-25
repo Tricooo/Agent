@@ -1,5 +1,6 @@
 package com.tricoq.infrastructure.dao;
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.tricoq.infrastructure.dao.po.AiAgentDrawConfig;
 import org.apache.ibatis.annotations.Mapper;
 
@@ -11,7 +12,7 @@ import java.util.List;
  * @description AI智能体拖拉拽配置主表数据访问对象
  */
 @Mapper
-public interface IAiAgentDrawConfigDao {
+public interface IAiAgentDrawConfigDao extends BaseMapper<AiAgentDrawConfig> {
 
     /**
      * 插入拖拉拽配置

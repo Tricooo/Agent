@@ -9,11 +9,12 @@
 
     <modules>
         <module>ai-agent-api</module>
-        <module>ai-agent-app</module>
+        <module>ai-agent-boot</module>
         <module>ai-agent-domain</module>
         <module>ai-agent-trigger</module>
         <module>ai-agent-infrastructure</module>
         <module>ai-agent-types</module>
+        <module>ai-agent-application</module>
     </modules>
 
     <repositories>
@@ -130,10 +131,23 @@
                 <scope>import</scope>
             </dependency>
 
+            <dependency>
+                <groupId>com.baomidou</groupId>
+                <artifactId>mybatis-plus-bom</artifactId>
+                <version>3.5.9</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
             <!-- 工程模块 -->
             <dependency>
                 <groupId>com.tricoq</groupId>
                 <artifactId>ai-agent-api</artifactId>
+                <version>1.0-SNAPSHOT</version>
+            </dependency>
+            <dependency>
+                <groupId>com.tricoq</groupId>
+                <artifactId>ai-agent-application</artifactId>
                 <version>1.0-SNAPSHOT</version>
             </dependency>
             <dependency>

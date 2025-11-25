@@ -1,5 +1,6 @@
 package com.tricoq.infrastructure.dao;
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.tricoq.infrastructure.dao.po.AiClientToolMcp;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -13,7 +14,7 @@ import java.util.Set;
  * @description MCP客户端配置表数据访问对象
  */
 @Mapper
-public interface IAiClientToolMcpDao {
+public interface IAiClientToolMcpDao extends BaseMapper<AiClientToolMcp> {
 
     /**
      * 插入MCP客户端配置

@@ -1,5 +1,8 @@
 package com.tricoq.infrastructure.dao.po;
 
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -16,11 +19,13 @@ import java.time.LocalDateTime;
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
+@TableName("ai_agent_task_schedule")
 public class AiAgentTaskSchedule {
 
     /**
      * 主键ID
      */
+    @TableId(value = "id", type = IdType.AUTO)
     private Long id;
 
     /**

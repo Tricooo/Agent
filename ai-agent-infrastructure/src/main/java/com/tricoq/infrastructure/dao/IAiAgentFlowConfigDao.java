@@ -1,6 +1,7 @@
 package com.tricoq.infrastructure.dao;
 
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.tricoq.infrastructure.dao.po.AiAgentFlowConfig;
 import org.apache.ibatis.annotations.Mapper;
 
@@ -12,7 +13,7 @@ import java.util.List;
  * @description 智能体-客户端关联表数据访问对象
  */
 @Mapper
-public interface IAiAgentFlowConfigDao {
+public interface IAiAgentFlowConfigDao extends BaseMapper<AiAgentFlowConfig> {
 
     /**
      * 插入智能体-客户端关联配置

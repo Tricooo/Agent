@@ -1,6 +1,7 @@
 package com.tricoq.infrastructure.dao;
 
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.tricoq.infrastructure.dao.po.AiClientRagOrder;
 import org.apache.ibatis.annotations.Mapper;
 
@@ -12,7 +13,7 @@ import java.util.List;
  * @description 知识库配置表数据访问对象
  */
 @Mapper
-public interface IAiClientRagOrderDao {
+public interface IAiClientRagOrderDao extends BaseMapper<AiClientRagOrder> {
 
     /**
      * 插入知识库配置
