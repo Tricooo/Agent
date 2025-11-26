@@ -2,8 +2,8 @@ package com.tricoq.domain.agent.service.execute.flow.step;
 
 import com.tricoq.domain.agent.model.entity.AutoAgentExecuteResultEntity;
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
-import com.tricoq.domain.agent.model.valobj.AiAgentClientFlowConfigVO;
-import com.tricoq.domain.agent.model.valobj.enums.AiClientTypeEnumVO;
+import com.tricoq.domain.agent.model.dto.AiAgentClientFlowConfigDTO;
+import com.tricoq.domain.agent.model.enums.AiClientTypeEnumVO;
 import com.tricoq.domain.agent.service.execute.flow.step.factory.DefaultFlowAgentExecuteStrategyFactory;
 import com.tricoq.types.framework.chain.StrategyHandler;
 import lombok.RequiredArgsConstructor;
@@ -38,7 +38,7 @@ public class Step2PanningNode extends AbstractExecuteSupport {
                              DefaultFlowAgentExecuteStrategyFactory.DynamicContext dynamicContext) {
         log.info("\n--- 步骤2: 执行步骤规划 ---");
 
-        AiAgentClientFlowConfigVO config = Optional
+        AiAgentClientFlowConfigDTO config = Optional
                 .ofNullable(dynamicContext.getConfigMap().get(AiClientTypeEnumVO.PLANNING_CLIENT.getCode()))
                 .orElseThrow();
 

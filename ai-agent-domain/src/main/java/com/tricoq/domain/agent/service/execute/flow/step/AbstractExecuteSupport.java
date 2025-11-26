@@ -3,7 +3,7 @@ package com.tricoq.domain.agent.service.execute.flow.step;
 import com.alibaba.fastjson.JSON;
 import com.tricoq.domain.agent.model.entity.AutoAgentExecuteResultEntity;
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
-import com.tricoq.domain.agent.model.valobj.enums.AiAgentEnumVO;
+import com.tricoq.domain.agent.model.enums.AiAgentEnumVO;
 import com.tricoq.domain.agent.service.execute.flow.step.factory.DefaultFlowAgentExecuteStrategyFactory;
 import com.tricoq.types.framework.chain.AbstractMultiThreadStrategyRouter;
 import jakarta.annotation.Resource;

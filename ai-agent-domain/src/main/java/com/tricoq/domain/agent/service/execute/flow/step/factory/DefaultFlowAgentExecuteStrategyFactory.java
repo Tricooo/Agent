@@ -1,7 +1,7 @@
 package com.tricoq.domain.agent.service.execute.flow.step.factory;
 
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
-import com.tricoq.domain.agent.model.valobj.AiAgentClientFlowConfigVO;
+import com.tricoq.domain.agent.model.dto.AiAgentClientFlowConfigDTO;
 import com.tricoq.domain.agent.service.execute.flow.step.RootFlowNode;
 import com.tricoq.types.framework.chain.StrategyHandler;
 import lombok.AllArgsConstructor;
@@ -60,7 +60,7 @@ public class DefaultFlowAgentExecuteStrategyFactory {
         private StringBuilder executeHistory = new StringBuilder();
 
         @Builder.Default
-        private final Map<String, AiAgentClientFlowConfigVO> configMap  = new HashMap<>();
+        private final Map<String, AiAgentClientFlowConfigDTO> configMap  = new HashMap<>();
 
         @Builder.Default
         private final Map<String, Object> dataObjects = new HashMap<>();

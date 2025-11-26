@@ -2,7 +2,7 @@ package com.tricoq.domain.agent.service.task;
 
 
 import com.tricoq.domain.agent.adapter.repository.ITaskScheduleRepository;
-import com.tricoq.domain.agent.model.valobj.AiAgentTaskScheduleVO;
+import com.tricoq.domain.agent.model.dto.AiAgentTaskScheduleDTO;
 import com.tricoq.domain.agent.service.ITaskService;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
@@ -22,7 +22,7 @@ public class AiAgentTaskService implements ITaskService {
     private ITaskScheduleRepository taskScheduleRepository;
 
     @Override
-    public List<AiAgentTaskScheduleVO> queryAllValidTaskSchedule() {
+    public List<AiAgentTaskScheduleDTO> queryAllValidTaskSchedule() {
         return taskScheduleRepository.queryAllValidTaskSchedule();
     }
 

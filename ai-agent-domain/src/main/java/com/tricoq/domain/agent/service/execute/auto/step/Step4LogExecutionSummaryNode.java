@@ -2,9 +2,9 @@ package com.tricoq.domain.agent.service.execute.auto.step;
 
 import com.tricoq.domain.agent.model.entity.AutoAgentExecuteResultEntity;
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
-import com.tricoq.domain.agent.model.valobj.AiAgentClientFlowConfigVO;
-import com.tricoq.domain.agent.model.valobj.enums.AiAgentEnumVO;
-import com.tricoq.domain.agent.model.valobj.enums.AiClientTypeEnumVO;
+import com.tricoq.domain.agent.model.dto.AiAgentClientFlowConfigDTO;
+import com.tricoq.domain.agent.model.enums.AiAgentEnumVO;
+import com.tricoq.domain.agent.model.enums.AiClientTypeEnumVO;
 import com.tricoq.domain.agent.service.execute.auto.step.factory.DefaultExecuteStrategyFactory;
 import com.tricoq.types.framework.chain.StrategyHandler;
 import lombok.RequiredArgsConstructor;
@@ -78,7 +78,7 @@ public class Step4LogExecutionSummaryNode extends AbstractExecuteSupport {
             String summaryPrompt = getSummaryPrompt(requestParameter, dynamicContext, isCompleted);
 
             // 获取对话客户端 - 使用任务分析客户端进行总结
-            AiAgentClientFlowConfigVO aiAgentClientFlowConfigVO = dynamicContext.getFlowConfigMap()
+            AiAgentClientFlowConfigDTO aiAgentClientFlowConfigVO = dynamicContext.getFlowConfigMap()
                     .get(AiClientTypeEnumVO.RESPONSE_ASSISTANT.getCode());
             ChatClient chatClient = getBean(AiAgentEnumVO.AI_CLIENT.getBeanName(aiAgentClientFlowConfigVO.getClientId()));
 

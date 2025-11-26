@@ -1,7 +1,7 @@
 package com.tricoq.domain.agent.service.execute.auto.step.factory;
 
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
-import com.tricoq.domain.agent.model.valobj.AiAgentClientFlowConfigVO;
+import com.tricoq.domain.agent.model.dto.AiAgentClientFlowConfigDTO;
 import com.tricoq.domain.agent.service.execute.auto.step.RootExecuteNode;
 import com.tricoq.types.framework.chain.StrategyHandler;
 import lombok.AllArgsConstructor;
@@ -36,7 +36,7 @@ public class DefaultExecuteStrategyFactory {
         @NonNull
         private final String originalUserInput;
         @Builder.Default
-        private final Map<String, AiAgentClientFlowConfigVO> flowConfigMap = new HashMap<>();
+        private final Map<String, AiAgentClientFlowConfigDTO> flowConfigMap = new HashMap<>();
         private String currentTask;
         @Builder.Default
         private boolean isCompleted = false;

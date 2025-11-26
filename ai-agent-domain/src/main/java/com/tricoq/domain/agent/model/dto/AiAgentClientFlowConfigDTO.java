@@ -1,4 +1,4 @@
-package com.tricoq.domain.agent.model.valobj;
+package com.tricoq.domain.agent.model.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -14,7 +14,7 @@ import lombok.NoArgsConstructor;
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-public class AiAgentClientFlowConfigVO {
+public class AiAgentClientFlowConfigDTO {
 
     /**
      * 客户端ID

@@ -1,6 +1,6 @@
 package com.tricoq.domain.agent.service;
 
-import com.tricoq.domain.agent.model.valobj.AiAgentVO;
+import com.tricoq.domain.agent.model.dto.AiAgentDTO;
 
 import java.util.List;
 
@@ -11,10 +11,10 @@ import java.util.List;
  */
 public interface IArmoryService {
 
-    List<AiAgentVO> acceptArmoryAllAvailableAgents();
+    List<AiAgentDTO> acceptArmoryAllAvailableAgents();
 
     void acceptArmoryAgent(String agentId);
 
-    List<AiAgentVO> queryAvailableAgents();
+    List<AiAgentDTO> queryAvailableAgents();
 
 }

@@ -2,9 +2,9 @@ package com.tricoq.domain.agent.service.execute.auto.step;
 
 import com.tricoq.domain.agent.model.entity.AutoAgentExecuteResultEntity;
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
-import com.tricoq.domain.agent.model.valobj.AiAgentClientFlowConfigVO;
-import com.tricoq.domain.agent.model.valobj.enums.AiAgentEnumVO;
-import com.tricoq.domain.agent.model.valobj.enums.AiClientTypeEnumVO;
+import com.tricoq.domain.agent.model.dto.AiAgentClientFlowConfigDTO;
+import com.tricoq.domain.agent.model.enums.AiAgentEnumVO;
+import com.tricoq.domain.agent.model.enums.AiClientTypeEnumVO;
 import com.tricoq.domain.agent.service.execute.auto.step.factory.DefaultExecuteStrategyFactory;
 import com.tricoq.types.framework.chain.StrategyHandler;
 import lombok.RequiredArgsConstructor;
@@ -38,12 +38,12 @@ public class Step2ExecuteNode extends AbstractExecuteSupport {
         String analyzeResult = Optional.ofNullable(dynamicContext.getAnalyzeResult())
                 .orElseThrow(() -> new RuntimeException("任务分析未执行"));
 
-        Map<String, AiAgentClientFlowConfigVO> flowConfigMap = dynamicContext.getFlowConfigMap();
+        Map<String, AiAgentClientFlowConfigDTO> flowConfigMap = dynamicContext.getFlowConfigMap();
         if (MapUtils.isEmpty(flowConfigMap)) {
             throw new IllegalArgumentException("flowConfigMap 为空");
         }
 
-        AiAgentClientFlowConfigVO flowConfig = Optional
+        AiAgentClientFlowConfigDTO flowConfig = Optional
                 .ofNullable(flowConfigMap.get(AiClientTypeEnumVO.PRECISION_EXECUTOR_CLIENT.getCode()))
                 .orElseThrow(() -> new IllegalArgumentException("没有此 client"));
         ChatClient executeClient = Optional

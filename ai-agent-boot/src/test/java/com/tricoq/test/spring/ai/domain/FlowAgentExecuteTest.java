@@ -3,7 +3,7 @@ package com.tricoq.test.spring.ai.domain;
 
 import com.tricoq.domain.agent.model.entity.ArmoryCommandEntity;
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
-import com.tricoq.domain.agent.model.valobj.enums.AiAgentEnumVO;
+import com.tricoq.domain.agent.model.enums.AiAgentEnumVO;
 import com.tricoq.domain.agent.service.armory.factory.DefaultArmoryStrategyFactory;
 import com.tricoq.domain.agent.service.execute.flow.step.factory.DefaultFlowAgentExecuteStrategyFactory;
 import com.tricoq.types.framework.chain.StrategyHandler;

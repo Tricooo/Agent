@@ -2,8 +2,8 @@ package com.tricoq.domain.agent.service.armory.node;
 
 import com.alibaba.fastjson.JSON;
 import com.tricoq.domain.agent.model.entity.ArmoryCommandEntity;
-import com.tricoq.domain.agent.model.valobj.enums.AiAgentEnumVO;
-import com.tricoq.domain.agent.model.valobj.AiClientApiVO;
+import com.tricoq.domain.agent.model.enums.AiAgentEnumVO;
+import com.tricoq.domain.agent.model.dto.AiClientApiDTO;
 import com.tricoq.domain.agent.service.armory.node.factory.DefaultArmoryStrategyFactory;
 import com.tricoq.types.framework.chain.StrategyHandler;
 import lombok.RequiredArgsConstructor;
@@ -31,13 +31,13 @@ public class AiClientApiNode extends AbstractArmorySupport {
     @Override
     protected String doApply(ArmoryCommandEntity requestParam, DefaultArmoryStrategyFactory.DynamicContext dynamicContext) {
         log.info("Ai Agent 构建节点，API 接口请求{}", JSON.toJSONString(requestParam));
-        List<AiClientApiVO> apiVOList = dynamicContext.getValue(AiAgentEnumVO.AI_CLIENT_API.getDataName());
+        List<AiClientApiDTO> apiVOList = dynamicContext.getValue(AiAgentEnumVO.AI_CLIENT_API.getDataName());
         if(CollectionUtils.isEmpty(apiVOList)){
             log.warn("没有需要被初始化的 ai client api");
             return router(requestParam, dynamicContext);
         }
 
-        for (AiClientApiVO apiVO : apiVOList) {
+        for (AiClientApiDTO apiVO : apiVOList) {
             OpenAiApi openAiApi = OpenAiApi.builder()
                     .apiKey(apiVO.getApiKey())
                     .baseUrl(apiVO.getBaseUrl())

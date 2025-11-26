@@ -1,7 +1,7 @@
 package com.tricoq.config;
 
 import com.tricoq.domain.agent.model.entity.ArmoryCommandEntity;
-import com.tricoq.domain.agent.model.valobj.enums.AiAgentEnumVO;
+import com.tricoq.domain.agent.model.enums.AiAgentEnumVO;
 import com.tricoq.domain.agent.service.IArmoryService;
 import com.tricoq.domain.agent.service.armory.node.factory.DefaultArmoryStrategyFactory;
 import lombok.RequiredArgsConstructor;

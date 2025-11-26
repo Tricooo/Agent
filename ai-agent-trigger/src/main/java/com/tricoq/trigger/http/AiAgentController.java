@@ -7,7 +7,7 @@ import com.tricoq.api.dto.ArmoryAgentRequestDTO;
 import com.tricoq.api.dto.AutoAgentRequestDTO;
 import com.tricoq.api.response.Response;
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
-import com.tricoq.domain.agent.model.valobj.AiAgentVO;
+import com.tricoq.domain.agent.model.dto.AiAgentDTO;
 import com.tricoq.domain.agent.service.IAgentDispatchService;
 import com.tricoq.domain.agent.service.IArmoryService;
 import com.tricoq.types.enums.ResponseCode;
@@ -121,11 +121,11 @@ public class AiAgentController implements IAiAgentService {
 
         try {
             // 调用装配服务查询可用智能体
-            List<AiAgentVO> aiAgentVOList = armoryService.queryAvailableAgents();
+            List<AiAgentDTO> aiAgentVOList = armoryService.queryAvailableAgents();
 
             // 转换为响应DTO
             List<AiAgentResponseDTO> responseList = new ArrayList<>();
-            for (AiAgentVO aiAgentVO : aiAgentVOList) {
+            for (AiAgentDTO aiAgentVO : aiAgentVOList) {
                 AiAgentResponseDTO responseDTO = AiAgentResponseDTO.builder()
                         .agentId(aiAgentVO.getAgentId())
                         .agentName(aiAgentVO.getAgentName())

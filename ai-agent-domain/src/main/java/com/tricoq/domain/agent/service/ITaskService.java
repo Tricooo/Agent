@@ -2,7 +2,7 @@ package com.tricoq.domain.agent.service;
 
 
 
-import com.tricoq.domain.agent.model.valobj.AiAgentTaskScheduleVO;
+import com.tricoq.domain.agent.model.dto.AiAgentTaskScheduleDTO;
 
 import java.util.List;
 
@@ -13,7 +13,7 @@ import java.util.List;
  */
 public interface ITaskService {
 
-    List<AiAgentTaskScheduleVO> queryAllValidTaskSchedule();
+    List<AiAgentTaskScheduleDTO> queryAllValidTaskSchedule();
 
     List<Long> queryAllInvalidTaskScheduleIds();
 

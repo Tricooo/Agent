@@ -1,4 +1,4 @@
-package com.tricoq.domain.agent.model.valobj;
+package com.tricoq.domain.agent.model.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -16,7 +16,7 @@ import java.util.List;
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-public class AiClientModelVO {
+public class AiClientModelDTO {
 
     /**
      * 全局唯一模型ID

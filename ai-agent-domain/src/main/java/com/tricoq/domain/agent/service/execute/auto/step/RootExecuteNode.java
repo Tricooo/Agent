@@ -2,7 +2,7 @@ package com.tricoq.domain.agent.service.execute.auto.step;
 
 import com.tricoq.domain.agent.adapter.repository.IAgentRepository;
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
-import com.tricoq.domain.agent.model.valobj.AiAgentClientFlowConfigVO;
+import com.tricoq.domain.agent.model.dto.AiAgentClientFlowConfigDTO;
 import com.tricoq.domain.agent.service.execute.auto.step.factory.DefaultExecuteStrategyFactory;
 import com.tricoq.types.framework.chain.StrategyHandler;
 import lombok.RequiredArgsConstructor;
@@ -39,7 +39,7 @@ public class RootExecuteNode extends AbstractExecuteSupport {
         log.info("最大执行步数: {}", requestParam.getMaxSteps());
         log.info("会话ID: {}", requestParam.getSessionId());
 
-        Map<String, AiAgentClientFlowConfigVO> configs = agentRepository
+        Map<String, AiAgentClientFlowConfigDTO> configs = agentRepository
                 .queryAiAgentFlowConfigByAgentId(requestParam.getAgentId());
         dynamicContext.getFlowConfigMap().putAll(configs);
         return router(requestParam, dynamicContext);

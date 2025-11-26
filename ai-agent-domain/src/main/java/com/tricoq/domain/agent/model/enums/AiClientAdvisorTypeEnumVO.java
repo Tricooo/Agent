@@ -1,6 +1,6 @@
-package com.tricoq.domain.agent.model.valobj.enums;
+package com.tricoq.domain.agent.model.enums;
 
-import com.tricoq.domain.agent.model.valobj.AiClientAdvisorVO;
+import com.tricoq.domain.agent.model.dto.AiClientAdvisorDTO;
 import com.tricoq.domain.agent.service.armory.node.factory.element.RagAnswerAdvisor;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -24,7 +24,7 @@ public enum AiClientAdvisorTypeEnumVO {
 
     CHAT_MEMORY("ChatMemory", "上下文记忆（内存模式）") {
         @Override
-        public Advisor createAdvisor(AiClientAdvisorVO aiClientAdvisorVO, VectorStore vectorStore) {
+        public Advisor createAdvisor(AiClientAdvisorDTO aiClientAdvisorVO, VectorStore vectorStore) {
             return PromptChatMemoryAdvisor.builder(MessageWindowChatMemory.builder()
                             .maxMessages(aiClientAdvisorVO.getChatMemory().getMaxMessages())
                             .build())
@@ -34,8 +34,8 @@ public enum AiClientAdvisorTypeEnumVO {
 
     RAG_ANSWER("RagAnswer", "知识库") {
         @Override
-        public Advisor createAdvisor(AiClientAdvisorVO aiClientAdvisorVO, VectorStore vectorStore) {
-            AiClientAdvisorVO.RagAnswer ragAnswer = aiClientAdvisorVO.getRagAnswer();
+        public Advisor createAdvisor(AiClientAdvisorDTO aiClientAdvisorVO, VectorStore vectorStore) {
+            AiClientAdvisorDTO.RagAnswer ragAnswer = aiClientAdvisorVO.getRagAnswer();
             if (ragAnswer == null) {
                 return null;
             }
@@ -59,7 +59,7 @@ public enum AiClientAdvisorTypeEnumVO {
      * @param vectorStore       向量存储
      * @return 顾问对象
      */
-    public abstract Advisor createAdvisor(AiClientAdvisorVO aiClientAdvisorVO, VectorStore vectorStore);
+    public abstract Advisor createAdvisor(AiClientAdvisorDTO aiClientAdvisorVO, VectorStore vectorStore);
 
     static {
         for (AiClientAdvisorTypeEnumVO vo : values()) {

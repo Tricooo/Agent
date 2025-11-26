@@ -2,7 +2,7 @@ package com.tricoq.domain.agent.service.execute.flow.step;
 
 import com.tricoq.domain.agent.adapter.repository.IAgentRepository;
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
-import com.tricoq.domain.agent.model.valobj.AiAgentClientFlowConfigVO;
+import com.tricoq.domain.agent.model.dto.AiAgentClientFlowConfigDTO;
 import com.tricoq.domain.agent.service.execute.flow.step.factory.DefaultFlowAgentExecuteStrategyFactory;
 import com.tricoq.types.framework.chain.StrategyHandler;
 import lombok.RequiredArgsConstructor;
@@ -40,7 +40,7 @@ public class RootFlowNode extends AbstractExecuteSupport {
         log.info("最大执行步数: {}", requestParam.getMaxSteps());
         log.info("会话ID: {}", requestParam.getSessionId());
 
-        Map<String, AiAgentClientFlowConfigVO> configMap = agentRepository
+        Map<String, AiAgentClientFlowConfigDTO> configMap = agentRepository
                 .queryAiAgentFlowConfigByAgentId(requestParam.getAgentId());
         if (configMap.isEmpty()) {
             throw new IllegalArgumentException("agent未配置");

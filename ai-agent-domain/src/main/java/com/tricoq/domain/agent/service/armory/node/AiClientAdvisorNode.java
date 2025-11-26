@@ -2,9 +2,9 @@ package com.tricoq.domain.agent.service.armory.node;
 
 import com.alibaba.fastjson.JSON;
 import com.tricoq.domain.agent.model.entity.ArmoryCommandEntity;
-import com.tricoq.domain.agent.model.valobj.enums.AiAgentEnumVO;
-import com.tricoq.domain.agent.model.valobj.enums.AiClientAdvisorTypeEnumVO;
-import com.tricoq.domain.agent.model.valobj.AiClientAdvisorVO;
+import com.tricoq.domain.agent.model.enums.AiAgentEnumVO;
+import com.tricoq.domain.agent.model.enums.AiClientAdvisorTypeEnumVO;
+import com.tricoq.domain.agent.model.dto.AiClientAdvisorDTO;
 import com.tricoq.domain.agent.service.armory.node.factory.DefaultArmoryStrategyFactory;
 import com.tricoq.types.framework.chain.StrategyHandler;
 import lombok.RequiredArgsConstructor;
@@ -40,21 +40,21 @@ public class AiClientAdvisorNode extends AbstractArmorySupport {
     protected String doApply(ArmoryCommandEntity requestParam, DefaultArmoryStrategyFactory.DynamicContext dynamicContext) {
         log.info("Ai Agent 构建节点，Advisor 顾问角色{}", JSON.toJSONString(requestParam));
 
-        List<AiClientAdvisorVO> advisors = dynamicContext.getValue(dataName());
+        List<AiClientAdvisorDTO> advisors = dynamicContext.getValue(dataName());
 
         if (CollectionUtils.isEmpty(advisors)) {
             log.warn("没有需要被初始化的 ai client advisor");
             return router(requestParam, dynamicContext);
         }
 
-        for (AiClientAdvisorVO advisorVO : advisors) {
+        for (AiClientAdvisorDTO advisorVO : advisors) {
             Advisor advisor = createClientAdvisor(advisorVO);
             registerBean(beanName(advisorVO.getAdvisorId()), Advisor.class, advisor);
         }
         return router(requestParam, dynamicContext);
     }
 
-    private Advisor createClientAdvisor(AiClientAdvisorVO advisorVO) {
+    private Advisor createClientAdvisor(AiClientAdvisorDTO advisorVO) {
         String advisorType = advisorVO.getAdvisorType();
         AiClientAdvisorTypeEnumVO vo = AiClientAdvisorTypeEnumVO.getByCode(advisorType);
         return vo.createAdvisor(advisorVO, vectorStore);

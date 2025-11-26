@@ -3,8 +3,8 @@ package com.tricoq.domain.agent.service.fixed;
 
 import com.tricoq.domain.agent.adapter.repository.IAgentRepository;
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
-import com.tricoq.domain.agent.model.valobj.AiAgentClientFlowConfigVO;
-import com.tricoq.domain.agent.model.valobj.enums.AiAgentEnumVO;
+import com.tricoq.domain.agent.model.dto.AiAgentClientFlowConfigDTO;
+import com.tricoq.domain.agent.model.enums.AiAgentEnumVO;
 import com.tricoq.domain.agent.service.IExecuteStrategy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,13 +38,13 @@ public class FixedAgentExecuteStrategy implements IExecuteStrategy {
     @Override
     public void execute(ExecuteCommandEntity requestParameter, ResponseBodyEmitter emitter) {
         // 1. 获取配置客户端
-        List<AiAgentClientFlowConfigVO> aiAgentClientList = (List<AiAgentClientFlowConfigVO>) repository
+        List<AiAgentClientFlowConfigDTO> aiAgentClientList = (List<AiAgentClientFlowConfigDTO>) repository
                 .queryAiAgentFlowConfigByAgentId(requestParameter.getAgentId()).values();
 
         // 2. 循环执行客户端
         String content = "";
 
-        for (AiAgentClientFlowConfigVO config : aiAgentClientList) {
+        for (AiAgentClientFlowConfigDTO config : aiAgentClientList) {
             ChatClient chatClient = getChatClientByClientId(config.getClientId());
             //content 显式传递是为了agent之间的交互
             //使用chat memory存储content是为了维持人和系统的连续性，用户一般只关系最终的执行结果，所以content可以只存最终结果

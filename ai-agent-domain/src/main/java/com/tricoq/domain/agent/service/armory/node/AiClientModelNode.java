@@ -2,8 +2,8 @@ package com.tricoq.domain.agent.service.armory.node;
 
 import com.alibaba.fastjson.JSON;
 import com.tricoq.domain.agent.model.entity.ArmoryCommandEntity;
-import com.tricoq.domain.agent.model.valobj.enums.AiAgentEnumVO;
-import com.tricoq.domain.agent.model.valobj.AiClientModelVO;
+import com.tricoq.domain.agent.model.enums.AiAgentEnumVO;
+import com.tricoq.domain.agent.model.dto.AiClientModelDTO;
 import com.tricoq.domain.agent.service.armory.node.factory.DefaultArmoryStrategyFactory;
 import com.tricoq.types.framework.chain.StrategyHandler;
 import io.modelcontextprotocol.client.McpSyncClient;
@@ -40,14 +40,14 @@ public class AiClientModelNode extends AbstractArmorySupport {
     @Override
     protected String doApply(ArmoryCommandEntity requestParam, DefaultArmoryStrategyFactory.DynamicContext dynamicContext) {
         log.info("Ai Agent 构建节点，Mode 对话模型{}", JSON.toJSONString(requestParam));
-        List<AiClientModelVO> modelNodes = dynamicContext.getValue(dataName());
+        List<AiClientModelDTO> modelNodes = dynamicContext.getValue(dataName());
 
         if (CollectionUtils.isEmpty(modelNodes)) {
             log.warn("没有需要被初始化的 ai client model");
             return router(requestParam, dynamicContext);
         }
 
-        for (AiClientModelVO modelNode : modelNodes) {
+        for (AiClientModelDTO modelNode : modelNodes) {
             OpenAiApi openAiApi = getBean(AiAgentEnumVO.AI_CLIENT_API.getBeanName(modelNode.getApiId()));
             if (null == openAiApi) {
                 throw new RuntimeException("mode 2 api is null");

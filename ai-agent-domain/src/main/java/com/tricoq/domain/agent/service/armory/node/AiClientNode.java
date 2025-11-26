@@ -2,9 +2,9 @@ package com.tricoq.domain.agent.service.armory.node;
 
 import com.alibaba.fastjson.JSON;
 import com.tricoq.domain.agent.model.entity.ArmoryCommandEntity;
-import com.tricoq.domain.agent.model.valobj.enums.AiAgentEnumVO;
-import com.tricoq.domain.agent.model.valobj.AiClientSystemPromptVO;
-import com.tricoq.domain.agent.model.valobj.AiClientVO;
+import com.tricoq.domain.agent.model.enums.AiAgentEnumVO;
+import com.tricoq.domain.agent.model.dto.AiClientSystemPromptDTO;
+import com.tricoq.domain.agent.model.dto.AiClientDTO;
 import com.tricoq.domain.agent.service.armory.node.factory.DefaultArmoryStrategyFactory;
 import com.tricoq.types.framework.chain.StrategyHandler;
 import io.modelcontextprotocol.client.McpSyncClient;
@@ -41,23 +41,23 @@ public class AiClientNode extends AbstractArmorySupport {
     protected String doApply(ArmoryCommandEntity requestParam, DefaultArmoryStrategyFactory.DynamicContext dynamicContext) {
         log.info("Ai Agent 构建节点，客户端{}", JSON.toJSONString(requestParam));
 
-        List<AiClientVO> clients = dynamicContext.getValue(dataName());
+        List<AiClientDTO> clients = dynamicContext.getValue(dataName());
         if (CollectionUtils.isEmpty(clients)) {
             return router(requestParam, dynamicContext);
         }
-        for (AiClientVO client : clients) {
+        for (AiClientDTO client : clients) {
             ChatModel model = getBean(AiAgentEnumVO.AI_CLIENT_MODEL.getBeanName(client.getModelId()));
             ChatClient.Builder clientBuilder = ChatClient.builder(model);
 
             //系统提示词构建
-            Map<String, AiClientSystemPromptVO> promptMap = dynamicContext
+            Map<String, AiClientSystemPromptDTO> promptMap = dynamicContext
                     .getValue(AiAgentEnumVO.AI_CLIENT_SYSTEM_PROMPT.getDataName());
             List<String> promptIds = client.getPromptIdList();
             if (CollectionUtils.isNotEmpty(promptIds) && MapUtils.isNotEmpty(promptMap)) {
                 String prompt = promptIds.stream()
                         .map(promptMap::get)
                         .filter(Objects::nonNull)
-                        .map(AiClientSystemPromptVO::getPromptContent)
+                        .map(AiClientSystemPromptDTO::getPromptContent)
                         .filter(Objects::nonNull)
                         .collect(Collectors.joining(System.lineSeparator()));
 

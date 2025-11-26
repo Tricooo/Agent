@@ -1,14 +1,14 @@
 package com.tricoq.infrastructure.adapter.repository;
 
 import com.alibaba.fastjson2.TypeReference;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.tricoq.domain.agent.model.valobj.AiClientAdvisorVO;
-import com.tricoq.domain.agent.model.valobj.AiClientApiVO;
-import com.tricoq.domain.agent.model.valobj.AiClientModelVO;
-import com.tricoq.domain.agent.model.valobj.AiClientSystemPromptVO;
-import com.tricoq.domain.agent.model.valobj.AiClientToolMcpVO;
-import com.tricoq.domain.agent.model.valobj.AiClientVO;
-import com.tricoq.domain.agent.model.valobj.enums.AiAgentEnumVO;
+import com.tricoq.domain.agent.model.aggregate.AiClientAggregate;
+import com.tricoq.domain.agent.model.dto.AiClientAdvisorDTO;
+import com.tricoq.domain.agent.model.dto.AiClientApiDTO;
+import com.tricoq.domain.agent.model.dto.AiClientModelDTO;
+import com.tricoq.domain.agent.model.dto.AiClientSystemPromptDTO;
+import com.tricoq.domain.agent.model.dto.AiClientToolMcpDTO;
+import com.tricoq.domain.agent.model.dto.AiClientDTO;
+import com.tricoq.domain.agent.model.enums.AiAgentEnumVO;
 import com.tricoq.domain.agent.adapter.repository.IClientRepository;
 import com.tricoq.infrastructure.dao.IAiClientAdvisorDao;
 import com.tricoq.infrastructure.dao.IAiClientApiDao;
@@ -29,6 +29,8 @@ import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.stereotype.Repository;
 import org.springframework.util.StringUtils;
 
+import java.io.Serializable;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -39,9 +41,14 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+/**
+ * @author trico qiang
+ * @date 11/25/25
+ */
 @Repository
 @RequiredArgsConstructor
-public class ClientRepositoryImpl extends ServiceImpl<IAiClientDao, AiClient> implements IClientRepository {
+public class ClientRepositoryImpl extends MpAggregateRepository<AiClientAggregate, AiClient, String, IAiClientDao>
+        implements IClientRepository {
 
     private final IAiClientDao aiClientDao;
     private final IAiClientConfigDao aiClientConfigDao;
@@ -52,7 +59,7 @@ public class ClientRepositoryImpl extends ServiceImpl<IAiClientDao, AiClient> im
     private final IAiClientAdvisorDao aiClientAdvisorDao;
 
     @Override
-    public List<AiClientApiVO> queryAiClientApiVOListByClientIds(List<String> clientIdList) {
+    public List<AiClientApiDTO> queryAiClientApisByClientIds(List<String> clientIdList) {
         if (CollectionUtils.isEmpty(clientIdList)) {
             return List.of();
         }
@@ -77,7 +84,7 @@ public class ClientRepositoryImpl extends ServiceImpl<IAiClientDao, AiClient> im
 
         List<AiClientApi> apis = aiClientApiDao.queryByApiIdsEnabled(apiIds);
         return apis.stream().map(api ->
-                        AiClientApiVO.builder()
+                        AiClientApiDTO.builder()
                                 .apiId(api.getApiId())
                                 .baseUrl(api.getBaseUrl())
                                 .apiKey(api.getApiKey())
@@ -88,7 +95,7 @@ public class ClientRepositoryImpl extends ServiceImpl<IAiClientDao, AiClient> im
     }
 
     @Override
-    public List<AiClientModelVO> queryAiClientModelVOByClientIds(List<String> clientIdList) {
+    public List<AiClientModelDTO> queryAiClientModelsByClientIds(List<String> clientIdList) {
         if (CollectionUtils.isEmpty(clientIdList)) {
             return List.of();
         }
@@ -109,7 +116,7 @@ public class ClientRepositoryImpl extends ServiceImpl<IAiClientDao, AiClient> im
                 .collect(Collectors.groupingBy(AiClientConfig::getSourceId,
                         Collectors.mapping(AiClientConfig::getTargetId, Collectors.toList())));
         List<AiClientModel> models = aiClientModelDao.queryByIds(modelIds);
-        return models.stream().map(model -> AiClientModelVO.builder()
+        return models.stream().map(model -> AiClientModelDTO.builder()
                         .modelId(model.getModelId())
                         .apiId(model.getApiId())
                         .modelName(model.getModelName())
@@ -120,7 +127,7 @@ public class ClientRepositoryImpl extends ServiceImpl<IAiClientDao, AiClient> im
     }
 
     @Override
-    public List<AiClientToolMcpVO> queryAiClientToolMcpVOByClientIds(List<String> clientIdList) {
+    public List<AiClientToolMcpDTO> queryAiClientToolMcpsByClientIds(List<String> clientIdList) {
         if (CollectionUtils.isEmpty(clientIdList)) {
             return List.of();
         }
@@ -154,7 +161,7 @@ public class ClientRepositoryImpl extends ServiceImpl<IAiClientDao, AiClient> im
             if (!StringUtils.hasText(transportConfig)) {
                 return null;
             }
-            AiClientToolMcpVO mcpVO = AiClientToolMcpVO.builder()
+            AiClientToolMcpDTO mcpVO = AiClientToolMcpDTO.builder()
                     .mcpId(mcp.getMcpId())
                     .mcpName(mcp.getMcpName())
                     .transportType(mcp.getTransportType())
@@ -163,17 +170,17 @@ public class ClientRepositoryImpl extends ServiceImpl<IAiClientDao, AiClient> im
                     .build();
             switch (mcp.getTransportType()) {
                 case "sse" -> {
-                    AiClientToolMcpVO.TransportConfigSse seeConfig =
-                            new TypeReference<AiClientToolMcpVO.TransportConfigSse>() {
+                    AiClientToolMcpDTO.TransportConfigSse seeConfig =
+                            new TypeReference<AiClientToolMcpDTO.TransportConfigSse>() {
                             }.parseObject(transportConfig);
                     mcpVO.setTransportConfigSse(seeConfig);
                     return mcpVO;
                 }
                 case "stdio" -> {
-                    Map<String, AiClientToolMcpVO.TransportConfigStdio.Stdio> stdioMap =
-                            new TypeReference<Map<String, AiClientToolMcpVO.TransportConfigStdio.Stdio>>() {
+                    Map<String, AiClientToolMcpDTO.TransportConfigStdio.Stdio> stdioMap =
+                            new TypeReference<Map<String, AiClientToolMcpDTO.TransportConfigStdio.Stdio>>() {
                             }.parseObject(transportConfig);
-                    mcpVO.setTransportConfigStdio(new AiClientToolMcpVO.TransportConfigStdio(stdioMap));
+                    mcpVO.setTransportConfigStdio(new AiClientToolMcpDTO.TransportConfigStdio(stdioMap));
                     return mcpVO;
                 }
                 default -> {
@@ -184,7 +191,7 @@ public class ClientRepositoryImpl extends ServiceImpl<IAiClientDao, AiClient> im
     }
 
     @Override
-    public Map<String, AiClientSystemPromptVO> queryAiClientSystemPromptVOByClientIds(List<String> clientIdList) {
+    public Map<String, AiClientSystemPromptDTO> queryAiClientSystemPromptsByClientIds(List<String> clientIdList) {
         if (CollectionUtils.isEmpty(clientIdList)) {
             return Map.of();
         }
@@ -200,17 +207,17 @@ public class ClientRepositoryImpl extends ServiceImpl<IAiClientDao, AiClient> im
         }
         List<AiClientSystemPrompt> systemPrompts = aiClientSystemPromptDao.queryByIdsPromptsEnabled(systemPromptIds);
         return systemPrompts.stream().map(prompt ->
-                        AiClientSystemPromptVO.builder()
+                        AiClientSystemPromptDTO.builder()
                                 .promptId(prompt.getPromptId())
                                 .promptName(prompt.getPromptName())
                                 .promptContent(prompt.getPromptContent())
                                 .description(prompt.getDescription())
                                 .build())
-                .collect(Collectors.toMap(AiClientSystemPromptVO::getPromptId, Function.identity()));
+                .collect(Collectors.toMap(AiClientSystemPromptDTO::getPromptId, Function.identity()));
     }
 
     @Override
-    public List<AiClientAdvisorVO> queryAiClientAdvisorVOByClientIds(List<String> clientIdList) {
+    public List<AiClientAdvisorDTO> queryAiClientAdvisorsByClientIds(List<String> clientIdList) {
         if (CollectionUtils.isEmpty(clientIdList)) {
             return List.of();
         }
@@ -230,7 +237,7 @@ public class ClientRepositoryImpl extends ServiceImpl<IAiClientDao, AiClient> im
             if (!StringUtils.hasText(advisorType)) {
                 return null;
             }
-            AiClientAdvisorVO advisorVO = AiClientAdvisorVO.builder()
+            AiClientAdvisorDTO advisorVO = AiClientAdvisorDTO.builder()
                     .advisorId(advisor.getAdvisorId())
                     .advisorName(advisor.getAdvisorName())
                     .advisorType(advisorType)
@@ -239,13 +246,13 @@ public class ClientRepositoryImpl extends ServiceImpl<IAiClientDao, AiClient> im
             String extParam = advisor.getExtParam();
             switch (advisorType) {
                 case "ChatMemory" -> {
-                    AiClientAdvisorVO.ChatMemory chatMemory = new TypeReference<AiClientAdvisorVO.ChatMemory>() {
+                    AiClientAdvisorDTO.ChatMemory chatMemory = new TypeReference<AiClientAdvisorDTO.ChatMemory>() {
                     }.parseObject(extParam);
                     advisorVO.setChatMemory(chatMemory);
                     return advisorVO;
                 }
                 case "RagAnswer" -> {
-                    AiClientAdvisorVO.RagAnswer ragAnswer = new TypeReference<AiClientAdvisorVO.RagAnswer>() {
+                    AiClientAdvisorDTO.RagAnswer ragAnswer = new TypeReference<AiClientAdvisorDTO.RagAnswer>() {
                     }.parseObject(extParam);
                     advisorVO.setRagAnswer(ragAnswer);
                     return advisorVO;
@@ -258,7 +265,7 @@ public class ClientRepositoryImpl extends ServiceImpl<IAiClientDao, AiClient> im
     }
 
     @Override
-    public List<AiClientVO> queryAiClientVOByClientIds(List<String> clientIdList) {
+    public List<AiClientDTO> queryAiClientsByClientIds(List<String> clientIdList) {
         if (CollectionUtils.isEmpty(clientIdList)) {
             return List.of();
         }
@@ -269,7 +276,7 @@ public class ClientRepositoryImpl extends ServiceImpl<IAiClientDao, AiClient> im
                 .collect(Collectors.groupingBy(AiClientConfig::getSourceId));
         List<AiClient> clients = aiClientDao.queryByClientIdEnabled(clientIdSet);
         return clients.stream().map(client -> {
-            AiClientVO aiClientVO = AiClientVO.builder()
+            AiClientDTO aiClientVO = AiClientDTO.builder()
                     .clientId(client.getClientId())
                     .clientName(client.getClientName())
                     .description(client.getDescription())
@@ -299,7 +306,7 @@ public class ClientRepositoryImpl extends ServiceImpl<IAiClientDao, AiClient> im
     }
 
     @Override
-    public List<AiClientApiVO> queryAiClientApiVOListByModelIds(List<String> modelIdList) {
+    public List<AiClientApiDTO> queryAiClientApisByModelIds(List<String> modelIdList) {
         if (CollectionUtils.isEmpty(modelIdList)) {
             return List.of();
         }
@@ -311,7 +318,7 @@ public class ClientRepositoryImpl extends ServiceImpl<IAiClientDao, AiClient> im
         }
         List<AiClientApi> apis = aiClientApiDao.queryByApiIdsEnabled(apiIdSet);
         return apis.stream().map(api ->
-                AiClientApiVO.builder()
+                AiClientApiDTO.builder()
                         .apiId(api.getApiId())
                         .baseUrl(api.getBaseUrl())
                         .apiKey(api.getApiKey())
@@ -322,17 +329,53 @@ public class ClientRepositoryImpl extends ServiceImpl<IAiClientDao, AiClient> im
     }
 
     @Override
-    public List<AiClientModelVO> queryAiClientModelVOByModelIds(List<String> modelIdList) {
+    public List<AiClientModelDTO> queryAiClientModelsByModelIds(List<String> modelIdList) {
         if (CollectionUtils.isEmpty(modelIdList)) {
             return List.of();
         }
         Set<String> modelIdSet = new HashSet<>(modelIdList);
         List<AiClientModel> aiClientModels = aiClientModelDao.queryByIds(modelIdSet);
-        return aiClientModels.stream().map(model -> AiClientModelVO.builder()
+        return aiClientModels.stream().map(model -> AiClientModelDTO.builder()
                 .modelId(model.getModelId())
                 .apiId(model.getApiId())
                 .modelName(model.getModelName())
                 .modelType(model.getModelType())
                 .build()).toList();
+    }
+
+    @Override
+    protected AiClient toPo(AiClientAggregate aggregate) {
+        if (aggregate == null) {
+            return null;
+        }
+        LocalDateTime now = LocalDateTime.now();
+        return AiClient.builder()
+                .clientId(aggregate.getClientId())
+                .clientName(aggregate.getClientName())
+                .description(aggregate.getDescription())
+                .status(1)
+                .createTime(now)
+                .updateTime(now)
+                .build();
+    }
+
+    @Override
+    protected AiClientAggregate toAggregate(AiClient data) {
+        if (data == null) {
+            return null;
+        }
+        // 这里仅还原基础信息，关联关系从 config 表加载，可在应用层补充后再挂载到聚合根
+        return AiClientAggregate.restore(data.getClientId(), data.getClientName(), data.getDescription(),
+                null, List.of(), List.of(), List.of());
+    }
+
+    @Override
+    protected String toId(AiClientAggregate aggregate) {
+        return aggregate == null ? null : aggregate.getClientId();
+    }
+
+    @Override
+    protected Serializable toSerializableId(String id) {
+        return id;
     }
 }

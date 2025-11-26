@@ -2,13 +2,13 @@ package com.tricoq.domain.agent.service.armory.business.data.impl;
 
 import com.tricoq.domain.agent.adapter.repository.IClientRepository;
 import com.tricoq.domain.agent.model.entity.ArmoryCommandEntity;
-import com.tricoq.domain.agent.model.valobj.enums.AiAgentEnumVO;
-import com.tricoq.domain.agent.model.valobj.AiClientAdvisorVO;
-import com.tricoq.domain.agent.model.valobj.AiClientApiVO;
-import com.tricoq.domain.agent.model.valobj.AiClientModelVO;
-import com.tricoq.domain.agent.model.valobj.AiClientSystemPromptVO;
-import com.tricoq.domain.agent.model.valobj.AiClientToolMcpVO;
-import com.tricoq.domain.agent.model.valobj.AiClientVO;
+import com.tricoq.domain.agent.model.enums.AiAgentEnumVO;
+import com.tricoq.domain.agent.model.dto.AiClientAdvisorDTO;
+import com.tricoq.domain.agent.model.dto.AiClientApiDTO;
+import com.tricoq.domain.agent.model.dto.AiClientModelDTO;
+import com.tricoq.domain.agent.model.dto.AiClientSystemPromptDTO;
+import com.tricoq.domain.agent.model.dto.AiClientToolMcpDTO;
+import com.tricoq.domain.agent.model.dto.AiClientDTO;
 import com.tricoq.domain.agent.service.armory.business.data.ILoadDataStrategy;
 import com.tricoq.domain.agent.service.armory.node.factory.DefaultArmoryStrategyFactory;
 import lombok.RequiredArgsConstructor;
@@ -40,34 +40,34 @@ public class AiClientLoadDataStrategy implements ILoadDataStrategy {
     public void loadData(ArmoryCommandEntity entity, DefaultArmoryStrategyFactory.DynamicContext dynamicContext) {
         List<String> clientIds = entity.getCommandIdList();
 
-        CompletableFuture<List<AiClientApiVO>> aiClientApiListFuture = CompletableFuture.supplyAsync(() -> {
+        CompletableFuture<List<AiClientApiDTO>> aiClientApiListFuture = CompletableFuture.supplyAsync(() -> {
             log.info("查询配置数据(ai_client_api) {}", clientIds);
-            return clientRepository.queryAiClientApiVOListByClientIds(clientIds);
+            return clientRepository.queryAiClientApisByClientIds(clientIds);
         }, threadPoolExecutor);
 
-        CompletableFuture<List<AiClientModelVO>> aiClientModelListFuture = CompletableFuture.supplyAsync(() -> {
+        CompletableFuture<List<AiClientModelDTO>> aiClientModelListFuture = CompletableFuture.supplyAsync(() -> {
             log.info("查询配置数据(ai_client_model) {}", clientIds);
-            return clientRepository.queryAiClientModelVOByClientIds(clientIds);
+            return clientRepository.queryAiClientModelsByClientIds(clientIds);
         }, threadPoolExecutor);
 
-        CompletableFuture<List<AiClientToolMcpVO>> aiClientToolMcpListFuture = CompletableFuture.supplyAsync(() -> {
+        CompletableFuture<List<AiClientToolMcpDTO>> aiClientToolMcpListFuture = CompletableFuture.supplyAsync(() -> {
             log.info("查询配置数据(ai_client_tool_mcp) {}", clientIds);
-            return clientRepository.queryAiClientToolMcpVOByClientIds(clientIds);
+            return clientRepository.queryAiClientToolMcpsByClientIds(clientIds);
         }, threadPoolExecutor);
 
-        CompletableFuture<Map<String, AiClientSystemPromptVO>> aiClientSystemPromptListFuture = CompletableFuture.supplyAsync(() -> {
+        CompletableFuture<Map<String, AiClientSystemPromptDTO>> aiClientSystemPromptListFuture = CompletableFuture.supplyAsync(() -> {
             log.info("查询配置数据(ai_client_system_prompt) {}", clientIds);
-            return clientRepository.queryAiClientSystemPromptVOByClientIds(clientIds);
+            return clientRepository.queryAiClientSystemPromptsByClientIds(clientIds);
         }, threadPoolExecutor);
 
-        CompletableFuture<List<AiClientAdvisorVO>> aiClientAdvisorListFuture = CompletableFuture.supplyAsync(() -> {
+        CompletableFuture<List<AiClientAdvisorDTO>> aiClientAdvisorListFuture = CompletableFuture.supplyAsync(() -> {
             log.info("查询配置数据(ai_client_advisor) {}", clientIds);
-            return clientRepository.queryAiClientAdvisorVOByClientIds(clientIds);
+            return clientRepository.queryAiClientAdvisorsByClientIds(clientIds);
         }, threadPoolExecutor);
 
-        CompletableFuture<List<AiClientVO>> aiClientListFuture = CompletableFuture.supplyAsync(() -> {
+        CompletableFuture<List<AiClientDTO>> aiClientListFuture = CompletableFuture.supplyAsync(() -> {
             log.info("查询配置数据(ai_client) {}", clientIds);
-            return clientRepository.queryAiClientVOByClientIds(clientIds);
+            return clientRepository.queryAiClientsByClientIds(clientIds);
         }, threadPoolExecutor);
 
         CompletableFuture<Void> all = CompletableFuture.allOf(aiClientApiListFuture,

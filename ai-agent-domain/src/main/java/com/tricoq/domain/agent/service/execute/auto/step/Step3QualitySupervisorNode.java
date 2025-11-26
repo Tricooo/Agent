@@ -2,9 +2,9 @@ package com.tricoq.domain.agent.service.execute.auto.step;
 
 import com.tricoq.domain.agent.model.entity.AutoAgentExecuteResultEntity;
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
-import com.tricoq.domain.agent.model.valobj.AiAgentClientFlowConfigVO;
-import com.tricoq.domain.agent.model.valobj.enums.AiAgentEnumVO;
-import com.tricoq.domain.agent.model.valobj.enums.AiClientTypeEnumVO;
+import com.tricoq.domain.agent.model.dto.AiAgentClientFlowConfigDTO;
+import com.tricoq.domain.agent.model.enums.AiAgentEnumVO;
+import com.tricoq.domain.agent.model.enums.AiClientTypeEnumVO;
 import com.tricoq.domain.agent.service.execute.auto.step.factory.DefaultExecuteStrategyFactory;
 import com.tricoq.types.framework.chain.StrategyHandler;
 import io.micrometer.common.util.StringUtils;
@@ -44,14 +44,14 @@ public class Step3QualitySupervisorNode extends AbstractExecuteSupport {
         if (StringUtils.isBlank(originalUserInput)) {
             throw new IllegalArgumentException("用户输入异常");
         }
-        Map<String, AiAgentClientFlowConfigVO> flowConfigMap = dynamicContext.getFlowConfigMap();
+        Map<String, AiAgentClientFlowConfigDTO> flowConfigMap = dynamicContext.getFlowConfigMap();
         if (MapUtils.isEmpty(flowConfigMap)) {
             throw new IllegalArgumentException("flowConfigMap 为空");
         }
         // 第三阶段：质量监督
         log.info("\n🔍 阶段3: 质量监督检查");
 
-        AiAgentClientFlowConfigVO flowConfig = Optional
+        AiAgentClientFlowConfigDTO flowConfig = Optional
                 .ofNullable(flowConfigMap.get(AiClientTypeEnumVO.QUALITY_SUPERVISOR_CLIENT.getCode()))
                 .orElseThrow(() -> new IllegalArgumentException("没有此 client"));
         ChatClient qualitySupervisorClient = Optional

@@ -1,7 +1,7 @@
 package com.tricoq.domain.agent.service.rag;
 
 import com.tricoq.domain.agent.adapter.repository.IRagRepository;
-import com.tricoq.domain.agent.model.valobj.AiRagOrderVO;
+import com.tricoq.domain.agent.model.dto.AiRagOrderDTO;
 import com.tricoq.domain.agent.service.IRagService;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -45,7 +45,7 @@ public class RagService implements IRagService {
             vectorStore.accept(documentList);
 
             // 存储到数据库
-            AiRagOrderVO aiRagOrderVO = new AiRagOrderVO();
+            AiRagOrderDTO aiRagOrderVO = new AiRagOrderDTO();
             aiRagOrderVO.setRagName(name);
             aiRagOrderVO.setKnowledgeTag(tag);
             ragRepository.createTagOrder(aiRagOrderVO);

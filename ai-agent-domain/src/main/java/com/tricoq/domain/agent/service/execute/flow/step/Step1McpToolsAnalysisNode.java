@@ -2,8 +2,8 @@ package com.tricoq.domain.agent.service.execute.flow.step;
 
 import com.tricoq.domain.agent.model.entity.AutoAgentExecuteResultEntity;
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
-import com.tricoq.domain.agent.model.valobj.AiAgentClientFlowConfigVO;
-import com.tricoq.domain.agent.model.valobj.enums.AiClientTypeEnumVO;
+import com.tricoq.domain.agent.model.dto.AiAgentClientFlowConfigDTO;
+import com.tricoq.domain.agent.model.enums.AiClientTypeEnumVO;
 import com.tricoq.domain.agent.service.execute.flow.step.factory.DefaultFlowAgentExecuteStrategyFactory;
 import com.tricoq.types.framework.chain.StrategyHandler;
 import lombok.RequiredArgsConstructor;
@@ -38,8 +38,8 @@ public class Step1McpToolsAnalysisNode extends AbstractExecuteSupport {
     protected String doApply(ExecuteCommandEntity requestParam, DefaultFlowAgentExecuteStrategyFactory.DynamicContext dynamicContext) {
         log.info("\n--- 步骤1: MCP工具能力分析（仅分析阶段，不执行用户请求） ---");
 
-        Map<String, AiAgentClientFlowConfigVO> configMap = dynamicContext.getConfigMap();
-        AiAgentClientFlowConfigVO config = Optional
+        Map<String, AiAgentClientFlowConfigDTO> configMap = dynamicContext.getConfigMap();
+        AiAgentClientFlowConfigDTO config = Optional
                 .ofNullable(configMap.get(AiClientTypeEnumVO.TOOL_MCP_CLIENT.getCode()))
                 .orElseThrow();
         ChatClient mcpAnalysisClient = Optional

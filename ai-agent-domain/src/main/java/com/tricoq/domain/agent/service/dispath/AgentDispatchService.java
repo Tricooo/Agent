@@ -2,7 +2,7 @@ package com.tricoq.domain.agent.service.dispath;
 
 import com.tricoq.domain.agent.adapter.repository.IAgentRepository;
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
-import com.tricoq.domain.agent.model.valobj.AiAgentVO;
+import com.tricoq.domain.agent.model.dto.AiAgentDTO;
 import com.tricoq.domain.agent.service.IAgentDispatchService;
 import com.tricoq.domain.agent.service.IExecuteStrategy;
 import com.tricoq.types.exception.BizException;
@@ -33,7 +33,7 @@ public class AgentDispatchService implements IAgentDispatchService {
 
     @Override
     public void dispatch(ExecuteCommandEntity commandEntity, ResponseBodyEmitter emitter) {
-        AiAgentVO aiAgentVO = agentRepository.queryAgentByAgentId(commandEntity.getAgentId());
+        AiAgentDTO aiAgentVO = agentRepository.queryAgentByAgentId(commandEntity.getAgentId());
 
         String strategy = aiAgentVO.getStrategy();
         IExecuteStrategy executeStrategy = executeStrategies.get(strategy);

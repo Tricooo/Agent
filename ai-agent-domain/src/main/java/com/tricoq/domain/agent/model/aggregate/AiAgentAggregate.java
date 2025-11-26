@@ -1,4 +1,4 @@
-package com.tricoq.domain.agent.model.valobj;
+package com.tricoq.domain.agent.model.aggregate;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -6,16 +6,16 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * AI智能体配置值对象
  *
- * @author xiaofuge bugstack.cn @小傅哥
- * 2025/9/2 07:05
+ *
+ * @author trico qiang
+ * @date 11/26/25
  */
 @Data
-@Builder
 @AllArgsConstructor
 @NoArgsConstructor
-public class AiAgentVO {
+@Builder
+public class AiAgentAggregate {
 
     /**
      * 智能体ID
@@ -46,5 +46,4 @@ public class AiAgentVO {
      * 状态(0:禁用,1:启用)
      */
     private Integer status;
-
 }

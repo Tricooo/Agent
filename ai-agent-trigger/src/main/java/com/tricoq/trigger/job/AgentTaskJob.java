@@ -2,7 +2,7 @@ package com.tricoq.trigger.job;
 
 import com.tricoq.domain.agent.adapter.repository.ITaskScheduleRepository;
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
-import com.tricoq.domain.agent.model.valobj.AiAgentTaskScheduleVO;
+import com.tricoq.domain.agent.model.dto.AiAgentTaskScheduleDTO;
 import com.tricoq.domain.agent.service.IAgentDispatchService;
 import com.tricoq.types.framework.schedule.model.TaskScheduleVO;
 import com.tricoq.types.framework.schedule.provider.ITaskDataProvider;
@@ -35,7 +35,7 @@ public class AgentTaskJob implements ITaskDataProvider {
      */
     @Override
     public List<TaskScheduleVO> queryAllValidTaskSchedule() {
-        List<AiAgentTaskScheduleVO> schedules = taskScheduleRepository.queryAllValidTaskSchedule();
+        List<AiAgentTaskScheduleDTO> schedules = taskScheduleRepository.queryAllValidTaskSchedule();
         if (schedules.isEmpty()) {
             return List.of();
         }

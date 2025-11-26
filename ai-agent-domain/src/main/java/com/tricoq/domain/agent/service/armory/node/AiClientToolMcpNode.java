@@ -2,8 +2,8 @@ package com.tricoq.domain.agent.service.armory.node;
 
 import com.alibaba.fastjson.JSON;
 import com.tricoq.domain.agent.model.entity.ArmoryCommandEntity;
-import com.tricoq.domain.agent.model.valobj.enums.AiAgentEnumVO;
-import com.tricoq.domain.agent.model.valobj.AiClientToolMcpVO;
+import com.tricoq.domain.agent.model.enums.AiAgentEnumVO;
+import com.tricoq.domain.agent.model.dto.AiClientToolMcpDTO;
 import com.tricoq.domain.agent.service.armory.node.factory.DefaultArmoryStrategyFactory;
 import com.tricoq.types.framework.chain.StrategyHandler;
 import io.modelcontextprotocol.client.McpClient;
@@ -42,13 +42,13 @@ public class AiClientToolMcpNode extends AbstractArmorySupport {
     @Override
     protected String doApply(ArmoryCommandEntity requestParam, DefaultArmoryStrategyFactory.DynamicContext dynamicContext) {
         log.info("Ai Agent 构建节点，Tool MCP 工具配置{}", JSON.toJSONString(requestParam));
-        List<AiClientToolMcpVO> mcpNodes = dynamicContext.getValue(AiAgentEnumVO.AI_CLIENT_TOOL_MCP.getDataName());
+        List<AiClientToolMcpDTO> mcpNodes = dynamicContext.getValue(AiAgentEnumVO.AI_CLIENT_TOOL_MCP.getDataName());
         if (CollectionUtils.isEmpty(mcpNodes)) {
             log.warn("没有需要被初始化的 ai client tool mcp");
             return router(requestParam, dynamicContext);
         }
 
-        for (AiClientToolMcpVO vo : mcpNodes) {
+        for (AiClientToolMcpDTO vo : mcpNodes) {
             McpSyncClient mcpSyncClient = createMcpSyncClient(vo);
             registerBean(beanName(vo.getMcpId()), McpSyncClient.class, mcpSyncClient);
         }
@@ -60,12 +60,12 @@ public class AiClientToolMcpNode extends AbstractArmorySupport {
         return AiAgentEnumVO.AI_CLIENT_TOOL_MCP.getBeanName(id);
     }
 
-    private McpSyncClient createMcpSyncClient(AiClientToolMcpVO vo) {
+    private McpSyncClient createMcpSyncClient(AiClientToolMcpDTO vo) {
 
         String transportType = vo.getTransportType();
         switch (transportType) {
             case "sse" -> {
-                AiClientToolMcpVO.TransportConfigSse configSse = vo.getTransportConfigSse();
+                AiClientToolMcpDTO.TransportConfigSse configSse = vo.getTransportConfigSse();
                 String originalBaseUri = configSse.getBaseUri();
                 String baseUri;
                 String sseEndpoint;
@@ -92,9 +92,9 @@ public class AiClientToolMcpNode extends AbstractArmorySupport {
             }
 
             case "stdio" -> {
-                AiClientToolMcpVO.TransportConfigStdio configStdio = vo.getTransportConfigStdio();
+                AiClientToolMcpDTO.TransportConfigStdio configStdio = vo.getTransportConfigStdio();
                 var stdioMap = configStdio.getStdio();
-                AiClientToolMcpVO.TransportConfigStdio.Stdio stdio = stdioMap.get(vo.getMcpId());
+                AiClientToolMcpDTO.TransportConfigStdio.Stdio stdio = stdioMap.get(vo.getMcpId());
                 ServerParameters parameters = ServerParameters.builder(stdio.getCommand())
                         .env(stdio.getEnv())
                         .args(stdio.getArgs())
