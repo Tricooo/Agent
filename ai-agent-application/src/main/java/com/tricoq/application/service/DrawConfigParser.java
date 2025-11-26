@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tricoq.application.model.dto.DrawGraphDTO;
+import com.tricoq.domain.agent.model.aggregate.AiAgentAggregate;
 import com.tricoq.domain.agent.model.dto.AiAgentDTO;
 import com.tricoq.types.common.DrawConstants;
 import com.tricoq.types.enums.ResponseCode;
@@ -445,7 +446,7 @@ public class DrawConfigParser {
         return null;
     }
 
-    public AiAgentDTO buildAgent(String agentId, String configData) {
+    public AiAgentAggregate buildAgent(String agentId, String configData) {
         Map<String, DrawGraphDTO.NodeDTO> type2NodeMap = getNodeMap(agentId, configData);
         DrawGraphDTO.NodeDTO agentNode = type2NodeMap.get(DrawConstants.NodeTypeConstants.AGENT);
         return parseAgentConfig(agentNode, agentId);
@@ -465,7 +466,7 @@ public class DrawConfigParser {
         return type2NodeMap;
     }
 
-    private AiAgentDTO parseAgentConfig(DrawGraphDTO.NodeDTO agentNode, String agentId) {
+    private AiAgentAggregate parseAgentConfig(DrawGraphDTO.NodeDTO agentNode, String agentId) {
         Map<String, String> inputsValues = agentNode.inputsValues();
         if (MapUtils.isEmpty(inputsValues)) {
             throw new IllegalArgumentException();
@@ -474,7 +475,7 @@ public class DrawConfigParser {
         String description = inputsValues.get(DrawConstants.AgentConstants.DESCRIPTION);
         String channel = inputsValues.get(DrawConstants.AgentConstants.CHANNEL);
         String strategy = inputsValues.get(DrawConstants.AgentConstants.STRATEGY);
-        return AiAgentDTO.builder()
+        return AiAgentAggregate.builder()
                 .agentId(agentId)
                 .agentName(agentName)
                 .description(description)

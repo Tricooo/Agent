@@ -1,5 +1,7 @@
 package com.tricoq.domain.agent.model.aggregate;
 
+import lombok.Getter;
+
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -8,7 +10,9 @@ import java.util.Set;
 
 /**
  * AI Client 聚合根：封装模型、Prompt、工具、顾问等关联，并提供简单不变式约束。
+ * @author trico qiang
  */
+@Getter
 public class AiClientAggregate {
 
     private final String clientId;
@@ -103,22 +107,6 @@ public class AiClientAggregate {
     public void replaceAdvisors(Collection<String> advisorIds) {
         this.advisorIds.clear();
         attachAdvisors(advisorIds);
-    }
-
-    public String getClientId() {
-        return clientId;
-    }
-
-    public String getClientName() {
-        return clientName;
-    }
-
-    public String getDescription() {
-        return description;
-    }
-
-    public String getModelId() {
-        return modelId;
     }
 
     public List<String> getPromptIds() {

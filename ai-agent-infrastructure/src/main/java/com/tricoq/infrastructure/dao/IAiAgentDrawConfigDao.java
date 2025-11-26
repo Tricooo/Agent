@@ -15,20 +15,6 @@ import java.util.List;
 public interface IAiAgentDrawConfigDao extends BaseMapper<AiAgentDrawConfig> {
 
     /**
-     * 插入拖拉拽配置
-     * @param aiAgentDrawConfig 拖拉拽配置对象
-     * @return 影响行数
-     */
-    int insert(AiAgentDrawConfig aiAgentDrawConfig);
-
-    /**
-     * 根据ID更新拖拉拽配置
-     * @param aiAgentDrawConfig 拖拉拽配置对象
-     * @return 影响行数
-     */
-    int updateById(AiAgentDrawConfig aiAgentDrawConfig);
-
-    /**
      * 根据配置ID更新拖拉拽配置
      * @param aiAgentDrawConfig 拖拉拽配置对象
      * @return 影响行数

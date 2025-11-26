@@ -1,7 +1,10 @@
 package com.tricoq.application.service;
 
 import com.tricoq.application.model.dto.command.SaveAgentDrawCommand;
+import com.tricoq.domain.agent.adapter.repository.IAgentDrawConfigRepository;
 import com.tricoq.domain.agent.adapter.repository.IAgentRepository;
+import com.tricoq.domain.agent.model.aggregate.AiAgentAggregate;
+import com.tricoq.domain.agent.model.aggregate.AiAgentDrawConfigAggregate;
 import com.tricoq.domain.agent.model.dto.AiAgentDTO;
 import com.tricoq.types.enums.ResponseCode;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +33,8 @@ public class AiAgentDrawAdminService {
 
     private final IAgentRepository agentRepository;
 
+    private final IAgentDrawConfigRepository agentDrawConfigRepository;
+
     @Transactional(rollbackFor = Exception.class)
     public void saveDrawConfig(SaveAgentDrawCommand command) {
         try {
@@ -47,7 +52,7 @@ public class AiAgentDrawAdminService {
 
             }
 
-            AiAgentDTO aiAgent = drawConfigParser.buildAgent(agentId, command.getConfigData());
+            AiAgentAggregate aiAgent = drawConfigParser.buildAgent(agentId, command.getConfigData());
             if (!agentRepository.saveAggregate(aiAgent)) {
                 throw new Exception("agent保存失败");
             }
@@ -59,7 +64,7 @@ public class AiAgentDrawAdminService {
             }
 
             // 检查配置是否已存在
-            AiAgentDrawConfig existingConfig = aiAgentDrawConfigDao.queryByConfigId(configId);
+            AiAgentDrawConfigAggregate existingConfig = agentDrawConfigRepository.findById(configId);
             AiAgentDrawConfig drawConfig = new AiAgentDrawConfig();
             BeanUtils.copyProperties(command, drawConfig);
             drawConfig.setConfigId(configId);
