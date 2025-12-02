@@ -1,6 +1,7 @@
 package com.tricoq.domain.agent.adapter.repository;
 
 import com.tricoq.domain.agent.model.aggregate.AiAgentAggregate;
+import com.tricoq.domain.agent.model.valobj.AiAgentClientFlowConfigVO;
 import com.tricoq.domain.agent.model.dto.AiAgentClientFlowConfigDTO;
 import com.tricoq.domain.agent.model.dto.AiAgentDTO;
 
@@ -21,4 +22,6 @@ public interface IAgentRepository extends IAggregateRepository<AiAgentAggregate,
     AiAgentDTO queryAgentByAgentId(String agentId);
 
     List<AiAgentDTO> queryAvailableAgents();
+
+    boolean saveFlowConfig(List<AiAgentClientFlowConfigVO> aiAgentClientFlowConfigs);
 }

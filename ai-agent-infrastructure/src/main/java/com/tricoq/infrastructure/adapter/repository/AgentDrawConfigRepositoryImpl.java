@@ -19,7 +19,7 @@ import java.time.LocalDateTime;
 @Repository
 @RequiredArgsConstructor
 public class AgentDrawConfigRepositoryImpl
-        extends MpAggregateRepository<AiAgentDrawConfigAggregate, AiAgentDrawConfig, String, IAiAgentDrawConfigDao>
+        extends MpAggregateRepository<AiAgentDrawConfigAggregate, AiAgentDrawConfig, String, Long, IAiAgentDrawConfigDao>
         implements IAgentDrawConfigRepository {
 
     private final IAiAgentDrawConfigDao drawConfigDao;
@@ -76,6 +76,21 @@ public class AgentDrawConfigRepositoryImpl
     @Override
     protected String toId(AiAgentDrawConfigAggregate aggregate) {
         return aggregate == null ? null : aggregate.getConfigId();
+    }
+
+    @Override
+    protected Long toDbId(AiAgentDrawConfig data) {
+        return data.getId();
+    }
+
+    @Override
+    protected void fillDbId(AiAgentDrawConfig target, Long dbId) {
+        target.setId(dbId);
+    }
+
+    @Override
+    protected AiAgentDrawConfig getByAggregateId(String s) {
+        return drawConfigDao.queryByConfigId(s);
     }
 
     /**

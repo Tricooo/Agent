@@ -1,5 +1,7 @@
 package com.tricoq.types.common;
 
+import java.util.List;
+
 /**
  * 拖拽画布常量
  *
@@ -19,6 +21,9 @@ public interface DrawConstants {
         String AGENT = "agent";
         String CLIENT = "client";
         String ADVISOR = "advisor";
-        String TOOL_MAP = "tool_mcp";
+        String TOOL_MCP = "tool_mcp";
+        String PROMPT = "prompt";
+        String MODEL = "model";
+        List<String> TYPES = List.of(AGENT, CLIENT, ADVISOR, TOOL_MCP, MODEL, PROMPT);
     }
 }

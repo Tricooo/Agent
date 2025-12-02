@@ -34,4 +34,6 @@ public interface IClientRepository extends IAggregateRepository<AiClientAggregat
     List<AiClientApiDTO> queryAiClientApisByModelIds(List<String> modelIdList);
 
     List<AiClientModelDTO> queryAiClientModelsByModelIds(List<String> modelIdList);
+
+    boolean saveOrUpdateClientConfigByAggregate(List<AiClientAggregate> aiClientAggregates, String extraParams);
 }

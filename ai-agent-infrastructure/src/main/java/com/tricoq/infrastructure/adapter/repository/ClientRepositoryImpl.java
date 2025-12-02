@@ -10,6 +10,7 @@ import com.tricoq.domain.agent.model.dto.AiClientToolMcpDTO;
 import com.tricoq.domain.agent.model.dto.AiClientDTO;
 import com.tricoq.domain.agent.model.enums.AiAgentEnumVO;
 import com.tricoq.domain.agent.adapter.repository.IClientRepository;
+import com.tricoq.domain.agent.model.valobj.AiClientModelVO;
 import com.tricoq.infrastructure.dao.IAiClientAdvisorDao;
 import com.tricoq.infrastructure.dao.IAiClientApiDao;
 import com.tricoq.infrastructure.dao.IAiClientConfigDao;
@@ -24,8 +25,10 @@ import com.tricoq.infrastructure.dao.po.AiClientConfig;
 import com.tricoq.infrastructure.dao.po.AiClientModel;
 import com.tricoq.infrastructure.dao.po.AiClientSystemPrompt;
 import com.tricoq.infrastructure.dao.po.AiClientToolMcp;
+import com.tricoq.types.common.DrawConstants;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.collections4.CollectionUtils;
+import org.apache.ibatis.executor.BatchResult;
 import org.springframework.stereotype.Repository;
 import org.springframework.util.StringUtils;
 
@@ -47,7 +50,7 @@ import java.util.stream.Stream;
  */
 @Repository
 @RequiredArgsConstructor
-public class ClientRepositoryImpl extends MpAggregateRepository<AiClientAggregate, AiClient, String, IAiClientDao>
+public class ClientRepositoryImpl extends MpAggregateRepository<AiClientAggregate, AiClient, String, Long, IAiClientDao>
         implements IClientRepository {
 
     private final IAiClientDao aiClientDao;
@@ -344,6 +347,57 @@ public class ClientRepositoryImpl extends MpAggregateRepository<AiClientAggregat
     }
 
     @Override
+    public boolean saveOrUpdateClientConfigByAggregate(List<AiClientAggregate> aiClientAggregates, String extraParams) {
+        List<AiClientConfig> saves = new ArrayList<>();
+        for (AiClientAggregate clientAggregate : aiClientAggregates) {
+            String clientId = clientAggregate.getClientId();
+            saves.addAll(clientAggregate.getAdvisorIds().stream().map(advisor -> AiClientConfig.builder()
+                            .sourceType(DrawConstants.NodeTypeConstants.CLIENT)
+                            .sourceId(clientId)
+                            .targetType(DrawConstants.NodeTypeConstants.ADVISOR)
+                            .targetId(advisor)
+                            .configId(clientAggregate.getConfigId())
+                            .extParam(extraParams)
+                            .status(1)
+                            .build())
+                    .toList());
+            saves.addAll(clientAggregate.getMcpIds().stream().map(mcp -> AiClientConfig.builder()
+                            .sourceType(DrawConstants.NodeTypeConstants.CLIENT)
+                            .sourceId(clientId)
+                            .targetType(DrawConstants.NodeTypeConstants.TOOL_MCP)
+                            .targetId(mcp)
+                            .configId(clientAggregate.getConfigId())
+                            .extParam(extraParams)
+                            .status(1)
+                            .build())
+                    .toList());
+            saves.addAll(clientAggregate.getPromptIds().stream().map(prompt -> AiClientConfig.builder()
+                            .sourceType(DrawConstants.NodeTypeConstants.CLIENT)
+                            .sourceId(clientId)
+                            .targetType(DrawConstants.NodeTypeConstants.PROMPT)
+                            .targetId(prompt)
+                            .configId(clientAggregate.getConfigId())
+                            .extParam(extraParams)
+                            .status(1)
+                            .build())
+                    .toList());
+            AiClientModelVO model = clientAggregate.getModel();
+            saves.addAll(model.getToolMcpIds().stream().map(mcp -> AiClientConfig.builder()
+                            .sourceType(DrawConstants.NodeTypeConstants.MODEL)
+                            .sourceId(model.getModelId())
+                            .targetType(DrawConstants.NodeTypeConstants.TOOL_MCP)
+                            .targetId(mcp)
+                            .configId(clientAggregate.getConfigId())
+                            .extParam(extraParams)
+                            .status(1)
+                            .build())
+                    .toList());
+        }
+        List<BatchResult> batchResults = aiClientConfigDao.insert(saves);
+        return !batchResults.isEmpty();
+    }
+
+    @Override
     protected AiClient toPo(AiClientAggregate aggregate) {
         if (aggregate == null) {
             return null;
@@ -366,7 +420,7 @@ public class ClientRepositoryImpl extends MpAggregateRepository<AiClientAggregat
         }
         // 这里仅还原基础信息，关联关系从 config 表加载，可在应用层补充后再挂载到聚合根
         return AiClientAggregate.restore(data.getClientId(), data.getClientName(), data.getDescription(),
-                null, List.of(), List.of(), List.of());
+                null, null, List.of(), List.of(), List.of());
     }
 
     @Override
@@ -375,7 +429,22 @@ public class ClientRepositoryImpl extends MpAggregateRepository<AiClientAggregat
     }
 
     @Override
+    protected Long toDbId(AiClient data) {
+        return data.getId();
+    }
+
+    @Override
+    protected void fillDbId(AiClient target, Long dbId) {
+        target.setId(dbId);
+    }
+
+    @Override
     protected Serializable toSerializableId(String id) {
         return id;
+    }
+
+    @Override
+    protected AiClient getByAggregateId(String s) {
+        return aiClientDao.queryByClientId(s);
     }
 }

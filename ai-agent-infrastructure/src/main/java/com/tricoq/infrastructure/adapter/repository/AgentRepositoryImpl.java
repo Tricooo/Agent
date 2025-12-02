@@ -1,43 +1,46 @@
 package com.tricoq.infrastructure.adapter.repository;
 
+import com.tricoq.domain.agent.adapter.repository.IAgentRepository;
 import com.tricoq.domain.agent.model.aggregate.AiAgentAggregate;
+import com.tricoq.domain.agent.model.valobj.AiAgentClientFlowConfigVO;
 import com.tricoq.domain.agent.model.dto.AiAgentClientFlowConfigDTO;
 import com.tricoq.domain.agent.model.dto.AiAgentDTO;
-import com.tricoq.domain.agent.adapter.repository.IAgentRepository;
 import com.tricoq.infrastructure.dao.IAiAgentDao;
-import com.tricoq.infrastructure.dao.IAiAgentFlowConfigDao;
 import com.tricoq.infrastructure.dao.po.AiAgent;
 import com.tricoq.infrastructure.dao.po.AiAgentFlowConfig;
-import com.tricoq.infrastructure.adapter.repository.MpAggregateRepository;
+import com.tricoq.infrastructure.service.AiAgentFlowConfigService;
 import lombok.RequiredArgsConstructor;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Repository;
 import org.springframework.util.CollectionUtils;
 
 import java.io.Serializable;
-import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
+ * 主表走父类BaseMapper，关联表走小仓储
+ *
  * @author trico qiang
  * @date 11/25/25
  */
 @Repository
 @RequiredArgsConstructor
-public class AgentRepositoryImpl extends MpAggregateRepository<AiAgentAggregate, AiAgent, String, IAiAgentDao>
+public class AgentRepositoryImpl extends MpAggregateRepository<AiAgentAggregate, AiAgent, String, Long, IAiAgentDao>
         implements IAgentRepository {
 
-    private final IAiAgentDao aiAgentDao;
-    private final IAiAgentFlowConfigDao aiAgentFlowConfigDao;
+    private final AiAgentFlowConfigService agentFlowConfigService;
 
     @Override
     public Map<String, AiAgentClientFlowConfigDTO> queryAiAgentFlowConfigByAgentId(String agentId) {
         if (agentId == null) {
             return Map.of();
         }
-        List<AiAgentFlowConfig> configs = aiAgentFlowConfigDao.queryByAgentId(agentId);
+        List<AiAgentFlowConfig> configs = agentFlowConfigService.queryByAgentId(agentId);
         if (CollectionUtils.isEmpty(configs)) {
             return Map.of();
         }
@@ -49,24 +52,30 @@ public class AgentRepositoryImpl extends MpAggregateRepository<AiAgentAggregate,
                         .clientName(flowConfig.getClientName())
                         .stepPrompt(flowConfig.getStepPrompt())
                         .build())
-                .collect(Collectors.toMap(AiAgentClientFlowConfigDTO::getClientType, Function.identity(), (v1, v2) -> v1));
+                .collect(Collectors.toMap(AiAgentClientFlowConfigDTO::getClientType,
+                        Function.identity(),
+                        (v1, v2) -> v1));
     }
 
     @Override
     public List<AiAgentClientFlowConfigDTO> queryAiAgentClientsByAgentId(String aiAgentId) {
-        List<AiAgentFlowConfig> flowConfigs = aiAgentFlowConfigDao.queryByAgentId(aiAgentId);
+        if (StringUtils.isBlank(aiAgentId)) {
+            return Collections.emptyList();
+        }
+        List<AiAgentFlowConfig> flowConfigs = agentFlowConfigService.queryByAgentId(aiAgentId);
         return flowConfigs.stream().map(flowConfig -> AiAgentClientFlowConfigDTO.builder()
-                .clientId(flowConfig.getClientId())
-                .clientName(flowConfig.getClientName())
-                .clientType(flowConfig.getClientType())
-                .sequence(flowConfig.getSequence())
-                .stepPrompt(flowConfig.getStepPrompt())
-                .build()).toList();
+                        .clientId(flowConfig.getClientId())
+                        .clientName(flowConfig.getClientName())
+                        .clientType(flowConfig.getClientType())
+                        .sequence(flowConfig.getSequence())
+                        .stepPrompt(flowConfig.getStepPrompt())
+                        .build())
+                .toList();
     }
 
     @Override
     public AiAgentDTO queryAgentByAgentId(String agentId) {
-        AiAgent aiAgent = aiAgentDao.queryByAgentId(agentId);
+        AiAgent aiAgent = this.baseMapper.queryByAgentId(agentId);
         if (aiAgent == null) {
             return null;
         }
@@ -82,7 +91,7 @@ public class AgentRepositoryImpl extends MpAggregateRepository<AiAgentAggregate,
 
     @Override
     public List<AiAgentDTO> queryAvailableAgents() {
-        List<AiAgent> aiAgents = aiAgentDao.queryEnabledAgents();
+        List<AiAgent> aiAgents = this.baseMapper.queryEnabledAgents();
         return aiAgents.stream().map(aiAgent -> AiAgentDTO.builder()
                 .agentId(aiAgent.getAgentId())
                 .agentName(aiAgent.getAgentName())
@@ -91,6 +100,24 @@ public class AgentRepositoryImpl extends MpAggregateRepository<AiAgentAggregate,
                 .strategy(aiAgent.getStrategy())
                 .status(aiAgent.getStatus())
                 .build()).toList();
+    }
+
+    @Override
+    public boolean saveFlowConfig(List<AiAgentClientFlowConfigVO> aiAgentClientFlowConfigs) {
+        if (CollectionUtils.isEmpty(aiAgentClientFlowConfigs)) {
+            return true;
+        }
+        List<AiAgentFlowConfig> configs = aiAgentClientFlowConfigs.stream()
+                .map(flowConfig -> AiAgentFlowConfig.builder()
+                        .agentId(flowConfig.getAgentId())
+                        .clientId(flowConfig.getClientId())
+                        .clientName(flowConfig.getClientName())
+                        .clientType(flowConfig.getClientType())
+                        .sequence(flowConfig.getSequence())
+                        .stepPrompt(flowConfig.getStepPrompt())
+                        .build())
+                .toList();
+        return agentFlowConfigService.saveBatch(configs);
     }
 
     /**
@@ -103,7 +130,6 @@ public class AgentRepositoryImpl extends MpAggregateRepository<AiAgentAggregate,
         if (aggregate == null) {
             return null;
         }
-        LocalDateTime now = LocalDateTime.now();
         return AiAgent.builder()
                 .agentId(aggregate.getAgentId())
                 .agentName(aggregate.getAgentName())
@@ -111,8 +137,6 @@ public class AgentRepositoryImpl extends MpAggregateRepository<AiAgentAggregate,
                 .channel(aggregate.getChannel())
                 .strategy(aggregate.getStrategy())
                 .status(aggregate.getStatus())
-                .createTime(now)
-                .updateTime(now)
                 .build();
     }
 
@@ -121,14 +145,24 @@ public class AgentRepositoryImpl extends MpAggregateRepository<AiAgentAggregate,
         if (data == null) {
             return null;
         }
-        return AiAgentAggregate.builder()
-                .agentId(data.getAgentId())
-                .agentName(data.getAgentName())
-                .description(data.getDescription())
-                .channel(data.getChannel())
-                .strategy(data.getStrategy())
-                .status(data.getStatus())
-                .build();
+        List<AiAgentClientFlowConfigVO> flowConfigs = agentFlowConfigService.queryByAgentId(data.getAgentId())
+                .stream()
+                .map(flow -> AiAgentClientFlowConfigVO.builder()
+                        .agentId(flow.getAgentId())
+                        .clientId(flow.getClientId())
+                        .clientName(flow.getClientName())
+                        .clientType(flow.getClientType())
+                        .sequence(flow.getSequence())
+                        .stepPrompt(flow.getStepPrompt())
+                        .build())
+                .toList();
+        return AiAgentAggregate.restore(data.getAgentId(),
+                data.getAgentName(),
+                data.getDescription(),
+                data.getChannel(),
+                data.getStrategy(),
+                data.getStatus(),
+                flowConfigs);
     }
 
     @Override
@@ -137,7 +171,22 @@ public class AgentRepositoryImpl extends MpAggregateRepository<AiAgentAggregate,
     }
 
     @Override
+    protected Long toDbId(AiAgent data) {
+        return data.getId();
+    }
+
+    @Override
+    protected void fillDbId(AiAgent target, Long dbId) {
+        target.setId(dbId);
+    }
+
+    @Override
     protected Serializable toSerializableId(String id) {
         return id;
+    }
+
+    @Override
+    protected AiAgent getByAggregateId(String s) {
+        return this.baseMapper.queryByAgentId(s);
     }
 }

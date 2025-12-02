@@ -1,5 +1,6 @@
 package com.tricoq.domain.agent.model.aggregate;
 
+import com.tricoq.domain.agent.model.valobj.AiClientModelVO;
 import lombok.Getter;
 
 import java.util.Collection;
@@ -10,6 +11,7 @@ import java.util.Set;
 
 /**
  * AI Client 聚合根：封装模型、Prompt、工具、顾问等关联，并提供简单不变式约束。
+ *
  * @author trico qiang
  */
 @Getter
@@ -18,14 +20,15 @@ public class AiClientAggregate {
     private final String clientId;
     private final String clientName;
     private final String description;
-    private String modelId;
+    private AiClientModelVO model;
+    private String configId;
     private final Set<String> promptIds = new LinkedHashSet<>();
     private final Set<String> mcpIds = new LinkedHashSet<>();
     private final Set<String> advisorIds = new LinkedHashSet<>();
 
     private AiClientAggregate(String clientId, String clientName, String description) {
         this.clientId = Objects.requireNonNull(clientId, "clientId cannot be null");
-        this.clientName = Objects.requireNonNull(clientName, "clientName cannot be null");
+        this.clientName = clientName;
         this.description = description;
     }
 
@@ -39,15 +42,17 @@ public class AiClientAggregate {
     public static AiClientAggregate restore(String clientId,
                                             String clientName,
                                             String description,
-                                            String modelId,
+                                            AiClientModelVO model,
+                                            String configId,
                                             Collection<String> promptIds,
                                             Collection<String> mcpIds,
                                             Collection<String> advisorIds) {
         AiClientAggregate aggregate = new AiClientAggregate(clientId, clientName, description);
-        aggregate.modelId = modelId;
-        aggregate.attachPrompts(promptIds);
-        aggregate.attachMcps(mcpIds);
-        aggregate.attachAdvisors(advisorIds);
+        aggregate.model = model;
+        aggregate.replacePrompts(promptIds);
+        aggregate.replaceMcps(mcpIds);
+        aggregate.replaceAdvisors(advisorIds);
+        aggregate.configId = configId;
         return aggregate;
     }
 
@@ -58,10 +63,9 @@ public class AiClientAggregate {
         if (modelId == null) {
             return;
         }
-        if (this.modelId != null && !this.modelId.equals(modelId)) {
-            throw new IllegalStateException("model already assigned: " + this.modelId);
+        if (this.model != null && !this.model.getModelId().equals(modelId)) {
+            throw new IllegalStateException("model already assigned: " + this.model.getModelId());
         }
-        this.modelId = modelId;
     }
 
     /**

@@ -18,7 +18,7 @@ import java.util.List;
 @Repository
 @RequiredArgsConstructor
 public class TaskScheduleRepositoryImpl
-        extends MpAggregateRepository<AiAgentTaskScheduleDTO, AiAgentTaskSchedule, Long, IAiAgentTaskScheduleDao>
+        extends MpAggregateRepository<AiAgentTaskScheduleDTO, AiAgentTaskSchedule, Long,Long, IAiAgentTaskScheduleDao>
         implements ITaskScheduleRepository {
 
     private final IAiAgentTaskScheduleDao aiAgentTaskScheduleDao;
@@ -82,7 +82,22 @@ public class TaskScheduleRepositoryImpl
     }
 
     @Override
+    protected Long toDbId(AiAgentTaskSchedule data) {
+        return data.getId();
+    }
+
+    @Override
+    protected void fillDbId(AiAgentTaskSchedule target, Long dbId) {
+        target.setId(dbId);
+    }
+
+    @Override
     protected Serializable toSerializableId(Long id) {
         return id;
+    }
+
+    @Override
+    protected AiAgentTaskSchedule getByAggregateId(Long aLong) {
+        return aiAgentTaskScheduleDao.queryById(aLong);
     }
 }

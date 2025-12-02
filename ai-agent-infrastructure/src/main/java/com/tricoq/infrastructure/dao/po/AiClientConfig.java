@@ -48,6 +48,9 @@ public class AiClientConfig {
      */
     private String targetId;
 
+
+    private String configId;
+
     /**
      * 扩展参数（JSON格式）
      */

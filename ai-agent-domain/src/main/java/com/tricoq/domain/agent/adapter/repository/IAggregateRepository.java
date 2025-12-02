@@ -16,7 +16,15 @@ public interface IAggregateRepository<A, ID> {
      * @param id 聚合根ID
      * @return 聚合根
      */
-    A findById(ID id);
+    A findByAggregateId(ID id);
+
+    /**
+     * 根据聚合根ID更新/新增
+     *
+     * @param aggregate 聚合根
+     * @return 聚合根
+     */
+    boolean saveOrUpdateByAggregateId(A aggregate);
 
     /**
      * 保存单个聚合根

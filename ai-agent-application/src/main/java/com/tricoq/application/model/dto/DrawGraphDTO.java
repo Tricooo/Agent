@@ -23,10 +23,16 @@ public class DrawGraphDTO {
     private List<EdgeDTO> edges;
 
     public record NodeDTO(String id, String type, String title, Map<String, String> inputsValues) {
+
+        public String extractNodeIds() {
+            return inputsValues().values().stream().findFirst().orElse(null);
+        }
     }
 
     public record EdgeDTO(String from,
                           String to,
                           String fromPort) {
     }
+
+
 }

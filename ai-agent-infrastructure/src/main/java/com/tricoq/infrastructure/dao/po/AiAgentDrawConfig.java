@@ -1,8 +1,12 @@
 package com.tricoq.infrastructure.dao.po;
 
+import com.baomidou.mybatisplus.annotation.FieldFill;
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.annotation.Version;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -56,11 +60,13 @@ public class AiAgentDrawConfig {
     /**
      * 配置版本号
      */
+    @TableField(update = "%s+1")
     private Integer version;
 
     /**
      * 状态(0:禁用,1:启用)
      */
+    @TableLogic
     private Integer status;
 
     /**
@@ -76,11 +82,13 @@ public class AiAgentDrawConfig {
     /**
      * 创建时间
      */
+    @TableField(fill= FieldFill.INSERT)
     private LocalDateTime createTime;
 
     /**
      * 更新时间
      */
+    @TableField(fill= FieldFill.UPDATE)
     private LocalDateTime updateTime;
 
 }
