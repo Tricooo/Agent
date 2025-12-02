@@ -12,12 +12,8 @@ import com.tricoq.domain.agent.model.enums.AiAgentEnumVO;
 import com.tricoq.domain.agent.adapter.repository.IClientRepository;
 import com.tricoq.domain.agent.model.valobj.AiClientModelVO;
 import com.tricoq.infrastructure.dao.IAiClientAdvisorDao;
-import com.tricoq.infrastructure.dao.IAiClientApiDao;
-import com.tricoq.infrastructure.dao.IAiClientConfigDao;
 import com.tricoq.infrastructure.dao.IAiClientDao;
-import com.tricoq.infrastructure.dao.IAiClientModelDao;
 import com.tricoq.infrastructure.dao.IAiClientSystemPromptDao;
-import com.tricoq.infrastructure.dao.IAiClientToolMcpDao;
 import com.tricoq.infrastructure.dao.po.AiClient;
 import com.tricoq.infrastructure.dao.po.AiClientAdvisor;
 import com.tricoq.infrastructure.dao.po.AiClientApi;
@@ -25,10 +21,16 @@ import com.tricoq.infrastructure.dao.po.AiClientConfig;
 import com.tricoq.infrastructure.dao.po.AiClientModel;
 import com.tricoq.infrastructure.dao.po.AiClientSystemPrompt;
 import com.tricoq.infrastructure.dao.po.AiClientToolMcp;
+import com.tricoq.infrastructure.service.AiClientAdvisorService;
+import com.tricoq.infrastructure.service.AiClientApiService;
+import com.tricoq.infrastructure.service.AiClientConfigService;
+import com.tricoq.infrastructure.service.AiClientModelService;
+import com.tricoq.infrastructure.service.AiClientService;
+import com.tricoq.infrastructure.service.AiClientSystemPromptService;
+import com.tricoq.infrastructure.service.AiClientToolMcpService;
 import com.tricoq.types.common.DrawConstants;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.collections4.CollectionUtils;
-import org.apache.ibatis.executor.BatchResult;
 import org.springframework.stereotype.Repository;
 import org.springframework.util.StringUtils;
 
@@ -53,13 +55,13 @@ import java.util.stream.Stream;
 public class ClientRepositoryImpl extends MpAggregateRepository<AiClientAggregate, AiClient, String, Long, IAiClientDao>
         implements IClientRepository {
 
-    private final IAiClientDao aiClientDao;
-    private final IAiClientConfigDao aiClientConfigDao;
-    private final IAiClientModelDao aiClientModelDao;
-    private final IAiClientApiDao aiClientApiDao;
-    private final IAiClientToolMcpDao aiClientToolMcpDao;
-    private final IAiClientSystemPromptDao aiClientSystemPromptDao;
-    private final IAiClientAdvisorDao aiClientAdvisorDao;
+    private final AiClientService clientService;
+    private final AiClientConfigService clientConfigService;
+    private final AiClientModelService clientModelService;
+    private final AiClientApiService clientApiService;
+    private final AiClientToolMcpService toolMcpService;
+    private final AiClientSystemPromptService systemPromptService;
+    private final AiClientAdvisorService clientAdvisorService;
 
     @Override
     public List<AiClientApiDTO> queryAiClientApisByClientIds(List<String> clientIdList) {
@@ -67,7 +69,7 @@ public class ClientRepositoryImpl extends MpAggregateRepository<AiClientAggregat
             return List.of();
         }
         Set<String> clientIdSet = new HashSet<>(clientIdList);
-        List<AiClientConfig> aiClientConfigs = aiClientConfigDao
+        List<AiClientConfig> aiClientConfigs = clientConfigService
                 .queryBySourceTypeAndIdsEnabled(AiAgentEnumVO.AI_CLIENT.getCode(), clientIdSet);
         Set<String> modelIds = aiClientConfigs.stream()
                 .filter(config -> config.getTargetType().equals(AiAgentEnumVO.AI_CLIENT_MODEL.getCode()))
@@ -76,7 +78,7 @@ public class ClientRepositoryImpl extends MpAggregateRepository<AiClientAggregat
         if (modelIds.isEmpty()) {
             return List.of();
         }
-        List<AiClientModel> models = aiClientModelDao.queryByIds(modelIds);
+        List<AiClientModel> models = clientModelService.queryByIds(modelIds);
         Set<String> apiIds = models.stream()
                 .map(AiClientModel::getApiId)
                 .filter(Objects::nonNull)
@@ -85,7 +87,7 @@ public class ClientRepositoryImpl extends MpAggregateRepository<AiClientAggregat
             return List.of();
         }
 
-        List<AiClientApi> apis = aiClientApiDao.queryByApiIdsEnabled(apiIds);
+        List<AiClientApi> apis = clientApiService.queryByApiIdsEnabled(apiIds);
         return apis.stream().map(api ->
                         AiClientApiDTO.builder()
                                 .apiId(api.getApiId())
@@ -103,7 +105,7 @@ public class ClientRepositoryImpl extends MpAggregateRepository<AiClientAggregat
             return List.of();
         }
         Set<String> clientIdSet = new HashSet<>(clientIdList);
-        List<AiClientConfig> aiClientConfigs = aiClientConfigDao
+        List<AiClientConfig> aiClientConfigs = clientConfigService
                 .queryBySourceTypeAndIdsEnabled(AiAgentEnumVO.AI_CLIENT.getCode(), clientIdSet);
         Set<String> modelIds = aiClientConfigs.stream()
                 .filter(config -> AiAgentEnumVO.AI_CLIENT_MODEL.getCode().equals(config.getTargetType()))
@@ -112,13 +114,13 @@ public class ClientRepositoryImpl extends MpAggregateRepository<AiClientAggregat
         if (modelIds.isEmpty()) {
             return List.of();
         }
-        List<AiClientConfig> modelConfigs = aiClientConfigDao
+        List<AiClientConfig> modelConfigs = clientConfigService
                 .queryBySourceTypeAndIdsEnabled(AiAgentEnumVO.AI_CLIENT_MODEL.getCode(), modelIds);
         Map<String, List<String>> toolMcpIdMap = modelConfigs.stream()
                 .filter(config -> AiAgentEnumVO.AI_CLIENT_TOOL_MCP.getCode().equals(config.getTargetType()))
                 .collect(Collectors.groupingBy(AiClientConfig::getSourceId,
                         Collectors.mapping(AiClientConfig::getTargetId, Collectors.toList())));
-        List<AiClientModel> models = aiClientModelDao.queryByIds(modelIds);
+        List<AiClientModel> models = clientModelService.queryByIds(modelIds);
         return models.stream().map(model -> AiClientModelDTO.builder()
                         .modelId(model.getModelId())
                         .apiId(model.getApiId())
@@ -135,7 +137,7 @@ public class ClientRepositoryImpl extends MpAggregateRepository<AiClientAggregat
             return List.of();
         }
         Set<String> clientIdSet = new HashSet<>(clientIdList);
-        List<AiClientConfig> aiClientConfigs = aiClientConfigDao
+        List<AiClientConfig> aiClientConfigs = clientConfigService
                 .queryBySourceTypeAndIdsEnabled(AiAgentEnumVO.AI_CLIENT.getCode(), clientIdSet);
         Set<String> clientMcpIdSet = aiClientConfigs.stream()
                 .filter(config -> config.getTargetType().equals(AiAgentEnumVO.AI_CLIENT_TOOL_MCP.getCode()))
@@ -148,7 +150,7 @@ public class ClientRepositoryImpl extends MpAggregateRepository<AiClientAggregat
                 .collect(Collectors.toSet());
         List<AiClientConfig> modelConfigs = new ArrayList<>();
         if (!modelIdSet.isEmpty()) {
-            modelConfigs.addAll(aiClientConfigDao
+            modelConfigs.addAll(clientConfigService
                     .queryBySourceTypeAndIdsEnabled(AiAgentEnumVO.AI_CLIENT_MODEL.getCode(), modelIdSet));
         }
         Set<String> modelMcpIdSet = modelConfigs.stream()
@@ -158,7 +160,7 @@ public class ClientRepositoryImpl extends MpAggregateRepository<AiClientAggregat
         Set<String> mcpIdSet = Stream.of(clientMcpIdSet, modelMcpIdSet)
                 .flatMap(Set::stream)
                 .collect(Collectors.toSet());
-        List<AiClientToolMcp> mcps = aiClientToolMcpDao.queryByMcpIdsEnabled(mcpIdSet);
+        List<AiClientToolMcp> mcps = toolMcpService.queryByMcpIdsEnabled(mcpIdSet);
         return mcps.stream().map(mcp -> {
             String transportConfig = mcp.getTransportConfig();
             if (!StringUtils.hasText(transportConfig)) {
@@ -199,7 +201,7 @@ public class ClientRepositoryImpl extends MpAggregateRepository<AiClientAggregat
             return Map.of();
         }
         Set<String> clientIdSet = new HashSet<>(clientIdList);
-        List<AiClientConfig> aiClientConfigs = aiClientConfigDao
+        List<AiClientConfig> aiClientConfigs = clientConfigService
                 .queryBySourceTypeAndIdsEnabled(AiAgentEnumVO.AI_CLIENT.getCode(), clientIdSet);
         Set<String> systemPromptIds = aiClientConfigs.stream()
                 .filter(config -> config.getTargetType().equals(AiAgentEnumVO.AI_CLIENT_SYSTEM_PROMPT.getCode()))
@@ -208,7 +210,7 @@ public class ClientRepositoryImpl extends MpAggregateRepository<AiClientAggregat
         if (systemPromptIds.isEmpty()) {
             return Map.of();
         }
-        List<AiClientSystemPrompt> systemPrompts = aiClientSystemPromptDao.queryByIdsPromptsEnabled(systemPromptIds);
+        List<AiClientSystemPrompt> systemPrompts = systemPromptService.queryByIdsPromptsEnabled(systemPromptIds);
         return systemPrompts.stream().map(prompt ->
                         AiClientSystemPromptDTO.builder()
                                 .promptId(prompt.getPromptId())
@@ -225,7 +227,7 @@ public class ClientRepositoryImpl extends MpAggregateRepository<AiClientAggregat
             return List.of();
         }
         Set<String> clientIdSet = new HashSet<>(clientIdList);
-        List<AiClientConfig> aiClientConfigs = aiClientConfigDao
+        List<AiClientConfig> aiClientConfigs = clientConfigService
                 .queryBySourceTypeAndIdsEnabled(AiAgentEnumVO.AI_CLIENT.getCode(), clientIdSet);
         Set<String> advisorIds = aiClientConfigs.stream()
                 .filter(config -> config.getTargetType().equals(AiAgentEnumVO.AI_CLIENT_ADVISOR.getCode()))
@@ -234,7 +236,7 @@ public class ClientRepositoryImpl extends MpAggregateRepository<AiClientAggregat
         if (advisorIds.isEmpty()) {
             return List.of();
         }
-        List<AiClientAdvisor> advisors = aiClientAdvisorDao.queryByAdvisorIdsEnabled(advisorIds);
+        List<AiClientAdvisor> advisors = clientAdvisorService.queryByAdvisorIdsEnabled(advisorIds);
         return advisors.stream().map(advisor -> {
             String advisorType = advisor.getAdvisorType();
             if (!StringUtils.hasText(advisorType)) {
@@ -273,11 +275,11 @@ public class ClientRepositoryImpl extends MpAggregateRepository<AiClientAggregat
             return List.of();
         }
         Set<String> clientIdSet = new HashSet<>(clientIdList);
-        List<AiClientConfig> aiClientConfigs = aiClientConfigDao
+        List<AiClientConfig> aiClientConfigs = clientConfigService
                 .queryBySourceTypeAndIdsEnabled(AiAgentEnumVO.AI_CLIENT.getCode(), clientIdSet);
         Map<String, List<AiClientConfig>> clientId2ConfigMap = aiClientConfigs.stream()
                 .collect(Collectors.groupingBy(AiClientConfig::getSourceId));
-        List<AiClient> clients = aiClientDao.queryByClientIdEnabled(clientIdSet);
+        List<AiClient> clients = clientService.queryByClientIdEnabled(clientIdSet);
         return clients.stream().map(client -> {
             AiClientDTO aiClientVO = AiClientDTO.builder()
                     .clientId(client.getClientId())
@@ -314,12 +316,12 @@ public class ClientRepositoryImpl extends MpAggregateRepository<AiClientAggregat
             return List.of();
         }
         Set<String> modelIdSet = new HashSet<>(modelIdList);
-        List<AiClientModel> aiClientModels = aiClientModelDao.queryByIds(modelIdSet);
+        List<AiClientModel> aiClientModels = clientModelService.queryByIds(modelIdSet);
         Set<String> apiIdSet = aiClientModels.stream().map(AiClientModel::getApiId).collect(Collectors.toSet());
         if (apiIdSet.isEmpty()) {
             return List.of();
         }
-        List<AiClientApi> apis = aiClientApiDao.queryByApiIdsEnabled(apiIdSet);
+        List<AiClientApi> apis = clientApiService.queryByApiIdsEnabled(apiIdSet);
         return apis.stream().map(api ->
                 AiClientApiDTO.builder()
                         .apiId(api.getApiId())
@@ -337,7 +339,7 @@ public class ClientRepositoryImpl extends MpAggregateRepository<AiClientAggregat
             return List.of();
         }
         Set<String> modelIdSet = new HashSet<>(modelIdList);
-        List<AiClientModel> aiClientModels = aiClientModelDao.queryByIds(modelIdSet);
+        List<AiClientModel> aiClientModels = clientModelService.queryByIds(modelIdSet);
         return aiClientModels.stream().map(model -> AiClientModelDTO.builder()
                 .modelId(model.getModelId())
                 .apiId(model.getApiId())
@@ -393,8 +395,7 @@ public class ClientRepositoryImpl extends MpAggregateRepository<AiClientAggregat
                             .build())
                     .toList());
         }
-        List<BatchResult> batchResults = aiClientConfigDao.insert(saves);
-        return !batchResults.isEmpty();
+        return clientConfigService.saveBatch(saves);
     }
 
     @Override
@@ -445,6 +446,6 @@ public class ClientRepositoryImpl extends MpAggregateRepository<AiClientAggregat
 
     @Override
     protected AiClient getByAggregateId(String s) {
-        return aiClientDao.queryByClientId(s);
+        return clientService.queryByClientId(s);
     }
 }

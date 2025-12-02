@@ -4,6 +4,7 @@ import com.tricoq.domain.agent.adapter.repository.IAgentDrawConfigRepository;
 import com.tricoq.domain.agent.model.aggregate.AiAgentDrawConfigAggregate;
 import com.tricoq.infrastructure.dao.IAiAgentDrawConfigDao;
 import com.tricoq.infrastructure.dao.po.AiAgentDrawConfig;
+import com.tricoq.infrastructure.service.AiAgentDrawConfigService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
@@ -22,7 +23,7 @@ public class AgentDrawConfigRepositoryImpl
         extends MpAggregateRepository<AiAgentDrawConfigAggregate, AiAgentDrawConfig, String, Long, IAiAgentDrawConfigDao>
         implements IAgentDrawConfigRepository {
 
-    private final IAiAgentDrawConfigDao drawConfigDao;
+    private final AiAgentDrawConfigService drawConfigService;
 
     /**
      * 领域对象 -> 数据库实体
@@ -90,7 +91,7 @@ public class AgentDrawConfigRepositoryImpl
 
     @Override
     protected AiAgentDrawConfig getByAggregateId(String s) {
-        return drawConfigDao.queryByConfigId(s);
+        return drawConfigService.queryByConfigId(s);
     }
 
     /**

@@ -2,16 +2,15 @@ package com.tricoq.infrastructure.adapter.repository;
 
 import com.tricoq.domain.agent.adapter.repository.IAgentRepository;
 import com.tricoq.domain.agent.model.aggregate.AiAgentAggregate;
-import com.tricoq.domain.agent.model.valobj.AiAgentClientFlowConfigVO;
 import com.tricoq.domain.agent.model.dto.AiAgentClientFlowConfigDTO;
 import com.tricoq.domain.agent.model.dto.AiAgentDTO;
+import com.tricoq.domain.agent.model.valobj.AiAgentClientFlowConfigVO;
 import com.tricoq.infrastructure.dao.IAiAgentDao;
 import com.tricoq.infrastructure.dao.po.AiAgent;
 import com.tricoq.infrastructure.dao.po.AiAgentFlowConfig;
 import com.tricoq.infrastructure.service.AiAgentFlowConfigService;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
-import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Repository;
 import org.springframework.util.CollectionUtils;
 
