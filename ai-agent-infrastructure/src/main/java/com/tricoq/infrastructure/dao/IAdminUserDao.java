@@ -3,6 +3,7 @@ package com.tricoq.infrastructure.dao;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.tricoq.infrastructure.dao.po.AdminUser;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
 
@@ -95,6 +96,6 @@ public interface IAdminUserDao extends BaseMapper<AdminUser> {
      * @param password 密码
      * @return 管理员用户对象
      */
-    AdminUser queryByUsernameAndPassword(String username, String password);
+    AdminUser queryByUsernameAndPassword(@Param("username") String username,@Param("password") String password);
 
 }

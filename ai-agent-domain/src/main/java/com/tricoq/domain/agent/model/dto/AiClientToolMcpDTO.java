@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -19,6 +20,11 @@ import java.util.Map;
 @AllArgsConstructor
 @NoArgsConstructor
 public class AiClientToolMcpDTO {
+
+    /**
+     * 主键ID
+     */
+    private Long id;
 
     /**
      * MCP ID
@@ -44,6 +50,15 @@ public class AiClientToolMcpDTO {
      * 请求超时时间(分钟)
      */
     private Integer requestTimeout;
+
+    /**
+     * 状态(0:禁用,1:启用)
+     */
+    private Integer status;
+
+    private LocalDateTime createTime;
+
+    private LocalDateTime updateTime;
 
     /**
      * 传输配置 - sse

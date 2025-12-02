@@ -36,4 +36,26 @@ public interface IClientRepository extends IAggregateRepository<AiClientAggregat
     List<AiClientModelDTO> queryAiClientModelsByModelIds(List<String> modelIdList);
 
     boolean saveOrUpdateClientConfigByAggregate(List<AiClientAggregate> aiClientAggregates, String extraParams);
+
+    // ===== 管理端基础配置 =====
+
+    boolean insertClient(AiClientDTO clientDTO);
+
+    boolean updateClientById(AiClientDTO clientDTO);
+
+    boolean updateClientByClientId(AiClientDTO clientDTO);
+
+    boolean deleteClientById(Long id);
+
+    boolean deleteClientByClientId(String clientId);
+
+    AiClientDTO queryClientById(Long id);
+
+    AiClientDTO queryClientByClientId(String clientId);
+
+    List<AiClientDTO> queryClientsByName(String clientName);
+
+    List<AiClientDTO> queryAllClients();
+
+    List<AiClientDTO> queryEnabledClients();
 }

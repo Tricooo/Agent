@@ -8,43 +8,28 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
 /**
- * 知识库订单
- * @author Fuzhengwei bugstack.cn @小傅哥
- * 2025-05-05 20:02
+ * 管理员用户领域对象
  */
 @Data
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-public class AiRagOrderDTO {
+public class AdminUserDTO {
 
-    /**
-     * 自增主键ID
-     */
     private Long id;
 
-    /**
-     * 知识库ID
-     */
-    private String ragId;
+    private String userId;
+
+    private String username;
+
+    private String password;
 
     /**
-     * 知识库名称
-     */
-    private String ragName;
-
-    /**
-     * 知识标签
-     */
-    private String knowledgeTag;
-
-    /**
-     * 状态(0:禁用,1:启用)
+     * 状态(0:禁用,1:启用,2:锁定)
      */
     private Integer status;
 
     private LocalDateTime createTime;
 
     private LocalDateTime updateTime;
-
 }

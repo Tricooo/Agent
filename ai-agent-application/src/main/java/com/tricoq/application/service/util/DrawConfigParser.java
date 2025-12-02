@@ -1,4 +1,4 @@
-package com.tricoq.application.service;
+package com.tricoq.application.service.util;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;

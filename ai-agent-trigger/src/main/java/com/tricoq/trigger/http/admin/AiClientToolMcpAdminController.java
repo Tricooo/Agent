@@ -5,13 +5,10 @@ import com.tricoq.api.dto.AiClientToolMcpQueryRequestDTO;
 import com.tricoq.api.dto.AiClientToolMcpRequestDTO;
 import com.tricoq.api.dto.AiClientToolMcpResponseDTO;
 import com.tricoq.api.response.Response;
-import com.tricoq.infrastructure.dao.IAiClientToolMcpDao;
-import com.tricoq.infrastructure.dao.po.AiClientToolMcp;
+import com.tricoq.application.service.AiClientToolMcpAdminService;
 import com.tricoq.types.enums.ResponseCode;
-import jakarta.annotation.Resource;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.BeanUtils;
-import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -23,9 +20,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.time.LocalDateTime;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * MCP客户端配置管理控制器
@@ -37,36 +32,22 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/v1/admin/ai-client-tool-mcp")
 @CrossOrigin(origins = "*", allowedHeaders = "*", methods = {RequestMethod.GET, RequestMethod.POST, RequestMethod.PUT, RequestMethod.DELETE, RequestMethod.OPTIONS})
+@RequiredArgsConstructor
 public class AiClientToolMcpAdminController implements IAiClientToolMcpAdminService {
 
-    @Resource
-    private IAiClientToolMcpDao aiClientToolMcpDao;
+    private final AiClientToolMcpAdminService aiClientToolMcpAdminService;
 
     @Override
     @PostMapping("/create")
     public Response<Boolean> createAiClientToolMcp(@RequestBody AiClientToolMcpRequestDTO request) {
         try {
-            log.info("创建MCP客户端配置请求：{}", request);
-            
-            // DTO转PO
-            AiClientToolMcp aiClientToolMcp = convertToAiClientToolMcp(request);
-            aiClientToolMcp.setCreateTime(LocalDateTime.now());
-            aiClientToolMcp.setUpdateTime(LocalDateTime.now());
-            
-            int result = aiClientToolMcpDao.insert(aiClientToolMcp);
-            
-            return Response.<Boolean>builder()
-                    .code(ResponseCode.SUCCESS.getCode())
-                    .info(ResponseCode.SUCCESS.getInfo())
-                    .data(result > 0)
-                    .build();
+            boolean success = aiClientToolMcpAdminService.createAiClientToolMcp(request);
+            return success(success);
+        } catch (IllegalArgumentException e) {
+            return fail(ResponseCode.ILLEGAL_PARAMETER, e.getMessage(), false);
         } catch (Exception e) {
             log.error("创建MCP客户端配置失败", e);
-            return Response.<Boolean>builder()
-                    .code(ResponseCode.UN_ERROR.getCode())
-                    .info(ResponseCode.UN_ERROR.getInfo())
-                    .data(false)
-                    .build();
+            return fail(ResponseCode.UN_ERROR, ResponseCode.UN_ERROR.getInfo(), false);
         }
     }
 
@@ -74,34 +55,13 @@ public class AiClientToolMcpAdminController implements IAiClientToolMcpAdminServ
     @PutMapping("/update-by-id")
     public Response<Boolean> updateAiClientToolMcpById(@RequestBody AiClientToolMcpRequestDTO request) {
         try {
-            log.info("根据ID更新MCP客户端配置请求：{}", request);
-            
-            if (request.getId() == null) {
-                return Response.<Boolean>builder()
-                        .code(ResponseCode.ILLEGAL_PARAMETER.getCode())
-                        .info("ID不能为空")
-                        .data(false)
-                        .build();
-            }
-            
-            // DTO转PO
-            AiClientToolMcp aiClientToolMcp = convertToAiClientToolMcp(request);
-            aiClientToolMcp.setUpdateTime(LocalDateTime.now());
-            
-            int result = aiClientToolMcpDao.updateById(aiClientToolMcp);
-            
-            return Response.<Boolean>builder()
-                    .code(ResponseCode.SUCCESS.getCode())
-                    .info(ResponseCode.SUCCESS.getInfo())
-                    .data(result > 0)
-                    .build();
+            boolean success = aiClientToolMcpAdminService.updateAiClientToolMcpById(request);
+            return success(success);
+        } catch (IllegalArgumentException e) {
+            return fail(ResponseCode.ILLEGAL_PARAMETER, e.getMessage(), false);
         } catch (Exception e) {
             log.error("根据ID更新MCP客户端配置失败", e);
-            return Response.<Boolean>builder()
-                    .code(ResponseCode.UN_ERROR.getCode())
-                    .info(ResponseCode.UN_ERROR.getInfo())
-                    .data(false)
-                    .build();
+            return fail(ResponseCode.UN_ERROR, ResponseCode.UN_ERROR.getInfo(), false);
         }
     }
 
@@ -109,34 +69,13 @@ public class AiClientToolMcpAdminController implements IAiClientToolMcpAdminServ
     @PutMapping("/update-by-mcp-id")
     public Response<Boolean> updateAiClientToolMcpByMcpId(@RequestBody AiClientToolMcpRequestDTO request) {
         try {
-            log.info("根据MCP ID更新MCP客户端配置请求：{}", request);
-            
-            if (!StringUtils.hasText(request.getMcpId())) {
-                return Response.<Boolean>builder()
-                        .code(ResponseCode.ILLEGAL_PARAMETER.getCode())
-                        .info("MCP ID不能为空")
-                        .data(false)
-                        .build();
-            }
-            
-            // DTO转PO
-            AiClientToolMcp aiClientToolMcp = convertToAiClientToolMcp(request);
-            aiClientToolMcp.setUpdateTime(LocalDateTime.now());
-            
-            int result = aiClientToolMcpDao.updateByMcpId(aiClientToolMcp);
-            
-            return Response.<Boolean>builder()
-                    .code(ResponseCode.SUCCESS.getCode())
-                    .info(ResponseCode.SUCCESS.getInfo())
-                    .data(result > 0)
-                    .build();
+            boolean success = aiClientToolMcpAdminService.updateAiClientToolMcpByMcpId(request);
+            return success(success);
+        } catch (IllegalArgumentException e) {
+            return fail(ResponseCode.ILLEGAL_PARAMETER, e.getMessage(), false);
         } catch (Exception e) {
             log.error("根据MCP ID更新MCP客户端配置失败", e);
-            return Response.<Boolean>builder()
-                    .code(ResponseCode.UN_ERROR.getCode())
-                    .info(ResponseCode.UN_ERROR.getInfo())
-                    .data(false)
-                    .build();
+            return fail(ResponseCode.UN_ERROR, ResponseCode.UN_ERROR.getInfo(), false);
         }
     }
 
@@ -144,22 +83,11 @@ public class AiClientToolMcpAdminController implements IAiClientToolMcpAdminServ
     @DeleteMapping("/delete-by-id/{id}")
     public Response<Boolean> deleteAiClientToolMcpById(@PathVariable Long id) {
         try {
-            log.info("根据ID删除MCP客户端配置：{}", id);
-            
-            int result = aiClientToolMcpDao.deleteById(id);
-            
-            return Response.<Boolean>builder()
-                    .code(ResponseCode.SUCCESS.getCode())
-                    .info(ResponseCode.SUCCESS.getInfo())
-                    .data(result > 0)
-                    .build();
+            boolean success = aiClientToolMcpAdminService.deleteAiClientToolMcpById(id);
+            return success(success);
         } catch (Exception e) {
             log.error("根据ID删除MCP客户端配置失败", e);
-            return Response.<Boolean>builder()
-                    .code(ResponseCode.UN_ERROR.getCode())
-                    .info(ResponseCode.UN_ERROR.getInfo())
-                    .data(false)
-                    .build();
+            return fail(ResponseCode.UN_ERROR, ResponseCode.UN_ERROR.getInfo(), false);
         }
     }
 
@@ -167,22 +95,11 @@ public class AiClientToolMcpAdminController implements IAiClientToolMcpAdminServ
     @DeleteMapping("/delete-by-mcp-id/{mcpId}")
     public Response<Boolean> deleteAiClientToolMcpByMcpId(@PathVariable String mcpId) {
         try {
-            log.info("根据MCP ID删除MCP客户端配置：{}", mcpId);
-            
-            int result = aiClientToolMcpDao.deleteByMcpId(mcpId);
-            
-            return Response.<Boolean>builder()
-                    .code(ResponseCode.SUCCESS.getCode())
-                    .info(ResponseCode.SUCCESS.getInfo())
-                    .data(result > 0)
-                    .build();
+            boolean success = aiClientToolMcpAdminService.deleteAiClientToolMcpByMcpId(mcpId);
+            return success(success);
         } catch (Exception e) {
             log.error("根据MCP ID删除MCP客户端配置失败", e);
-            return Response.<Boolean>builder()
-                    .code(ResponseCode.UN_ERROR.getCode())
-                    .info(ResponseCode.UN_ERROR.getInfo())
-                    .data(false)
-                    .build();
+            return fail(ResponseCode.UN_ERROR, ResponseCode.UN_ERROR.getInfo(), false);
         }
     }
 
@@ -190,32 +107,11 @@ public class AiClientToolMcpAdminController implements IAiClientToolMcpAdminServ
     @GetMapping("/query-by-id/{id}")
     public Response<AiClientToolMcpResponseDTO> queryAiClientToolMcpById(@PathVariable Long id) {
         try {
-            log.info("根据ID查询MCP客户端配置：{}", id);
-            
-            AiClientToolMcp aiClientToolMcp = aiClientToolMcpDao.queryById(id);
-            
-            if (aiClientToolMcp == null) {
-                return Response.<AiClientToolMcpResponseDTO>builder()
-                        .code(ResponseCode.SUCCESS.getCode())
-                        .info(ResponseCode.SUCCESS.getInfo())
-                        .data(null)
-                        .build();
-            }
-            
-            AiClientToolMcpResponseDTO responseDTO = convertToAiClientToolMcpResponseDTO(aiClientToolMcp);
-            
-            return Response.<AiClientToolMcpResponseDTO>builder()
-                    .code(ResponseCode.SUCCESS.getCode())
-                    .info(ResponseCode.SUCCESS.getInfo())
-                    .data(responseDTO)
-                    .build();
+            AiClientToolMcpResponseDTO data = aiClientToolMcpAdminService.queryAiClientToolMcpById(id);
+            return success(data);
         } catch (Exception e) {
             log.error("根据ID查询MCP客户端配置失败", e);
-            return Response.<AiClientToolMcpResponseDTO>builder()
-                    .code(ResponseCode.UN_ERROR.getCode())
-                    .info(ResponseCode.UN_ERROR.getInfo())
-                    .data(null)
-                    .build();
+            return fail(ResponseCode.UN_ERROR, ResponseCode.UN_ERROR.getInfo(), null);
         }
     }
 
@@ -223,32 +119,11 @@ public class AiClientToolMcpAdminController implements IAiClientToolMcpAdminServ
     @GetMapping("/query-by-mcp-id/{mcpId}")
     public Response<AiClientToolMcpResponseDTO> queryAiClientToolMcpByMcpId(@PathVariable String mcpId) {
         try {
-            log.info("根据MCP ID查询MCP客户端配置：{}", mcpId);
-            
-            AiClientToolMcp aiClientToolMcp = aiClientToolMcpDao.queryByMcpId(mcpId);
-            
-            if (aiClientToolMcp == null) {
-                return Response.<AiClientToolMcpResponseDTO>builder()
-                        .code(ResponseCode.SUCCESS.getCode())
-                        .info(ResponseCode.SUCCESS.getInfo())
-                        .data(null)
-                        .build();
-            }
-            
-            AiClientToolMcpResponseDTO responseDTO = convertToAiClientToolMcpResponseDTO(aiClientToolMcp);
-            
-            return Response.<AiClientToolMcpResponseDTO>builder()
-                    .code(ResponseCode.SUCCESS.getCode())
-                    .info(ResponseCode.SUCCESS.getInfo())
-                    .data(responseDTO)
-                    .build();
+            AiClientToolMcpResponseDTO data = aiClientToolMcpAdminService.queryAiClientToolMcpByMcpId(mcpId);
+            return success(data);
         } catch (Exception e) {
             log.error("根据MCP ID查询MCP客户端配置失败", e);
-            return Response.<AiClientToolMcpResponseDTO>builder()
-                    .code(ResponseCode.UN_ERROR.getCode())
-                    .info(ResponseCode.UN_ERROR.getInfo())
-                    .data(null)
-                    .build();
+            return fail(ResponseCode.UN_ERROR, ResponseCode.UN_ERROR.getInfo(), null);
         }
     }
 
@@ -256,26 +131,10 @@ public class AiClientToolMcpAdminController implements IAiClientToolMcpAdminServ
     @GetMapping("/query-all")
     public Response<List<AiClientToolMcpResponseDTO>> queryAllAiClientToolMcps() {
         try {
-            log.info("查询所有MCP客户端配置");
-            
-            List<AiClientToolMcp> aiClientToolMcps = aiClientToolMcpDao.queryAll();
-            
-            List<AiClientToolMcpResponseDTO> responseDTOs = aiClientToolMcps.stream()
-                    .map(this::convertToAiClientToolMcpResponseDTO)
-                    .collect(Collectors.toList());
-            
-            return Response.<List<AiClientToolMcpResponseDTO>>builder()
-                    .code(ResponseCode.SUCCESS.getCode())
-                    .info(ResponseCode.SUCCESS.getInfo())
-                    .data(responseDTOs)
-                    .build();
+            return success(aiClientToolMcpAdminService.queryAllAiClientToolMcps());
         } catch (Exception e) {
             log.error("查询所有MCP客户端配置失败", e);
-            return Response.<List<AiClientToolMcpResponseDTO>>builder()
-                    .code(ResponseCode.UN_ERROR.getCode())
-                    .info(ResponseCode.UN_ERROR.getInfo())
-                    .data(null)
-                    .build();
+            return fail(ResponseCode.UN_ERROR, ResponseCode.UN_ERROR.getInfo(), null);
         }
     }
 
@@ -283,26 +142,10 @@ public class AiClientToolMcpAdminController implements IAiClientToolMcpAdminServ
     @GetMapping("/query-by-status/{status}")
     public Response<List<AiClientToolMcpResponseDTO>> queryAiClientToolMcpsByStatus(@PathVariable Integer status) {
         try {
-            log.info("根据状态查询MCP客户端配置：{}", status);
-            
-            List<AiClientToolMcp> aiClientToolMcps = aiClientToolMcpDao.queryByStatus(status);
-            
-            List<AiClientToolMcpResponseDTO> responseDTOs = aiClientToolMcps.stream()
-                    .map(this::convertToAiClientToolMcpResponseDTO)
-                    .collect(Collectors.toList());
-            
-            return Response.<List<AiClientToolMcpResponseDTO>>builder()
-                    .code(ResponseCode.SUCCESS.getCode())
-                    .info(ResponseCode.SUCCESS.getInfo())
-                    .data(responseDTOs)
-                    .build();
+            return success(aiClientToolMcpAdminService.queryAiClientToolMcpsByStatus(status));
         } catch (Exception e) {
             log.error("根据状态查询MCP客户端配置失败", e);
-            return Response.<List<AiClientToolMcpResponseDTO>>builder()
-                    .code(ResponseCode.UN_ERROR.getCode())
-                    .info(ResponseCode.UN_ERROR.getInfo())
-                    .data(null)
-                    .build();
+            return fail(ResponseCode.UN_ERROR, ResponseCode.UN_ERROR.getInfo(), null);
         }
     }
 
@@ -310,26 +153,10 @@ public class AiClientToolMcpAdminController implements IAiClientToolMcpAdminServ
     @GetMapping("/query-by-transport-type/{transportType}")
     public Response<List<AiClientToolMcpResponseDTO>> queryAiClientToolMcpsByTransportType(@PathVariable String transportType) {
         try {
-            log.info("根据传输类型查询MCP客户端配置：{}", transportType);
-            
-            List<AiClientToolMcp> aiClientToolMcps = aiClientToolMcpDao.queryByTransportType(transportType);
-            
-            List<AiClientToolMcpResponseDTO> responseDTOs = aiClientToolMcps.stream()
-                    .map(this::convertToAiClientToolMcpResponseDTO)
-                    .collect(Collectors.toList());
-            
-            return Response.<List<AiClientToolMcpResponseDTO>>builder()
-                    .code(ResponseCode.SUCCESS.getCode())
-                    .info(ResponseCode.SUCCESS.getInfo())
-                    .data(responseDTOs)
-                    .build();
+            return success(aiClientToolMcpAdminService.queryAiClientToolMcpsByTransportType(transportType));
         } catch (Exception e) {
             log.error("根据传输类型查询MCP客户端配置失败", e);
-            return Response.<List<AiClientToolMcpResponseDTO>>builder()
-                    .code(ResponseCode.UN_ERROR.getCode())
-                    .info(ResponseCode.UN_ERROR.getInfo())
-                    .data(null)
-                    .build();
+            return fail(ResponseCode.UN_ERROR, ResponseCode.UN_ERROR.getInfo(), null);
         }
     }
 
@@ -337,26 +164,10 @@ public class AiClientToolMcpAdminController implements IAiClientToolMcpAdminServ
     @GetMapping("/query-enabled")
     public Response<List<AiClientToolMcpResponseDTO>> queryEnabledAiClientToolMcps() {
         try {
-            log.info("查询启用的MCP客户端配置");
-            
-            List<AiClientToolMcp> aiClientToolMcps = aiClientToolMcpDao.queryEnabledMcps();
-            
-            List<AiClientToolMcpResponseDTO> responseDTOs = aiClientToolMcps.stream()
-                    .map(this::convertToAiClientToolMcpResponseDTO)
-                    .collect(Collectors.toList());
-            
-            return Response.<List<AiClientToolMcpResponseDTO>>builder()
-                    .code(ResponseCode.SUCCESS.getCode())
-                    .info(ResponseCode.SUCCESS.getInfo())
-                    .data(responseDTOs)
-                    .build();
+            return success(aiClientToolMcpAdminService.queryEnabledAiClientToolMcps());
         } catch (Exception e) {
             log.error("查询启用的MCP客户端配置失败", e);
-            return Response.<List<AiClientToolMcpResponseDTO>>builder()
-                    .code(ResponseCode.UN_ERROR.getCode())
-                    .info(ResponseCode.UN_ERROR.getInfo())
-                    .data(null)
-                    .build();
+            return fail(ResponseCode.UN_ERROR, ResponseCode.UN_ERROR.getInfo(), null);
         }
     }
 
@@ -364,73 +175,28 @@ public class AiClientToolMcpAdminController implements IAiClientToolMcpAdminServ
     @PostMapping("/query-list")
     public Response<List<AiClientToolMcpResponseDTO>> queryAiClientToolMcpList(@RequestBody AiClientToolMcpQueryRequestDTO request) {
         try {
-            log.info("根据查询条件查询MCP客户端配置列表：{}", request);
-            
-            // 根据查询条件调用不同的DAO方法
-            List<AiClientToolMcp> aiClientToolMcps;
-            
-            if (StringUtils.hasText(request.getMcpId())) {
-                // 根据MCP ID查询
-                AiClientToolMcp single = aiClientToolMcpDao.queryByMcpId(request.getMcpId());
-                aiClientToolMcps = single != null ? List.of(single) : List.of();
-            } else if (request.getStatus() != null) {
-                // 根据状态查询
-                aiClientToolMcps = aiClientToolMcpDao.queryByStatus(request.getStatus());
-            } else if (StringUtils.hasText(request.getTransportType())) {
-                // 根据传输类型查询
-                aiClientToolMcps = aiClientToolMcpDao.queryByTransportType(request.getTransportType());
-            } else {
-                // 查询所有
-                aiClientToolMcps = aiClientToolMcpDao.queryAll();
-            }
-            
-            // 如果有MCP名称条件，进行过滤
-            if (StringUtils.hasText(request.getMcpName())) {
-                aiClientToolMcps = aiClientToolMcps.stream()
-                        .filter(mcp -> mcp.getMcpName() != null && 
-                                      mcp.getMcpName().contains(request.getMcpName()))
-                        .collect(Collectors.toList());
-            }
-            
-            List<AiClientToolMcpResponseDTO> responseDTOs = aiClientToolMcps.stream()
-                    .map(this::convertToAiClientToolMcpResponseDTO)
-                    .collect(Collectors.toList());
-            
-            return Response.<List<AiClientToolMcpResponseDTO>>builder()
-                    .code(ResponseCode.SUCCESS.getCode())
-                    .info(ResponseCode.SUCCESS.getInfo())
-                    .data(responseDTOs)
-                    .build();
+            return success(aiClientToolMcpAdminService.queryAiClientToolMcpList(request));
+        } catch (IllegalArgumentException e) {
+            return fail(ResponseCode.ILLEGAL_PARAMETER, e.getMessage(), null);
         } catch (Exception e) {
             log.error("根据查询条件查询MCP客户端配置列表失败", e);
-            return Response.<List<AiClientToolMcpResponseDTO>>builder()
-                    .code(ResponseCode.UN_ERROR.getCode())
-                    .info(ResponseCode.UN_ERROR.getInfo())
-                    .data(null)
-                    .build();
+            return fail(ResponseCode.UN_ERROR, ResponseCode.UN_ERROR.getInfo(), null);
         }
     }
 
-    /**
-     * DTO转PO对象
-     * @param requestDTO 请求DTO
-     * @return PO对象
-     */
-    private AiClientToolMcp convertToAiClientToolMcp(AiClientToolMcpRequestDTO requestDTO) {
-        AiClientToolMcp aiClientToolMcp = new AiClientToolMcp();
-        BeanUtils.copyProperties(requestDTO, aiClientToolMcp);
-        return aiClientToolMcp;
+    private <T> Response<T> success(T data) {
+        return Response.<T>builder()
+                .code(ResponseCode.SUCCESS.getCode())
+                .info(ResponseCode.SUCCESS.getInfo())
+                .data(data)
+                .build();
     }
 
-    /**
-     * PO转响应DTO对象
-     * @param aiClientToolMcp PO对象
-     * @return 响应DTO
-     */
-    private AiClientToolMcpResponseDTO convertToAiClientToolMcpResponseDTO(AiClientToolMcp aiClientToolMcp) {
-        AiClientToolMcpResponseDTO responseDTO = new AiClientToolMcpResponseDTO();
-        BeanUtils.copyProperties(aiClientToolMcp, responseDTO);
-        return responseDTO;
+    private <T> Response<T> fail(ResponseCode code, String info, T data) {
+        return Response.<T>builder()
+                .code(code.getCode())
+                .info(info)
+                .data(data)
+                .build();
     }
-
 }

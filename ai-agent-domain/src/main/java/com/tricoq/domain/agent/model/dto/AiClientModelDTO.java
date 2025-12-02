@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -17,6 +18,11 @@ import java.util.List;
 @AllArgsConstructor
 @NoArgsConstructor
 public class AiClientModelDTO {
+
+    /**
+     * 自增主键ID
+     */
+    private Long id;
 
     /**
      * 全局唯一模型ID
@@ -37,6 +43,15 @@ public class AiClientModelDTO {
      * 模型类型：openai、deepseek、claude
      */
     private String modelType;
+
+    /**
+     * 状态：0-禁用，1-启用
+     */
+    private Integer status;
+
+    private LocalDateTime createTime;
+
+    private LocalDateTime updateTime;
 
     /**
      * 工具 mcp ids

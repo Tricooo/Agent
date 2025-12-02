@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -20,6 +21,11 @@ import java.util.List;
 public class AiClientDTO {
 
     /**
+     * 数据库主键
+     */
+    private Long id;
+
+    /**
      * 客户端ID
      */
     private String clientId;
@@ -33,6 +39,21 @@ public class AiClientDTO {
      * 描述
      */
     private String description;
+
+    /**
+     * 状态(0:禁用,1:启用)
+     */
+    private Integer status;
+
+    /**
+     * 创建时间
+     */
+    private LocalDateTime createTime;
+
+    /**
+     * 更新时间
+     */
+    private LocalDateTime updateTime;
 
     /**
      * 全局唯一模型ID

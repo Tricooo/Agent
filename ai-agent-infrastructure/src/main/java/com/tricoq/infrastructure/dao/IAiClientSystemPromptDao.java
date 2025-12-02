@@ -20,16 +20,6 @@ import java.util.Set;
 public interface IAiClientSystemPromptDao extends BaseMapper<AiClientSystemPrompt> {
 
     /**
-     * 插入系统提示词配置
-     */
-    void insert(AiClientSystemPrompt aiClientSystemPrompt);
-
-    /**
-     * 根据ID更新系统提示词配置
-     */
-    int updateById(AiClientSystemPrompt aiClientSystemPrompt);
-
-    /**
      * 根据提示词ID更新系统提示词配置
      */
     int updateByPromptId(AiClientSystemPrompt aiClientSystemPrompt);

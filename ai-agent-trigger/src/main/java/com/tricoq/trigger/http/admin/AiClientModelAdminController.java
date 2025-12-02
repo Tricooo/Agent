@@ -5,13 +5,10 @@ import com.tricoq.api.dto.AiClientModelQueryRequestDTO;
 import com.tricoq.api.dto.AiClientModelRequestDTO;
 import com.tricoq.api.dto.AiClientModelResponseDTO;
 import com.tricoq.api.response.Response;
-import com.tricoq.infrastructure.dao.IAiClientModelDao;
-import com.tricoq.infrastructure.dao.po.AiClientModel;
+import com.tricoq.application.service.AiClientModelAdminService;
 import com.tricoq.types.enums.ResponseCode;
-import jakarta.annotation.Resource;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.BeanUtils;
-import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -23,9 +20,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.time.LocalDateTime;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * AI客户端模型管理控制器
@@ -37,36 +32,22 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/v1/admin/ai-client-model")
 @CrossOrigin(origins = "*", allowedHeaders = "*", methods = {RequestMethod.GET, RequestMethod.POST, RequestMethod.PUT, RequestMethod.DELETE, RequestMethod.OPTIONS})
+@RequiredArgsConstructor
 public class AiClientModelAdminController implements IAiClientModelAdminService {
 
-    @Resource
-    private IAiClientModelDao aiClientModelDao;
+    private final AiClientModelAdminService aiClientModelAdminService;
 
     @Override
     @PostMapping("/create")
     public Response<Boolean> createAiClientModel(@RequestBody AiClientModelRequestDTO request) {
         try {
-            log.info("创建AI客户端模型配置请求：{}", request);
-            
-            // DTO转PO
-            AiClientModel aiClientModel = convertToAiClientModel(request);
-            aiClientModel.setCreateTime(LocalDateTime.now());
-            aiClientModel.setUpdateTime(LocalDateTime.now());
-            
-            int result = aiClientModelDao.insert(aiClientModel);
-            
-            return Response.<Boolean>builder()
-                    .code(ResponseCode.SUCCESS.getCode())
-                    .info(ResponseCode.SUCCESS.getInfo())
-                    .data(result > 0)
-                    .build();
+            boolean success = aiClientModelAdminService.createAiClientModel(request);
+            return success(success);
+        } catch (IllegalArgumentException e) {
+            return fail(ResponseCode.ILLEGAL_PARAMETER, e.getMessage(), false);
         } catch (Exception e) {
             log.error("创建AI客户端模型配置失败", e);
-            return Response.<Boolean>builder()
-                    .code(ResponseCode.UN_ERROR.getCode())
-                    .info(ResponseCode.UN_ERROR.getInfo())
-                    .data(false)
-                    .build();
+            return fail(ResponseCode.UN_ERROR, ResponseCode.UN_ERROR.getInfo(), false);
         }
     }
 
@@ -74,34 +55,13 @@ public class AiClientModelAdminController implements IAiClientModelAdminService 
     @PutMapping("/update-by-id")
     public Response<Boolean> updateAiClientModelById(@RequestBody AiClientModelRequestDTO request) {
         try {
-            log.info("根据ID更新AI客户端模型配置请求：{}", request);
-            
-            if (request.getId() == null) {
-                return Response.<Boolean>builder()
-                        .code(ResponseCode.ILLEGAL_PARAMETER.getCode())
-                        .info("ID不能为空")
-                        .data(false)
-                        .build();
-            }
-            
-            // DTO转PO
-            AiClientModel aiClientModel = convertToAiClientModel(request);
-            aiClientModel.setUpdateTime(LocalDateTime.now());
-            
-            int result = aiClientModelDao.updateById(aiClientModel);
-            
-            return Response.<Boolean>builder()
-                    .code(ResponseCode.SUCCESS.getCode())
-                    .info(ResponseCode.SUCCESS.getInfo())
-                    .data(result > 0)
-                    .build();
+            boolean success = aiClientModelAdminService.updateAiClientModelById(request);
+            return success(success);
+        } catch (IllegalArgumentException e) {
+            return fail(ResponseCode.ILLEGAL_PARAMETER, e.getMessage(), false);
         } catch (Exception e) {
             log.error("根据ID更新AI客户端模型配置失败", e);
-            return Response.<Boolean>builder()
-                    .code(ResponseCode.UN_ERROR.getCode())
-                    .info(ResponseCode.UN_ERROR.getInfo())
-                    .data(false)
-                    .build();
+            return fail(ResponseCode.UN_ERROR, ResponseCode.UN_ERROR.getInfo(), false);
         }
     }
 
@@ -109,34 +69,13 @@ public class AiClientModelAdminController implements IAiClientModelAdminService 
     @PutMapping("/update-by-model-id")
     public Response<Boolean> updateAiClientModelByModelId(@RequestBody AiClientModelRequestDTO request) {
         try {
-            log.info("根据模型ID更新AI客户端模型配置请求：{}", request);
-            
-            if (!StringUtils.hasText(request.getModelId())) {
-                return Response.<Boolean>builder()
-                        .code(ResponseCode.ILLEGAL_PARAMETER.getCode())
-                        .info("模型ID不能为空")
-                        .data(false)
-                        .build();
-            }
-            
-            // DTO转PO
-            AiClientModel aiClientModel = convertToAiClientModel(request);
-            aiClientModel.setUpdateTime(LocalDateTime.now());
-            
-            int result = aiClientModelDao.updateByModelId(aiClientModel);
-            
-            return Response.<Boolean>builder()
-                    .code(ResponseCode.SUCCESS.getCode())
-                    .info(ResponseCode.SUCCESS.getInfo())
-                    .data(result > 0)
-                    .build();
+            boolean success = aiClientModelAdminService.updateAiClientModelByModelId(request);
+            return success(success);
+        } catch (IllegalArgumentException e) {
+            return fail(ResponseCode.ILLEGAL_PARAMETER, e.getMessage(), false);
         } catch (Exception e) {
             log.error("根据模型ID更新AI客户端模型配置失败", e);
-            return Response.<Boolean>builder()
-                    .code(ResponseCode.UN_ERROR.getCode())
-                    .info(ResponseCode.UN_ERROR.getInfo())
-                    .data(false)
-                    .build();
+            return fail(ResponseCode.UN_ERROR, ResponseCode.UN_ERROR.getInfo(), false);
         }
     }
 
@@ -144,22 +83,11 @@ public class AiClientModelAdminController implements IAiClientModelAdminService 
     @DeleteMapping("/delete-by-id/{id}")
     public Response<Boolean> deleteAiClientModelById(@PathVariable Long id) {
         try {
-            log.info("根据ID删除AI客户端模型配置请求：{}", id);
-            
-            int result = aiClientModelDao.deleteById(id);
-            
-            return Response.<Boolean>builder()
-                    .code(ResponseCode.SUCCESS.getCode())
-                    .info(ResponseCode.SUCCESS.getInfo())
-                    .data(result > 0)
-                    .build();
+            boolean success = aiClientModelAdminService.deleteAiClientModelById(id);
+            return success(success);
         } catch (Exception e) {
             log.error("根据ID删除AI客户端模型配置失败", e);
-            return Response.<Boolean>builder()
-                    .code(ResponseCode.UN_ERROR.getCode())
-                    .info(ResponseCode.UN_ERROR.getInfo())
-                    .data(false)
-                    .build();
+            return fail(ResponseCode.UN_ERROR, ResponseCode.UN_ERROR.getInfo(), false);
         }
     }
 
@@ -167,22 +95,11 @@ public class AiClientModelAdminController implements IAiClientModelAdminService 
     @DeleteMapping("/delete-by-model-id/{modelId}")
     public Response<Boolean> deleteAiClientModelByModelId(@PathVariable String modelId) {
         try {
-            log.info("根据模型ID删除AI客户端模型配置请求：{}", modelId);
-            
-            int result = aiClientModelDao.deleteByModelId(modelId);
-            
-            return Response.<Boolean>builder()
-                    .code(ResponseCode.SUCCESS.getCode())
-                    .info(ResponseCode.SUCCESS.getInfo())
-                    .data(result > 0)
-                    .build();
+            boolean success = aiClientModelAdminService.deleteAiClientModelByModelId(modelId);
+            return success(success);
         } catch (Exception e) {
             log.error("根据模型ID删除AI客户端模型配置失败", e);
-            return Response.<Boolean>builder()
-                    .code(ResponseCode.UN_ERROR.getCode())
-                    .info(ResponseCode.UN_ERROR.getInfo())
-                    .data(false)
-                    .build();
+            return fail(ResponseCode.UN_ERROR, ResponseCode.UN_ERROR.getInfo(), false);
         }
     }
 
@@ -190,33 +107,14 @@ public class AiClientModelAdminController implements IAiClientModelAdminService 
     @GetMapping("/query-by-id/{id}")
     public Response<AiClientModelResponseDTO> queryAiClientModelById(@PathVariable Long id) {
         try {
-            log.info("根据ID查询AI客户端模型配置请求：{}", id);
-            
-            AiClientModel aiClientModel = aiClientModelDao.queryById(id);
-            
-            if (aiClientModel == null) {
-                return Response.<AiClientModelResponseDTO>builder()
-                        .code(ResponseCode.UN_ERROR.getCode())
-                        .info("未找到对应的AI客户端模型配置")
-                        .data(null)
-                        .build();
+            AiClientModelResponseDTO data = aiClientModelAdminService.queryAiClientModelById(id);
+            if (data == null) {
+                return fail(ResponseCode.UN_ERROR, "未找到对应的AI客户端模型配置", null);
             }
-            
-            // PO转DTO
-            AiClientModelResponseDTO responseDTO = convertToAiClientModelResponseDTO(aiClientModel);
-            
-            return Response.<AiClientModelResponseDTO>builder()
-                    .code(ResponseCode.SUCCESS.getCode())
-                    .info(ResponseCode.SUCCESS.getInfo())
-                    .data(responseDTO)
-                    .build();
+            return success(data);
         } catch (Exception e) {
             log.error("根据ID查询AI客户端模型配置失败", e);
-            return Response.<AiClientModelResponseDTO>builder()
-                    .code(ResponseCode.UN_ERROR.getCode())
-                    .info(ResponseCode.UN_ERROR.getInfo())
-                    .data(null)
-                    .build();
+            return fail(ResponseCode.UN_ERROR, ResponseCode.UN_ERROR.getInfo(), null);
         }
     }
 
@@ -224,33 +122,14 @@ public class AiClientModelAdminController implements IAiClientModelAdminService 
     @GetMapping("/query-by-model-id/{modelId}")
     public Response<AiClientModelResponseDTO> queryAiClientModelByModelId(@PathVariable String modelId) {
         try {
-            log.info("根据模型ID查询AI客户端模型配置请求：{}", modelId);
-            
-            AiClientModel aiClientModel = aiClientModelDao.queryByModelId(modelId);
-            
-            if (aiClientModel == null) {
-                return Response.<AiClientModelResponseDTO>builder()
-                        .code(ResponseCode.UN_ERROR.getCode())
-                        .info("未找到对应的AI客户端模型配置")
-                        .data(null)
-                        .build();
+            AiClientModelResponseDTO data = aiClientModelAdminService.queryAiClientModelByModelId(modelId);
+            if (data == null) {
+                return fail(ResponseCode.UN_ERROR, "未找到对应的AI客户端模型配置", null);
             }
-            
-            // PO转DTO
-            AiClientModelResponseDTO responseDTO = convertToAiClientModelResponseDTO(aiClientModel);
-            
-            return Response.<AiClientModelResponseDTO>builder()
-                    .code(ResponseCode.SUCCESS.getCode())
-                    .info(ResponseCode.SUCCESS.getInfo())
-                    .data(responseDTO)
-                    .build();
+            return success(data);
         } catch (Exception e) {
             log.error("根据模型ID查询AI客户端模型配置失败", e);
-            return Response.<AiClientModelResponseDTO>builder()
-                    .code(ResponseCode.UN_ERROR.getCode())
-                    .info(ResponseCode.UN_ERROR.getInfo())
-                    .data(null)
-                    .build();
+            return fail(ResponseCode.UN_ERROR, ResponseCode.UN_ERROR.getInfo(), null);
         }
     }
 
@@ -258,27 +137,10 @@ public class AiClientModelAdminController implements IAiClientModelAdminService 
     @GetMapping("/query-by-api-id/{apiId}")
     public Response<List<AiClientModelResponseDTO>> queryAiClientModelsByApiId(@PathVariable String apiId) {
         try {
-            log.info("根据API配置ID查询AI客户端模型配置列表请求：{}", apiId);
-            
-            List<AiClientModel> aiClientModels = aiClientModelDao.queryByApiId(apiId);
-            
-            // PO转DTO
-            List<AiClientModelResponseDTO> responseDTOs = aiClientModels.stream()
-                    .map(this::convertToAiClientModelResponseDTO)
-                    .collect(Collectors.toList());
-            
-            return Response.<List<AiClientModelResponseDTO>>builder()
-                    .code(ResponseCode.SUCCESS.getCode())
-                    .info(ResponseCode.SUCCESS.getInfo())
-                    .data(responseDTOs)
-                    .build();
+            return success(aiClientModelAdminService.queryAiClientModelsByApiId(apiId));
         } catch (Exception e) {
             log.error("根据API配置ID查询AI客户端模型配置列表失败", e);
-            return Response.<List<AiClientModelResponseDTO>>builder()
-                    .code(ResponseCode.UN_ERROR.getCode())
-                    .info(ResponseCode.UN_ERROR.getInfo())
-                    .data(null)
-                    .build();
+            return fail(ResponseCode.UN_ERROR, ResponseCode.UN_ERROR.getInfo(), null);
         }
     }
 
@@ -286,27 +148,10 @@ public class AiClientModelAdminController implements IAiClientModelAdminService 
     @GetMapping("/query-by-model-type/{modelType}")
     public Response<List<AiClientModelResponseDTO>> queryAiClientModelsByModelType(@PathVariable String modelType) {
         try {
-            log.info("根据模型类型查询AI客户端模型配置列表请求：{}", modelType);
-            
-            List<AiClientModel> aiClientModels = aiClientModelDao.queryByModelType(modelType);
-            
-            // PO转DTO
-            List<AiClientModelResponseDTO> responseDTOs = aiClientModels.stream()
-                    .map(this::convertToAiClientModelResponseDTO)
-                    .collect(Collectors.toList());
-            
-            return Response.<List<AiClientModelResponseDTO>>builder()
-                    .code(ResponseCode.SUCCESS.getCode())
-                    .info(ResponseCode.SUCCESS.getInfo())
-                    .data(responseDTOs)
-                    .build();
+            return success(aiClientModelAdminService.queryAiClientModelsByModelType(modelType));
         } catch (Exception e) {
             log.error("根据模型类型查询AI客户端模型配置列表失败", e);
-            return Response.<List<AiClientModelResponseDTO>>builder()
-                    .code(ResponseCode.UN_ERROR.getCode())
-                    .info(ResponseCode.UN_ERROR.getInfo())
-                    .data(null)
-                    .build();
+            return fail(ResponseCode.UN_ERROR, ResponseCode.UN_ERROR.getInfo(), null);
         }
     }
 
@@ -314,27 +159,10 @@ public class AiClientModelAdminController implements IAiClientModelAdminService 
     @GetMapping("/query-enabled")
     public Response<List<AiClientModelResponseDTO>> queryEnabledAiClientModels() {
         try {
-            log.info("查询所有启用的AI客户端模型配置请求");
-            
-            List<AiClientModel> aiClientModels = aiClientModelDao.queryEnabledModels();
-            
-            // PO转DTO
-            List<AiClientModelResponseDTO> responseDTOs = aiClientModels.stream()
-                    .map(this::convertToAiClientModelResponseDTO)
-                    .collect(Collectors.toList());
-            
-            return Response.<List<AiClientModelResponseDTO>>builder()
-                    .code(ResponseCode.SUCCESS.getCode())
-                    .info(ResponseCode.SUCCESS.getInfo())
-                    .data(responseDTOs)
-                    .build();
+            return success(aiClientModelAdminService.queryEnabledAiClientModels());
         } catch (Exception e) {
             log.error("查询所有启用的AI客户端模型配置失败", e);
-            return Response.<List<AiClientModelResponseDTO>>builder()
-                    .code(ResponseCode.UN_ERROR.getCode())
-                    .info(ResponseCode.UN_ERROR.getInfo())
-                    .data(null)
-                    .build();
+            return fail(ResponseCode.UN_ERROR, ResponseCode.UN_ERROR.getInfo(), null);
         }
     }
 
@@ -342,45 +170,12 @@ public class AiClientModelAdminController implements IAiClientModelAdminService 
     @PostMapping("/query-list")
     public Response<List<AiClientModelResponseDTO>> queryAiClientModelList(@RequestBody AiClientModelQueryRequestDTO request) {
         try {
-            log.info("根据条件查询AI客户端模型配置列表请求：{}", request);
-            
-            List<AiClientModel> aiClientModels;
-            
-            // 根据不同条件查询
-            if (StringUtils.hasText(request.getModelId())) {
-                AiClientModel model = aiClientModelDao.queryByModelId(request.getModelId());
-                aiClientModels = model != null ? List.of(model) : List.of();
-            } else if (StringUtils.hasText(request.getApiId())) {
-                aiClientModels = aiClientModelDao.queryByApiId(request.getApiId());
-            } else if (StringUtils.hasText(request.getModelType())) {
-                aiClientModels = aiClientModelDao.queryByModelType(request.getModelType());
-            } else if (request.getStatus() != null) {
-                if (request.getStatus() == 1) {
-                    aiClientModels = aiClientModelDao.queryEnabledModels();
-                } else {
-                    aiClientModels = aiClientModelDao.queryAll();
-                }
-            } else {
-                aiClientModels = aiClientModelDao.queryAll();
-            }
-            
-            // PO转DTO
-            List<AiClientModelResponseDTO> responseDTOs = aiClientModels.stream()
-                    .map(this::convertToAiClientModelResponseDTO)
-                    .collect(Collectors.toList());
-            
-            return Response.<List<AiClientModelResponseDTO>>builder()
-                    .code(ResponseCode.SUCCESS.getCode())
-                    .info(ResponseCode.SUCCESS.getInfo())
-                    .data(responseDTOs)
-                    .build();
+            return success(aiClientModelAdminService.queryAiClientModelList(request));
+        } catch (IllegalArgumentException e) {
+            return fail(ResponseCode.ILLEGAL_PARAMETER, e.getMessage(), null);
         } catch (Exception e) {
             log.error("根据条件查询AI客户端模型配置列表失败", e);
-            return Response.<List<AiClientModelResponseDTO>>builder()
-                    .code(ResponseCode.UN_ERROR.getCode())
-                    .info(ResponseCode.UN_ERROR.getInfo())
-                    .data(null)
-                    .build();
+            return fail(ResponseCode.UN_ERROR, ResponseCode.UN_ERROR.getInfo(), null);
         }
     }
 
@@ -388,46 +183,27 @@ public class AiClientModelAdminController implements IAiClientModelAdminService 
     @GetMapping("/query-all")
     public Response<List<AiClientModelResponseDTO>> queryAllAiClientModels() {
         try {
-            log.info("查询所有AI客户端模型配置请求");
-            
-            List<AiClientModel> aiClientModels = aiClientModelDao.queryAll();
-            
-            // PO转DTO
-            List<AiClientModelResponseDTO> responseDTOs = aiClientModels.stream()
-                    .map(this::convertToAiClientModelResponseDTO)
-                    .collect(Collectors.toList());
-            
-            return Response.<List<AiClientModelResponseDTO>>builder()
-                    .code(ResponseCode.SUCCESS.getCode())
-                    .info(ResponseCode.SUCCESS.getInfo())
-                    .data(responseDTOs)
-                    .build();
+            return success(aiClientModelAdminService.queryAllAiClientModels());
         } catch (Exception e) {
             log.error("查询所有AI客户端模型配置失败", e);
-            return Response.<List<AiClientModelResponseDTO>>builder()
-                    .code(ResponseCode.UN_ERROR.getCode())
-                    .info(ResponseCode.UN_ERROR.getInfo())
-                    .data(null)
-                    .build();
+            return fail(ResponseCode.UN_ERROR, ResponseCode.UN_ERROR.getInfo(), null);
         }
     }
 
-    /**
-     * DTO转PO对象
-     */
-    private AiClientModel convertToAiClientModel(AiClientModelRequestDTO requestDTO) {
-        AiClientModel aiClientModel = new AiClientModel();
-        BeanUtils.copyProperties(requestDTO, aiClientModel);
-        return aiClientModel;
+    private <T> Response<T> success(T data) {
+        return Response.<T>builder()
+                .code(ResponseCode.SUCCESS.getCode())
+                .info(ResponseCode.SUCCESS.getInfo())
+                .data(data)
+                .build();
     }
 
-    /**
-     * PO转DTO对象
-     */
-    private AiClientModelResponseDTO convertToAiClientModelResponseDTO(AiClientModel aiClientModel) {
-        AiClientModelResponseDTO responseDTO = new AiClientModelResponseDTO();
-        BeanUtils.copyProperties(aiClientModel, responseDTO);
-        return responseDTO;
+    private <T> Response<T> fail(ResponseCode code, String info, T data) {
+        return Response.<T>builder()
+                .code(code.getCode())
+                .info(info)
+                .data(data)
+                .build();
     }
 
 }

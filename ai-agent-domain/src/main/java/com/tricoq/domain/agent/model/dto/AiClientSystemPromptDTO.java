@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
+
 /**
  * AI 提示词&动态规划，值对象
  *
@@ -16,6 +18,11 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 public class AiClientSystemPromptDTO {
+
+    /**
+     * 主键ID
+     */
+    private Long id;
 
     /**
      * 提示词ID
@@ -36,6 +43,15 @@ public class AiClientSystemPromptDTO {
      * 描述
      */
     private String description;
+
+    /**
+     * 状态(0:禁用,1:启用)
+     */
+    private Integer status;
+
+    private LocalDateTime createTime;
+
+    private LocalDateTime updateTime;
 
 
 }

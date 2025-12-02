@@ -55,6 +55,7 @@ import java.util.stream.Stream;
 public class ClientRepositoryImpl extends MpAggregateRepository<AiClientAggregate, AiClient, String, Long, IAiClientDao>
         implements IClientRepository {
 
+    private final IAiClientDao aiClientDao;
     private final AiClientService clientService;
     private final AiClientConfigService clientConfigService;
     private final AiClientModelService clientModelService;
@@ -396,6 +397,124 @@ public class ClientRepositoryImpl extends MpAggregateRepository<AiClientAggregat
                     .toList());
         }
         return clientConfigService.saveBatch(saves);
+    }
+
+    @Override
+    public boolean insertClient(AiClientDTO clientDTO) {
+        if (clientDTO == null) {
+            return false;
+        }
+        AiClient po = toClientPo(clientDTO);
+        LocalDateTime now = LocalDateTime.now();
+        if (po.getCreateTime() == null) {
+            po.setCreateTime(now);
+        }
+        po.setUpdateTime(now);
+        return aiClientDao.insert(po) > 0;
+    }
+
+    @Override
+    public boolean updateClientById(AiClientDTO clientDTO) {
+        if (clientDTO == null || clientDTO.getId() == null) {
+            return false;
+        }
+        AiClient po = toClientPo(clientDTO);
+        po.setId(clientDTO.getId());
+        po.setUpdateTime(LocalDateTime.now());
+        return aiClientDao.updateById(po) > 0;
+    }
+
+    @Override
+    public boolean updateClientByClientId(AiClientDTO clientDTO) {
+        if (clientDTO == null || !StringUtils.hasText(clientDTO.getClientId())) {
+            return false;
+        }
+        AiClient po = toClientPo(clientDTO);
+        po.setUpdateTime(LocalDateTime.now());
+        return aiClientDao.updateByClientId(po) > 0;
+    }
+
+    @Override
+    public boolean deleteClientById(Long id) {
+        return id != null && aiClientDao.deleteById(id) > 0;
+    }
+
+    @Override
+    public boolean deleteClientByClientId(String clientId) {
+        return StringUtils.hasText(clientId) && aiClientDao.deleteByClientId(clientId) > 0;
+    }
+
+    @Override
+    public AiClientDTO queryClientById(Long id) {
+        if (id == null) {
+            return null;
+        }
+        return toClientDto(aiClientDao.queryById(id));
+    }
+
+    @Override
+    public AiClientDTO queryClientByClientId(String clientId) {
+        if (!StringUtils.hasText(clientId)) {
+            return null;
+        }
+        return toClientDto(aiClientDao.queryByClientId(clientId));
+    }
+
+    @Override
+    public List<AiClientDTO> queryClientsByName(String clientName) {
+        if (!StringUtils.hasText(clientName)) {
+            return List.of();
+        }
+        return aiClientDao.queryByClientName(clientName).stream()
+                .map(this::toClientDto)
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
+    @Override
+    public List<AiClientDTO> queryAllClients() {
+        return aiClientDao.queryAll().stream()
+                .map(this::toClientDto)
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
+    @Override
+    public List<AiClientDTO> queryEnabledClients() {
+        return aiClientDao.queryEnabledClients().stream()
+                .map(this::toClientDto)
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
+    private AiClientDTO toClientDto(AiClient aiClient) {
+        if (aiClient == null) {
+            return null;
+        }
+        return AiClientDTO.builder()
+                .id(aiClient.getId())
+                .clientId(aiClient.getClientId())
+                .clientName(aiClient.getClientName())
+                .description(aiClient.getDescription())
+                .status(aiClient.getStatus())
+                .createTime(aiClient.getCreateTime())
+                .updateTime(aiClient.getUpdateTime())
+                .build();
+    }
+
+    private AiClient toClientPo(AiClientDTO dto) {
+        if (dto == null) {
+            return null;
+        }
+        return AiClient.builder()
+                .id(dto.getId())
+                .clientId(dto.getClientId())
+                .clientName(dto.getClientName())
+                .description(dto.getDescription())
+                .status(dto.getStatus())
+                .createTime(dto.getCreateTime())
+                .updateTime(dto.getUpdateTime())
+                .build();
     }
 
     @Override

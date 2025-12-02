@@ -25,6 +25,10 @@
             <groupId>com.tricoq</groupId>
             <artifactId>ai-agent-domain</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.tricoq</groupId>
+            <artifactId>ai-agent-api</artifactId>
+        </dependency>
     </dependencies>
 
 </project>

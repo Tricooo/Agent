@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
+
 /**
  * 顾问配置，值对象
  *
@@ -16,6 +18,11 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 public class AiClientAdvisorDTO {
+
+    /**
+     * 数据库主键
+     */
+    private Long id;
 
     /**
      * 顾问ID
@@ -31,6 +38,20 @@ public class AiClientAdvisorDTO {
      * 顾问类型(PromptChatMemory/RagAnswer/SimpleLoggerAdvisor等)
      */
     private String advisorType;
+
+    /**
+     * 扩展参数
+     */
+    private String extParam;
+
+    /**
+     * 状态(0:禁用,1:启用)
+     */
+    private Integer status;
+
+    private LocalDateTime createTime;
+
+    private LocalDateTime updateTime;
 
     /**
      * 顺序号
