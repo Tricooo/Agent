@@ -114,9 +114,15 @@ public class AgentRepositoryImpl extends MpAggregateRepository<AiAgentAggregate,
                         .clientType(flowConfig.getClientType())
                         .sequence(flowConfig.getSequence())
                         .stepPrompt(flowConfig.getStepPrompt())
+                        .status(1)
                         .build())
                 .toList();
         return agentFlowConfigService.saveBatch(configs);
+    }
+
+    @Override
+    public boolean removeByAggregateId(String agentId) {
+        return false;
     }
 
     /**

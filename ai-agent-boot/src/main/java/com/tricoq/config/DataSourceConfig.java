@@ -52,26 +52,6 @@ public class DataSourceConfig {
         return dataSource;
     }
 
-    @Bean("sqlSessionFactory")
-    public MybatisSqlSessionFactoryBean sqlSessionFactory(@Qualifier("mysqlDataSource") DataSource mysqlDataSource) throws Exception {
-        MybatisSqlSessionFactoryBean sqlSessionFactoryBean = new MybatisSqlSessionFactoryBean();
-        sqlSessionFactoryBean.setDataSource(mysqlDataSource);
-
-        // 设置MyBatis配置文件位置
-        PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
-        sqlSessionFactoryBean.setConfigLocation(resolver.getResource("classpath:/mybatis/config/mybatis-config.xml"));
-
-        // 设置Mapper XML文件位置
-        sqlSessionFactoryBean.setMapperLocations(resolver.getResources("classpath:/mybatis/mapper/*.xml"));
-
-        return sqlSessionFactoryBean;
-    }
-
-    @Bean("sqlSessionTemplate")
-    public SqlSessionTemplate sqlSessionTemplate(@Qualifier("sqlSessionFactory") MybatisSqlSessionFactoryBean sqlSessionFactory) throws Exception {
-        return new SqlSessionTemplate(Objects.requireNonNull(sqlSessionFactory.getObject()));
-    }
-
     @Bean("pgVectorDataSource")
     public DataSource pgVectorDataSource(@Value("${spring.datasource.pgvector.driver-class-name}") String driverClassName,
                                          @Value("${spring.datasource.pgvector.url}") String url,

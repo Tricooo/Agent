@@ -1,15 +1,21 @@
 package com.tricoq.infrastructure.adapter.repository;
 
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.tricoq.domain.agent.adapter.repository.IAgentDrawConfigRepository;
 import com.tricoq.domain.agent.model.aggregate.AiAgentDrawConfigAggregate;
+import com.tricoq.domain.agent.model.entity.DrawConfigQueryCommandEntity;
 import com.tricoq.infrastructure.dao.IAiAgentDrawConfigDao;
 import com.tricoq.infrastructure.dao.po.AiAgentDrawConfig;
 import com.tricoq.infrastructure.service.AiAgentDrawConfigService;
 import lombok.RequiredArgsConstructor;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Repository;
 
 import java.io.Serializable;
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 /**
  *
@@ -102,5 +108,24 @@ public class AgentDrawConfigRepositoryImpl
     @Override
     protected Serializable toSerializableId(String id) {
         return id;
+    }
+
+    @Override
+    public List<AiAgentDrawConfigAggregate> queryByCondition(DrawConfigQueryCommandEntity query) {
+        return this.list(Wrappers.<AiAgentDrawConfig>lambdaQuery()
+                .eq(AiAgentDrawConfig::getStatus, 1)
+                .eq(StringUtils.isNotBlank(query.getAgentId()), AiAgentDrawConfig::getAgentId, query.getAgentId())
+                .like(StringUtils.isNotBlank(query.getConfigName()), AiAgentDrawConfig::getConfigName, query.getConfigName())
+        ).stream().map(this::toAggregate).toList();
+    }
+
+    @Override
+    public AiAgentDrawConfigAggregate queryByConfigId(String configId) {
+        return toAggregate(drawConfigService.queryByConfigId(configId));
+    }
+
+    @Override
+    public boolean removeByAggregateId(String configId) {
+        return false;
     }
 }

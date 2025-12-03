@@ -1,5 +1,7 @@
 package com.tricoq.application.service;
 
+import com.tricoq.api.dto.AiAgentDrawConfigQueryRequestDTO;
+import com.tricoq.api.dto.AiAgentDrawConfigResponseDTO;
 import com.tricoq.application.model.dto.command.SaveAgentDrawCommand;
 import com.tricoq.application.service.util.DrawConfigParser;
 import com.tricoq.domain.agent.adapter.repository.IAgentDrawConfigRepository;
@@ -9,6 +11,7 @@ import com.tricoq.domain.agent.model.aggregate.AiAgentAggregate;
 import com.tricoq.domain.agent.model.valobj.AiAgentClientFlowConfigVO;
 import com.tricoq.domain.agent.model.aggregate.AiAgentDrawConfigAggregate;
 import com.tricoq.domain.agent.model.aggregate.AiClientAggregate;
+import com.tricoq.domain.agent.model.entity.DrawConfigQueryCommandEntity;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -51,9 +54,9 @@ public class AiAgentDrawAdminService {
         }
 
         // 参数校验
-        if (!StringUtils.isBlank(command.getConfigName()) ||
-                !StringUtils.isBlank(command.getConfigData()) ||
-                !StringUtils.isBlank(command.getConfigExecData())) {
+        if (StringUtils.isBlank(command.getConfigName()) ||
+                StringUtils.isBlank(command.getConfigData()) ||
+                StringUtils.isBlank(command.getConfigExecData())) {
             throw new IllegalArgumentException("参数异常");
         }
 
@@ -68,7 +71,7 @@ public class AiAgentDrawAdminService {
 
         // 生成配置ID（如果没有提供）
         String configId = command.getConfigId();
-        if (!StringUtils.isBlank(configId)) {
+        if (StringUtils.isBlank(configId)) {
             configId = UUID.randomUUID().toString().replace("-", "");
         }
         AiAgentDrawConfigAggregate drawConfig = new AiAgentDrawConfigAggregate();
@@ -90,5 +93,55 @@ public class AiAgentDrawAdminService {
         if (!agentRepository.saveFlowConfig(aiAgent.getFlowConfigs())) {
             throw new Exception("client flow config保存失败");
         }
+    }
+
+    public List<AiAgentDrawConfigResponseDTO> queryDrawConfigList(AiAgentDrawConfigQueryRequestDTO request) {
+        DrawConfigQueryCommandEntity query = DrawConfigQueryCommandEntity.builder()
+                .configId(request.getConfigId())
+                .configName(request.getConfigName())
+                .agentId(request.getAgentId())
+                .status(request.getStatus())
+                .build();
+        List<AiAgentDrawConfigResponseDTO> all = agentDrawConfigRepository.queryByCondition(query).stream()
+                .map(this::toResponse)
+                .toList();
+//        Integer pageNum = request.getPageNum();
+//        Integer pageSize = request.getPageSize();
+//        if (pageNum != null && pageSize != null && pageNum > 0 && pageSize > 0) {
+//            int start = Math.max(0, (pageNum - 1) * pageSize);
+//            int end = Math.min(start + pageSize, all.size());
+//            if (start >= all.size()) {
+//                return List.of();
+//            }
+//            return all.subList(start, end);
+//        }
+        return all;
+    }
+
+    private AiAgentDrawConfigResponseDTO toResponse(AiAgentDrawConfigAggregate aggregate) {
+        if (aggregate == null) {
+            return null;
+        }
+        AiAgentDrawConfigResponseDTO dto = new AiAgentDrawConfigResponseDTO();
+        BeanUtils.copyProperties(aggregate, dto);
+        return dto;
+    }
+
+    public AiAgentDrawConfigResponseDTO getDrawConfig(String configId) {
+        return toResponse(agentDrawConfigRepository.queryByConfigId(configId));
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public boolean deleteByConfigId(String configId) {
+        //todo 删除bean工厂中注册的智能体
+
+        AiAgentDrawConfigAggregate configAggregate = agentDrawConfigRepository.queryByConfigId(configId);
+        if(configAggregate == null) {
+            return false;
+        }
+        String agentId = configAggregate.getAgentId();
+        boolean result = agentRepository.removeByAggregateId(agentId);
+        boolean delResult = agentDrawConfigRepository.removeByAggregateId(configId);
+        return result && delResult;
     }
 }

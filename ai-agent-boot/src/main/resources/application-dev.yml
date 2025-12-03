@@ -60,10 +60,11 @@ spring:
       auto-config:
         enabled: true
 
-# MyBatis 配置【如需使用记得打开】
-#mybatis:
-#  mapper-locations: classpath:/mybatis/mapper/*.xml
-#  config-location:  classpath:/mybatis/config/mybatis-config.xml
+mybatis-plus:
+  configuration:
+    # 配置日志实现为标准输出
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  mapper-locations: classpath:/mybatis/mapper/*.xml
 
 # 日志
 logging:

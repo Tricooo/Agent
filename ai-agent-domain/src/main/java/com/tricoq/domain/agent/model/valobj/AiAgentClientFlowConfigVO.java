@@ -1,5 +1,6 @@
 package com.tricoq.domain.agent.model.valobj;
 
+import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;

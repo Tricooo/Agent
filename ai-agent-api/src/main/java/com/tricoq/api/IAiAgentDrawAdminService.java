@@ -1,8 +1,11 @@
 package com.tricoq.api;
 
+import com.tricoq.api.dto.AiAgentDrawConfigQueryRequestDTO;
 import com.tricoq.api.dto.AiAgentDrawConfigRequestDTO;
 import com.tricoq.api.dto.AiAgentDrawConfigResponseDTO;
 import com.tricoq.api.response.Response;
+
+import java.util.List;
 
 /**
  * AI智能体拖拉拽配置管理服务接口
@@ -19,6 +22,15 @@ public interface IAiAgentDrawAdminService {
      * @return 保存结果
      */
     Response<String> saveDrawConfig(AiAgentDrawConfigRequestDTO request);
+
+    /**
+     * 分页查询拖拉拽流程图配置列表
+     *
+     * @param request 查询条件与分页参数
+     * @return 配置列表
+     */
+    Response<List<AiAgentDrawConfigResponseDTO>> queryDrawConfigList(AiAgentDrawConfigQueryRequestDTO request);
+
 
     /**
      * 获取拖拉拽流程图配置

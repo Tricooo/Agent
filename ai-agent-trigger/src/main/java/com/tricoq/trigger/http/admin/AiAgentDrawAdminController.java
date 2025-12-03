@@ -1,8 +1,7 @@
 package com.tricoq.trigger.http.admin;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tricoq.api.IAiAgentDrawAdminService;
+import com.tricoq.api.dto.AiAgentDrawConfigQueryRequestDTO;
 import com.tricoq.api.dto.AiAgentDrawConfigRequestDTO;
 import com.tricoq.api.dto.AiAgentDrawConfigResponseDTO;
 import com.tricoq.api.response.Response;
@@ -11,9 +10,7 @@ import com.tricoq.application.service.AiAgentDrawAdminService;
 import com.tricoq.types.enums.ResponseCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.BeanUtils;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -24,8 +21,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -42,7 +37,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AiAgentDrawAdminController implements IAiAgentDrawAdminService {
 
-    private final AiAgentDrawAdminService aiAgentDrawAdminService;
+    private final AiAgentDrawAdminService agentDrawAdminService;
 
     /**
      * 保存draw config
@@ -63,90 +58,78 @@ public class AiAgentDrawAdminController implements IAiAgentDrawAdminService {
                 .configId(request.getConfigId())
                 .build();
         try {
-            aiAgentDrawAdminService.saveDrawConfig(command);
-        }catch (Exception e){
+            agentDrawAdminService.saveDrawConfig(command);
+            return success(null);
+        } catch (Exception e) {
+            log.error("保存流程图失败", e);
+            return fail(ResponseCode.UN_ERROR, ResponseCode.UN_ERROR.getInfo(), null);
+        }
+    }
 
+    /**
+     * 分页查询拖拉拽流程图配置列表
+     *
+     * @param request 查询条件与分页参数
+     * @return 配置列表
+     */
+    @Override
+    @PostMapping("/query-list")
+    public Response<List<AiAgentDrawConfigResponseDTO>> queryDrawConfigList(AiAgentDrawConfigQueryRequestDTO request) {
+        try {
+            return success(agentDrawAdminService.queryDrawConfigList(request));
+        } catch (Exception e) {
+            log.error("查询异常", e);
+            return fail(ResponseCode.UN_ERROR, ResponseCode.UN_ERROR.getInfo(), null);
         }
 
-        return null;
     }
 
     @Override
     @GetMapping("/get-config/{configId}")
     public Response<AiAgentDrawConfigResponseDTO> getDrawConfig(@PathVariable String configId) {
-//        try {
-//            log.info("获取流程图配置请求，configId: {}", configId);
-//
-//            if (!StringUtils.hasText(configId)) {
-//                return Response.<AiAgentDrawConfigResponseDTO>builder()
-//                        .code(ResponseCode.ILLEGAL_PARAMETER.getCode())
-//                        .info("配置ID不能为空")
-//                        .build();
-//            }
-//
-//            AiAgentDrawConfig drawConfig = aiAgentDrawConfigDao.queryByConfigId(configId);
-//
-//            if (drawConfig == null) {
-//                return Response.<AiAgentDrawConfigResponseDTO>builder()
-//                        .code(ResponseCode.UN_ERROR.getCode())
-//                        .info("配置不存在")
-//                        .build();
-//            }
-//
-//            AiAgentDrawConfigResponseDTO responseDTO = new AiAgentDrawConfigResponseDTO();
-//            BeanUtils.copyProperties(drawConfig, responseDTO);
-//
-//            return Response.<AiAgentDrawConfigResponseDTO>builder()
-//                    .code(ResponseCode.SUCCESS.getCode())
-//                    .info(ResponseCode.SUCCESS.getInfo())
-//                    .data(responseDTO)
-//                    .build();
-//
-//        } catch (Exception e) {
-//            log.error("获取流程图配置失败", e);
-//            return Response.<AiAgentDrawConfigResponseDTO>builder()
-//                    .code(ResponseCode.UN_ERROR.getCode())
-//                    .info("获取失败：" + e.getMessage())
-//                    .build();
-//        }
-        return null;
+        try {
+            log.info("获取流程图配置请求，configId: {}", configId);
+            if (StringUtils.isEmpty(configId)) {
+                return fail(ResponseCode.ILLEGAL_PARAMETER, ResponseCode.ILLEGAL_PARAMETER.getInfo(), null);
+            }
+            return success(agentDrawAdminService.getDrawConfig(configId));
+        } catch (Exception e) {
+            log.error("获取流程图配置失败", e);
+            return fail(ResponseCode.UN_ERROR, ResponseCode.UN_ERROR.getInfo(), null);
+        }
     }
 
     @Override
     @DeleteMapping("/delete-config/{configId}")
     public Response<String> deleteDrawConfig(@PathVariable String configId) {
-//        try {
-//            log.info("删除流程图配置请求，configId: {}", configId);
-//
-//            if (!StringUtils.hasText(configId)) {
-//                return Response.<String>builder()
-//                        .code(ResponseCode.ILLEGAL_PARAMETER.getCode())
-//                        .info("配置ID不能为空")
-//                        .build();
-//            }
-//
-//            int result = aiAgentDrawConfigDao.deleteByConfigId(configId);
-//
-//            if (result > 0) {
-//                return Response.<String>builder()
-//                        .code(ResponseCode.SUCCESS.getCode())
-//                        .info(ResponseCode.SUCCESS.getInfo())
-//                        .data("删除成功")
-//                        .build();
-//            } else {
-//                return Response.<String>builder()
-//                        .code(ResponseCode.UN_ERROR.getCode())
-//                        .info("删除失败，配置不存在")
-//                        .build();
-//            }
-//
-//        } catch (Exception e) {
-//            log.error("删除流程图配置失败", e);
-//            return Response.<String>builder()
-//                    .code(ResponseCode.UN_ERROR.getCode())
-//                    .info("删除失败：" + e.getMessage())
-//                    .build();
-//        }
-        return null;
+        try {
+            log.info("删除流程图配置请求，configId: {}", configId);
+
+            if (StringUtils.isEmpty(configId)) {
+                return fail(ResponseCode.ILLEGAL_PARAMETER, ResponseCode.ILLEGAL_PARAMETER.getInfo(), null);
+            }
+
+            return agentDrawAdminService.deleteByConfigId(configId) ? success("删除成功") :
+                    fail(ResponseCode.UN_ERROR, ResponseCode.UN_ERROR.getInfo(), "删除失败");
+        } catch (Exception e) {
+            log.error("删除流程图配置失败", e);
+            return fail(ResponseCode.UN_ERROR, "删除失败：" + e.getMessage() , null);
+        }
+    }
+
+    private <T> Response<T> success(T data) {
+        return Response.<T>builder()
+                .code(ResponseCode.SUCCESS.getCode())
+                .info(ResponseCode.SUCCESS.getInfo())
+                .data(data)
+                .build();
+    }
+
+    private <T> Response<T> fail(ResponseCode code, String info, T data) {
+        return Response.<T>builder()
+                .code(code.getCode())
+                .info(info)
+                .data(data)
+                .build();
     }
 }

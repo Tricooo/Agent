@@ -24,4 +24,6 @@ public interface IAgentRepository extends IAggregateRepository<AiAgentAggregate,
     List<AiAgentDTO> queryAvailableAgents();
 
     boolean saveFlowConfig(List<AiAgentClientFlowConfigVO> aiAgentClientFlowConfigs);
+
+    boolean removeByAggregateId(String agentId);
 }

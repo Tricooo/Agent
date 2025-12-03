@@ -21,6 +21,7 @@ public class MybatisPlusFillHandler implements MetaObjectHandler {
 
     private final static String CREATE_TIME = "createTime";
     private final static String UPDATE_TIME = "updateTime";
+    private final static String STATUS = "status";
 
     /**
      * 插入元对象字段填充（用于插入时对公共字段的填充）
@@ -30,6 +31,7 @@ public class MybatisPlusFillHandler implements MetaObjectHandler {
     @Override
     public void insertFill(MetaObject metaObject) {
         this.setFieldValByName(CREATE_TIME, LocalDateTime.now(), metaObject);
+        this.setFieldValByName(STATUS, 1, metaObject);
     }
 
     /**

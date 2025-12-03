@@ -66,7 +66,7 @@ public class AiAgentDrawConfig {
     /**
      * 状态(0:禁用,1:启用)
      */
-    @TableLogic
+    @TableField(fill = FieldFill.INSERT)
     private Integer status;
 
     /**

@@ -49,6 +49,8 @@ public class AiAgentFlowConfig {
 
     private String stepPrompt;
 
+    private int status;
+
     /**
      * 创建时间
      */

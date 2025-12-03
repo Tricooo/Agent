@@ -16,27 +16,6 @@ import java.util.List;
 public interface IAiAgentFlowConfigDao extends BaseMapper<AiAgentFlowConfig> {
 
     /**
-     * 插入智能体-客户端关联配置
-     * @param aiAgentFlowConfig 智能体-客户端关联配置对象
-     * @return 影响行数
-     */
-    int insert(AiAgentFlowConfig aiAgentFlowConfig);
-
-    /**
-     * 根据ID更新智能体-客户端关联配置
-     * @param aiAgentFlowConfig 智能体-客户端关联配置对象
-     * @return 影响行数
-     */
-    int updateById(AiAgentFlowConfig aiAgentFlowConfig);
-
-    /**
-     * 根据ID删除智能体-客户端关联配置
-     * @param id 主键ID
-     * @return 影响行数
-     */
-    int deleteById(Long id);
-
-    /**
      * 根据智能体ID删除关联配置
      * @param agentId 智能体ID
      * @return 影响行数

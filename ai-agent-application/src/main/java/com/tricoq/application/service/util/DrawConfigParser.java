@@ -16,6 +16,7 @@ import org.apache.commons.collections4.MapUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -83,40 +84,50 @@ public class DrawConfigParser {
 
         return clientNodes.stream().map(clientNode -> {
             String clientNodeId = clientNode.id();
-            Map<String, List<String>> type2NodeIds = extractType2IdsMap(fromMap, clientNodeId, exceptClientNodeMap);
+            Map<String, List<DrawGraphDTO.NodeDTO>> type2Nodes = extractType2IdsMap(fromMap, clientNodeId, exceptClientNodeMap);
 
-            List<String> modelIds = type2NodeIds.get(DrawConstants.NodeTypeConstants.MODEL);
-            if (modelIds == null || modelIds.size() != 1) {
+            List<DrawGraphDTO.NodeDTO> models = type2Nodes.get(DrawConstants.NodeTypeConstants.MODEL);
+            if (models == null || models.size() != 1) {
                 throw new IllegalArgumentException(ResponseCode.ILLEGAL_PARAMETER.getCode());
             }
-            String modelId = modelIds.get(0);
-            Map<String, List<String>> model2NodeIds = extractType2IdsMap(fromMap, modelId, exceptClientNodeMap);
+            DrawGraphDTO.NodeDTO model = models.get(0);
+            Map<String, List<DrawGraphDTO.NodeDTO>> type2ModelRelationNodes = extractType2IdsMap(fromMap, model.id(), exceptClientNodeMap);
+            List<String> mcpIds = new ArrayList<>();
+            if(MapUtils.isNotEmpty(type2ModelRelationNodes)){
+                List<DrawGraphDTO.NodeDTO> mcpRelationNodes = type2ModelRelationNodes.get(DrawConstants.NodeTypeConstants.TOOL_MCP);
+                mcpIds.addAll(mcpRelationNodes.stream().map(DrawGraphDTO.NodeDTO::extractNodeIds).toList());
+            }
 
             Map<String, String> inputsValues = clientNode.inputsValues();
             String clientId = Optional.ofNullable(inputsValues.get("clientId"))
                     .orElseThrow(() -> new IllegalArgumentException(ResponseCode.ILLEGAL_PARAMETER.getCode()));
             return AiClientAggregate.restore(clientId, null, null,
                     AiClientModelVO.builder()
-                            .modelId(modelId)
-                            .toolMcpIds(model2NodeIds.get(DrawConstants.NodeTypeConstants.TOOL_MCP))
+                            .modelId(model.extractNodeIds())
+                            .toolMcpIds(mcpIds)
                             .build(),
                     configId,
-                    type2NodeIds.get(DrawConstants.NodeTypeConstants.PROMPT),
-                    type2NodeIds.get(DrawConstants.NodeTypeConstants.TOOL_MCP),
-                    type2NodeIds.get(DrawConstants.NodeTypeConstants.ADVISOR)
+                    type2Nodes.getOrDefault(DrawConstants.NodeTypeConstants.PROMPT,Collections.emptyList())
+                            .stream().filter(Objects::nonNull).map(DrawGraphDTO.NodeDTO::extractNodeIds).toList(),
+                    type2Nodes.getOrDefault(DrawConstants.NodeTypeConstants.TOOL_MCP,Collections.emptyList())
+                            .stream().filter(Objects::nonNull).map(DrawGraphDTO.NodeDTO::extractNodeIds).toList(),
+                    type2Nodes.getOrDefault(DrawConstants.NodeTypeConstants.ADVISOR,Collections.emptyList())
+                            .stream().filter(Objects::nonNull).map(DrawGraphDTO.NodeDTO::extractNodeIds).toList()
             );
         }).toList();
     }
 
-    private Map<String, List<String>> extractType2IdsMap(Map<String, List<DrawGraphDTO.EdgeDTO>> fromMap,
+    private Map<String, List<DrawGraphDTO.NodeDTO>> extractType2IdsMap(Map<String, List<DrawGraphDTO.EdgeDTO>> fromMap,
                                                          String clientNodeId,
                                                          Map<String, DrawGraphDTO.NodeDTO> exceptClientNodeMap) {
         List<DrawGraphDTO.EdgeDTO> clientLines = fromMap.get(clientNodeId);
+        if(CollectionUtils.isEmpty(clientLines)) {
+            return Collections.emptyMap();
+        }
         return clientLines.stream()
                 .map(line -> exceptClientNodeMap.get(line.to()))
                 .filter(Objects::nonNull)
-                .collect(Collectors.groupingBy(DrawGraphDTO.NodeDTO::type,
-                        Collectors.mapping(DrawGraphDTO.NodeDTO::extractNodeIds, Collectors.toList())));
+                .collect(Collectors.groupingBy(DrawGraphDTO.NodeDTO::type));
     }
 
     public AiAgentAggregate buildAgent(String agentId, String configData) {
@@ -170,11 +181,21 @@ public class DrawConfigParser {
         data.put("agentId", agentId);
         requireNonBlank(data, "clientId", "sequence");
 
-        AiAgentClientFlowConfigVO vo = OBJECT_MAPPER.convertValue(data, AiAgentClientFlowConfigVO.class);
-        if (vo.getSequence() == null) {
+        int sequence;
+        try {
+            sequence = Integer.parseInt(data.get("sequence"));
+        } catch (NumberFormatException ex) {
             throw new IllegalArgumentException("sequence 非法: " + data.get("sequence"));
         }
-        return vo;
+
+        return AiAgentClientFlowConfigVO.builder()
+                .agentId(agentId)
+                .clientId(data.get("clientId"))
+                .clientName(data.get("clientName"))
+                .clientType(data.get("clientType"))
+                .sequence(sequence)
+                .stepPrompt(data.get("stepPrompt"))
+                .build();
     }
 
     private void requireNonBlank(Map<String, String> data, String... keys) {
