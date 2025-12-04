@@ -18,20 +18,6 @@ import java.util.List;
 public interface IAiClientModelDao extends BaseMapper<AiClientModel> {
 
     /**
-     * 插入聊天模型配置
-     * @param aiClientModel 聊天模型配置对象
-     * @return 影响行数
-     */
-    int insert(AiClientModel aiClientModel);
-
-    /**
-     * 根据ID更新聊天模型配置
-     * @param aiClientModel 聊天模型配置对象
-     * @return 影响行数
-     */
-    int updateById(AiClientModel aiClientModel);
-
-    /**
      * 根据模型ID更新聊天模型配置
      * @param aiClientModel 聊天模型配置对象
      * @return 影响行数
@@ -39,25 +25,11 @@ public interface IAiClientModelDao extends BaseMapper<AiClientModel> {
     int updateByModelId(AiClientModel aiClientModel);
 
     /**
-     * 根据ID删除聊天模型配置
-     * @param id 主键ID
-     * @return 影响行数
-     */
-    int deleteById(Long id);
-
-    /**
      * 根据模型ID删除聊天模型配置
      * @param modelId 模型ID
      * @return 影响行数
      */
     int deleteByModelId(String modelId);
-
-    /**
-     * 根据ID查询聊天模型配置
-     * @param id 主键ID
-     * @return 聊天模型配置对象
-     */
-    AiClientModel queryById(Long id);
 
     /**
      * 根据模型ID查询聊天模型配置

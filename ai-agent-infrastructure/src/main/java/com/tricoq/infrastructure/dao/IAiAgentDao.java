@@ -16,20 +16,6 @@ import java.util.List;
 public interface IAiAgentDao extends BaseMapper<AiAgent> {
 
     /**
-     * 插入AI智能体配置
-     * @param aiAgent AI智能体配置对象
-     * @return 影响行数
-     */
-    int insert(AiAgent aiAgent);
-
-    /**
-     * 根据ID更新AI智能体配置
-     * @param aiAgent AI智能体配置对象
-     * @return 影响行数
-     */
-    int updateById(AiAgent aiAgent);
-
-    /**
      * 根据智能体ID更新AI智能体配置
      * @param aiAgent AI智能体配置对象
      * @return 影响行数
@@ -37,25 +23,11 @@ public interface IAiAgentDao extends BaseMapper<AiAgent> {
     int updateByAgentId(AiAgent aiAgent);
 
     /**
-     * 根据ID删除AI智能体配置
-     * @param id 主键ID
-     * @return 影响行数
-     */
-    int deleteById(Long id);
-
-    /**
      * 根据智能体ID删除AI智能体配置
      * @param agentId 智能体ID
      * @return 影响行数
      */
     int deleteByAgentId(String agentId);
-
-    /**
-     * 根据ID查询AI智能体配置
-     * @param id 主键ID
-     * @return AI智能体配置对象
-     */
-    AiAgent queryById(Long id);
 
     /**
      * 根据智能体ID查询AI智能体配置

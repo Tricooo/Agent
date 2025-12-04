@@ -22,25 +22,11 @@ public interface IAiAgentDrawConfigDao extends BaseMapper<AiAgentDrawConfig> {
     int updateByConfigId(AiAgentDrawConfig aiAgentDrawConfig);
 
     /**
-     * 根据ID删除拖拉拽配置
-     * @param id 主键ID
-     * @return 影响行数
-     */
-    int deleteById(Long id);
-
-    /**
      * 根据配置ID删除拖拉拽配置
      * @param configId 配置ID
      * @return 影响行数
      */
     int deleteByConfigId(String configId);
-
-    /**
-     * 根据ID查询拖拉拽配置
-     * @param id 主键ID
-     * @return 拖拉拽配置对象
-     */
-    AiAgentDrawConfig queryById(Long id);
 
     /**
      * 根据配置ID查询拖拉拽配置

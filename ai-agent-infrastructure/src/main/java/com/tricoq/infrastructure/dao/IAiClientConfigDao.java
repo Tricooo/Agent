@@ -19,22 +19,6 @@ import java.util.List;
 public interface IAiClientConfigDao extends BaseMapper<AiClientConfig> {
 
     /**
-     * 插入AI客户端配置
-     *
-     * @param aiClientConfig AI客户端配置对象
-     * @return 影响行数
-     */
-    int insert(AiClientConfig aiClientConfig);
-
-    /**
-     * 根据ID更新AI客户端配置
-     *
-     * @param aiClientConfig AI客户端配置对象
-     * @return 影响行数
-     */
-    int updateById(AiClientConfig aiClientConfig);
-
-    /**
      * 根据源ID更新AI客户端配置
      *
      * @param aiClientConfig AI客户端配置对象
@@ -43,28 +27,12 @@ public interface IAiClientConfigDao extends BaseMapper<AiClientConfig> {
     int updateBySourceId(AiClientConfig aiClientConfig);
 
     /**
-     * 根据ID删除AI客户端配置
-     *
-     * @param id 主键ID
-     * @return 影响行数
-     */
-    int deleteById(Long id);
-
-    /**
      * 根据源ID删除AI客户端配置
      *
      * @param sourceId 源ID
      * @return 影响行数
      */
     int deleteBySourceId(String sourceId);
-
-    /**
-     * 根据ID查询AI客户端配置
-     *
-     * @param id 主键ID
-     * @return AI客户端配置对象
-     */
-    AiClientConfig queryById(Long id);
 
     /**
      * 根据源ID查询AI客户端配置

@@ -12,24 +12,6 @@
         <result column="update_time" property="updateTime"/>
     </resultMap>
 
-    <insert id="insert" parameterType="com.tricoq.infrastructure.dao.po.AiClientRagOrder" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO ai_client_rag_order (
-            rag_id, rag_name, knowledge_tag, status, create_time, update_time
-        ) VALUES (
-            #{ragId}, #{ragName}, #{knowledgeTag}, #{status}, #{createTime}, #{updateTime}
-        )
-    </insert>
-
-    <update id="updateById" parameterType="com.tricoq.infrastructure.dao.po.AiClientRagOrder">
-        UPDATE ai_client_rag_order SET
-            rag_id = #{ragId},
-            rag_name = #{ragName},
-            knowledge_tag = #{knowledgeTag},
-            status = #{status},
-            update_time = #{updateTime}
-        WHERE id = #{id}
-    </update>
-
     <update id="updateByRagId" parameterType="com.tricoq.infrastructure.dao.po.AiClientRagOrder">
         UPDATE ai_client_rag_order SET
             rag_name = #{ragName},
@@ -39,19 +21,9 @@
         WHERE rag_id = #{ragId}
     </update>
 
-    <delete id="deleteById" parameterType="java.lang.Long">
-        DELETE FROM ai_client_rag_order WHERE id = #{id}
-    </delete>
-
     <delete id="deleteByRagId" parameterType="java.lang.String">
         DELETE FROM ai_client_rag_order WHERE rag_id = #{ragId}
     </delete>
-
-    <select id="queryById" parameterType="java.lang.Long" resultMap="AiClientRagOrderMap">
-        SELECT id, rag_id, rag_name, knowledge_tag, status, create_time, update_time
-        FROM ai_client_rag_order
-        WHERE id = #{id}
-    </select>
 
     <select id="queryByRagId" parameterType="java.lang.String" resultMap="AiClientRagOrderMap">
         SELECT id, rag_id, rag_name, knowledge_tag, status, create_time, update_time

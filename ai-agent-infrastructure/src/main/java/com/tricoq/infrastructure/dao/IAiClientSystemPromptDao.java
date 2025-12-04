@@ -25,19 +25,9 @@ public interface IAiClientSystemPromptDao extends BaseMapper<AiClientSystemPromp
     int updateByPromptId(AiClientSystemPrompt aiClientSystemPrompt);
 
     /**
-     * 根据ID删除系统提示词配置
-     */
-    int deleteById(Long id);
-
-    /**
      * 根据提示词ID删除系统提示词配置
      */
     int deleteByPromptId(String promptId);
-
-    /**
-     * 根据ID查询系统提示词配置
-     */
-    AiClientSystemPrompt queryById(Long id);
 
     /**
      * 根据提示词ID查询系统提示词配置

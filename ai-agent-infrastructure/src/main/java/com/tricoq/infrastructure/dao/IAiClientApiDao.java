@@ -17,20 +17,6 @@ import java.util.List;
 public interface IAiClientApiDao extends BaseMapper<AiClientApi> {
 
     /**
-     * 插入AI客户端API配置
-     * @param aiClientApi AI客户端API配置对象
-     * @return 影响行数
-     */
-    int insert(AiClientApi aiClientApi);
-
-    /**
-     * 根据ID更新AI客户端API配置
-     * @param aiClientApi AI客户端API配置对象
-     * @return 影响行数
-     */
-    int updateById(AiClientApi aiClientApi);
-
-    /**
      * 根据API ID更新AI客户端API配置
      * @param aiClientApi AI客户端API配置对象
      * @return 影响行数
@@ -38,25 +24,11 @@ public interface IAiClientApiDao extends BaseMapper<AiClientApi> {
     int updateByApiId(AiClientApi aiClientApi);
 
     /**
-     * 根据ID删除AI客户端API配置
-     * @param id 主键ID
-     * @return 影响行数
-     */
-    int deleteById(Long id);
-
-    /**
      * 根据API ID删除AI客户端API配置
      * @param apiId API ID
      * @return 影响行数
      */
     int deleteByApiId(String apiId);
-
-    /**
-     * 根据ID查询AI客户端API配置
-     * @param id 主键ID
-     * @return AI客户端API配置对象
-     */
-    AiClientApi queryById(Long id);
 
     /**
      * 根据API ID查询AI客户端API配置

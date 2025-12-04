@@ -23,13 +23,6 @@ public interface IAiAgentFlowConfigDao extends BaseMapper<AiAgentFlowConfig> {
     int deleteByAgentId(String agentId);
 
     /**
-     * 根据ID查询智能体-客户端关联配置
-     * @param id 主键ID
-     * @return 智能体-客户端关联配置对象
-     */
-    AiAgentFlowConfig queryById(Long id);
-
-    /**
      * 根据智能体ID查询关联配置列表
      * @param agentId 智能体ID
      * @return 智能体-客户端关联配置列表

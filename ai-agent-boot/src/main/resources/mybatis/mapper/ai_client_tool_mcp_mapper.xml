@@ -14,26 +14,6 @@
         <result column="update_time" property="updateTime"/>
     </resultMap>
 
-    <insert id="insert" parameterType="com.tricoq.infrastructure.dao.po.AiClientToolMcp" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO ai_client_tool_mcp (
-            mcp_id, mcp_name, transport_type, transport_config, request_timeout, status, create_time, update_time
-        ) VALUES (
-            #{mcpId}, #{mcpName}, #{transportType}, #{transportConfig}, #{requestTimeout}, #{status}, #{createTime}, #{updateTime}
-        )
-    </insert>
-
-    <update id="updateById" parameterType="com.tricoq.infrastructure.dao.po.AiClientToolMcp">
-        UPDATE ai_client_tool_mcp SET
-            mcp_id = #{mcpId},
-            mcp_name = #{mcpName},
-            transport_type = #{transportType},
-            transport_config = #{transportConfig},
-            request_timeout = #{requestTimeout},
-            status = #{status},
-            update_time = #{updateTime}
-        WHERE id = #{id}
-    </update>
-
     <update id="updateByMcpId" parameterType="com.tricoq.infrastructure.dao.po.AiClientToolMcp">
         UPDATE ai_client_tool_mcp SET
             mcp_name = #{mcpName},
@@ -45,19 +25,9 @@
         WHERE mcp_id = #{mcpId}
     </update>
 
-    <delete id="deleteById" parameterType="java.lang.Long">
-        DELETE FROM ai_client_tool_mcp WHERE id = #{id}
-    </delete>
-
     <delete id="deleteByMcpId" parameterType="java.lang.String">
         DELETE FROM ai_client_tool_mcp WHERE mcp_id = #{mcpId}
     </delete>
-
-    <select id="queryById" parameterType="java.lang.Long" resultMap="AiClientToolMcpMap">
-        SELECT id, mcp_id, mcp_name, transport_type, transport_config, request_timeout, status, create_time, update_time
-        FROM ai_client_tool_mcp
-        WHERE id = #{id}
-    </select>
 
     <select id="queryByMcpId" parameterType="java.lang.String" resultMap="AiClientToolMcpMap">
         SELECT id, mcp_id, mcp_name, transport_type, transport_config, request_timeout, status, create_time, update_time

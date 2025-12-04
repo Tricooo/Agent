@@ -16,20 +16,6 @@ import java.util.List;
 public interface IAiClientRagOrderDao extends BaseMapper<AiClientRagOrder> {
 
     /**
-     * 插入知识库配置
-     * @param aiClientRagOrder 知识库配置对象
-     * @return 影响行数
-     */
-    int insert(AiClientRagOrder aiClientRagOrder);
-
-    /**
-     * 根据ID更新知识库配置
-     * @param aiClientRagOrder 知识库配置对象
-     * @return 影响行数
-     */
-    int updateById(AiClientRagOrder aiClientRagOrder);
-
-    /**
      * 根据知识库ID更新知识库配置
      * @param aiClientRagOrder 知识库配置对象
      * @return 影响行数
@@ -37,25 +23,11 @@ public interface IAiClientRagOrderDao extends BaseMapper<AiClientRagOrder> {
     int updateByRagId(AiClientRagOrder aiClientRagOrder);
 
     /**
-     * 根据ID删除知识库配置
-     * @param id 主键ID
-     * @return 影响行数
-     */
-    int deleteById(Long id);
-
-    /**
      * 根据知识库ID删除知识库配置
      * @param ragId 知识库ID
      * @return 影响行数
      */
     int deleteByRagId(String ragId);
-
-    /**
-     * 根据ID查询知识库配置
-     * @param id 主键ID
-     * @return 知识库配置对象
-     */
-    AiClientRagOrder queryById(Long id);
 
     /**
      * 根据知识库ID查询知识库配置

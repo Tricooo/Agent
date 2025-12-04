@@ -16,39 +16,11 @@ import java.util.List;
 public interface IAiAgentTaskScheduleDao extends BaseMapper<AiAgentTaskSchedule> {
 
     /**
-     * 插入智能体任务调度配置
-     * @param aiAgentTaskSchedule 智能体任务调度配置对象
-     * @return 影响行数
-     */
-    int insert(AiAgentTaskSchedule aiAgentTaskSchedule);
-
-    /**
-     * 根据ID更新智能体任务调度配置
-     * @param aiAgentTaskSchedule 智能体任务调度配置对象
-     * @return 影响行数
-     */
-    int updateById(AiAgentTaskSchedule aiAgentTaskSchedule);
-
-    /**
-     * 根据ID删除智能体任务调度配置
-     * @param id 主键ID
-     * @return 影响行数
-     */
-    int deleteById(Long id);
-
-    /**
      * 根据智能体ID删除任务调度配置
      * @param agentId 智能体ID
      * @return 影响行数
      */
     int deleteByAgentId(Long agentId);
-
-    /**
-     * 根据ID查询智能体任务调度配置
-     * @param id 主键ID
-     * @return 智能体任务调度配置对象
-     */
-    AiAgentTaskSchedule queryById(Long id);
 
     /**
      * 根据智能体ID查询任务调度配置列表
