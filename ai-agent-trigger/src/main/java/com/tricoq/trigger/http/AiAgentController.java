@@ -6,10 +6,7 @@ import com.tricoq.api.dto.AiAgentResponseDTO;
 import com.tricoq.api.dto.ArmoryAgentRequestDTO;
 import com.tricoq.api.dto.AutoAgentRequestDTO;
 import com.tricoq.api.response.Response;
-import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
-import com.tricoq.domain.agent.model.dto.AiAgentDTO;
-import com.tricoq.domain.agent.service.IAgentDispatchService;
-import com.tricoq.domain.agent.service.IArmoryService;
+import com.tricoq.application.facade.AgentExecutionFacade;
 import com.tricoq.types.enums.ResponseCode;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -38,9 +35,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AiAgentController implements IAiAgentService {
 
-    private final IAgentDispatchService agentDispatchService;
-
-    private final IArmoryService armoryService;
+    private final AgentExecutionFacade agentExecutionFacade;
 
     @PostMapping("/auto_agent")
     @Override
@@ -52,18 +47,7 @@ public class AiAgentController implements IAiAgentService {
             response.setHeader("Content-Type", "text/event-stream");
             response.setCharacterEncoding("UTF-8");
 
-            ResponseBodyEmitter emitter = new ResponseBodyEmitter(Long.MAX_VALUE);
-
-            ExecuteCommandEntity command = ExecuteCommandEntity.builder()
-                    .agentId(request.getAiAgentId())
-                    .sessionId(request.getSessionId())
-                    .maxSteps(request.getMaxStep())
-                    .userInput(request.getMessage())
-                    .build();
-
-            agentDispatchService.dispatch(command, emitter);
-
-            return emitter;
+            return agentExecutionFacade.autoAgent(request);
         } catch (Exception e) {
             log.error("AutoAgent请求处理异常：{}", e.getMessage(), e);
             ResponseBodyEmitter errorEmitter = new ResponseBodyEmitter();
@@ -94,7 +78,7 @@ public class AiAgentController implements IAiAgentService {
             }
 
             // 调用装配服务
-            armoryService.acceptArmoryAgent(request.getAgentId());
+            agentExecutionFacade.armoryAgent(request);
 
             log.info("装配智能体成功，agentId：{}", request.getAgentId());
             return Response.<Boolean>builder()
@@ -120,22 +104,7 @@ public class AiAgentController implements IAiAgentService {
         log.info("查询可用智能体列表请求开始");
 
         try {
-            // 调用装配服务查询可用智能体
-            List<AiAgentDTO> aiAgentVOList = armoryService.queryAvailableAgents();
-
-            // 转换为响应DTO
-            List<AiAgentResponseDTO> responseList = new ArrayList<>();
-            for (AiAgentDTO aiAgentVO : aiAgentVOList) {
-                AiAgentResponseDTO responseDTO = AiAgentResponseDTO.builder()
-                        .agentId(aiAgentVO.getAgentId())
-                        .agentName(aiAgentVO.getAgentName())
-                        .description(aiAgentVO.getDescription())
-                        .channel(aiAgentVO.getChannel())
-                        .strategy(aiAgentVO.getStrategy())
-                        .status(aiAgentVO.getStatus())
-                        .build();
-                responseList.add(responseDTO);
-            }
+            List<AiAgentResponseDTO> responseList = agentExecutionFacade.queryAvailableAgents();
 
             log.info("查询可用智能体列表成功，共{}个智能体", responseList.size());
             return Response.<List<AiAgentResponseDTO>>builder()
