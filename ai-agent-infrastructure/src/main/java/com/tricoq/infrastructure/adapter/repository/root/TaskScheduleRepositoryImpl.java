@@ -21,11 +21,9 @@ public class TaskScheduleRepositoryImpl
         extends MpAggregateRepository<AiAgentTaskScheduleDTO, AiAgentTaskSchedule, Long,Long, IAiAgentTaskScheduleDao>
         implements ITaskScheduleRepository {
 
-    private final IAiAgentTaskScheduleDao aiAgentTaskScheduleDao;
-
     @Override
     public List<AiAgentTaskScheduleDTO> queryAllValidTaskSchedule() {
-        List<AiAgentTaskSchedule> schedules = aiAgentTaskScheduleDao.queryAllValidTaskSchedule();
+        List<AiAgentTaskSchedule> schedules = this.baseMapper.queryAllValidTaskSchedule();
         if (schedules.isEmpty()) {
             return List.of();
         }
@@ -40,7 +38,7 @@ public class TaskScheduleRepositoryImpl
 
     @Override
     public List<Long> queryAllInvalidTaskScheduleIds() {
-        return aiAgentTaskScheduleDao.queryAllInvalidTaskScheduleIds();
+        return this.baseMapper.queryAllInvalidTaskScheduleIds();
     }
 
     @Override
@@ -98,6 +96,6 @@ public class TaskScheduleRepositoryImpl
 
     @Override
     protected AiAgentTaskSchedule getByAggregateId(Long aLong) {
-        return aiAgentTaskScheduleDao.queryById(aLong);
+        return this.baseMapper.selectById(aLong);
     }
 }
