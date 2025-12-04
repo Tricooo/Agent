@@ -2,8 +2,8 @@ package com.tricoq.infrastructure.adapter.repository;
 
 import com.tricoq.domain.agent.adapter.repository.IAiClientToolMcpRepository;
 import com.tricoq.domain.agent.model.dto.AiClientToolMcpDTO;
-import com.tricoq.infrastructure.dao.IAiClientToolMcpDao;
 import com.tricoq.infrastructure.dao.po.AiClientToolMcp;
+import com.tricoq.infrastructure.support.AiClientToolMcpDaoSupport;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 import org.springframework.util.StringUtils;
@@ -14,12 +14,13 @@ import java.util.Objects;
 
 /**
  * MCP 客户端配置仓储实现
+ * @author trico qiang
  */
 @Repository
 @RequiredArgsConstructor
 public class AiClientToolMcpRepositoryImpl implements IAiClientToolMcpRepository {
 
-    private final IAiClientToolMcpDao aiClientToolMcpDao;
+    private final AiClientToolMcpDaoSupport toolMcpDaoSupport;
 
     @Override
     public boolean insert(AiClientToolMcpDTO mcp) {
@@ -30,7 +31,7 @@ public class AiClientToolMcpRepositoryImpl implements IAiClientToolMcpRepository
         LocalDateTime now = LocalDateTime.now();
         po.setCreateTime(now);
         po.setUpdateTime(now);
-        return aiClientToolMcpDao.insert(po) > 0;
+        return toolMcpDaoSupport.save(po);
     }
 
     @Override
@@ -41,7 +42,7 @@ public class AiClientToolMcpRepositoryImpl implements IAiClientToolMcpRepository
         AiClientToolMcp po = toPo(mcp);
         po.setId(mcp.getId());
         po.setUpdateTime(LocalDateTime.now());
-        return aiClientToolMcpDao.updateById(po) > 0;
+        return toolMcpDaoSupport.updateById(po);
     }
 
     @Override
@@ -51,17 +52,17 @@ public class AiClientToolMcpRepositoryImpl implements IAiClientToolMcpRepository
         }
         AiClientToolMcp po = toPo(mcp);
         po.setUpdateTime(LocalDateTime.now());
-        return aiClientToolMcpDao.updateByMcpId(po) > 0;
+        return toolMcpDaoSupport.getBaseMapper().updateByMcpId(po) > 0;
     }
 
     @Override
     public boolean deleteById(Long id) {
-        return id != null && aiClientToolMcpDao.deleteById(id) > 0;
+        return id != null && toolMcpDaoSupport.removeById(id);
     }
 
     @Override
     public boolean deleteByMcpId(String mcpId) {
-        return StringUtils.hasText(mcpId) && aiClientToolMcpDao.deleteByMcpId(mcpId) > 0;
+        return StringUtils.hasText(mcpId) && toolMcpDaoSupport.getBaseMapper().deleteByMcpId(mcpId) > 0;
     }
 
     @Override
@@ -69,7 +70,7 @@ public class AiClientToolMcpRepositoryImpl implements IAiClientToolMcpRepository
         if (id == null) {
             return null;
         }
-        return toDto(aiClientToolMcpDao.queryById(id));
+        return toDto(toolMcpDaoSupport.getById(id));
     }
 
     @Override
@@ -77,12 +78,12 @@ public class AiClientToolMcpRepositoryImpl implements IAiClientToolMcpRepository
         if (!StringUtils.hasText(mcpId)) {
             return null;
         }
-        return toDto(aiClientToolMcpDao.queryByMcpId(mcpId));
+        return toDto(toolMcpDaoSupport.getBaseMapper().queryByMcpId(mcpId));
     }
 
     @Override
     public List<AiClientToolMcpDTO> queryAll() {
-        return aiClientToolMcpDao.queryAll().stream()
+        return toolMcpDaoSupport.getBaseMapper().queryAll().stream()
                 .map(this::toDto)
                 .filter(Objects::nonNull)
                 .toList();
@@ -93,7 +94,7 @@ public class AiClientToolMcpRepositoryImpl implements IAiClientToolMcpRepository
         if (status == null) {
             return List.of();
         }
-        return aiClientToolMcpDao.queryByStatus(status).stream()
+        return toolMcpDaoSupport.getBaseMapper().queryByStatus(status).stream()
                 .map(this::toDto)
                 .filter(Objects::nonNull)
                 .toList();
@@ -104,7 +105,7 @@ public class AiClientToolMcpRepositoryImpl implements IAiClientToolMcpRepository
         if (!StringUtils.hasText(transportType)) {
             return List.of();
         }
-        return aiClientToolMcpDao.queryByTransportType(transportType).stream()
+        return toolMcpDaoSupport.getBaseMapper().queryByTransportType(transportType).stream()
                 .map(this::toDto)
                 .filter(Objects::nonNull)
                 .toList();
@@ -112,7 +113,7 @@ public class AiClientToolMcpRepositoryImpl implements IAiClientToolMcpRepository
 
     @Override
     public List<AiClientToolMcpDTO> queryEnabledMcps() {
-        return aiClientToolMcpDao.queryEnabledMcps().stream()
+        return toolMcpDaoSupport.getBaseMapper().queryEnabledMcps().stream()
                 .map(this::toDto)
                 .filter(Objects::nonNull)
                 .toList();

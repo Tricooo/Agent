@@ -2,8 +2,8 @@ package com.tricoq.infrastructure.adapter.repository;
 
 import com.tricoq.domain.agent.adapter.repository.IAiClientModelRepository;
 import com.tricoq.domain.agent.model.dto.AiClientModelDTO;
-import com.tricoq.infrastructure.dao.IAiClientModelDao;
 import com.tricoq.infrastructure.dao.po.AiClientModel;
+import com.tricoq.infrastructure.support.AiClientModelDaoSupport;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 import org.springframework.util.StringUtils;
@@ -19,7 +19,7 @@ import java.util.Objects;
 @RequiredArgsConstructor
 public class AiClientModelRepositoryImpl implements IAiClientModelRepository {
 
-    private final IAiClientModelDao aiClientModelDao;
+    private final AiClientModelDaoSupport clientModelDaoSupport;
 
     @Override
     public boolean insert(AiClientModelDTO model) {
@@ -30,7 +30,7 @@ public class AiClientModelRepositoryImpl implements IAiClientModelRepository {
         LocalDateTime now = LocalDateTime.now();
         po.setCreateTime(now);
         po.setUpdateTime(now);
-        return aiClientModelDao.insert(po) > 0;
+        return clientModelDaoSupport.save(po);
     }
 
     @Override
@@ -41,7 +41,7 @@ public class AiClientModelRepositoryImpl implements IAiClientModelRepository {
         AiClientModel po = toPo(model);
         po.setId(model.getId());
         po.setUpdateTime(LocalDateTime.now());
-        return aiClientModelDao.updateById(po) > 0;
+        return clientModelDaoSupport.updateById(po);
     }
 
     @Override
@@ -51,17 +51,17 @@ public class AiClientModelRepositoryImpl implements IAiClientModelRepository {
         }
         AiClientModel po = toPo(model);
         po.setUpdateTime(LocalDateTime.now());
-        return aiClientModelDao.updateByModelId(po) > 0;
+        return clientModelDaoSupport.getBaseMapper().updateByModelId(po) > 0;
     }
 
     @Override
     public boolean deleteById(Long id) {
-        return id != null && aiClientModelDao.deleteById(id) > 0;
+        return id != null && clientModelDaoSupport.removeById(id);
     }
 
     @Override
     public boolean deleteByModelId(String modelId) {
-        return StringUtils.hasText(modelId) && aiClientModelDao.deleteByModelId(modelId) > 0;
+        return StringUtils.hasText(modelId) && clientModelDaoSupport.getBaseMapper().deleteByModelId(modelId) > 0;
     }
 
     @Override
@@ -69,7 +69,7 @@ public class AiClientModelRepositoryImpl implements IAiClientModelRepository {
         if (id == null) {
             return null;
         }
-        return toDto(aiClientModelDao.queryById(id));
+        return toDto(clientModelDaoSupport.getById(id));
     }
 
     @Override
@@ -77,7 +77,7 @@ public class AiClientModelRepositoryImpl implements IAiClientModelRepository {
         if (!StringUtils.hasText(modelId)) {
             return null;
         }
-        return toDto(aiClientModelDao.queryByModelId(modelId));
+        return toDto(clientModelDaoSupport.getBaseMapper().queryByModelId(modelId));
     }
 
     @Override
@@ -85,7 +85,7 @@ public class AiClientModelRepositoryImpl implements IAiClientModelRepository {
         if (!StringUtils.hasText(apiId)) {
             return List.of();
         }
-        return aiClientModelDao.queryByApiId(apiId).stream()
+        return clientModelDaoSupport.getBaseMapper().queryByApiId(apiId).stream()
                 .map(this::toDto)
                 .filter(Objects::nonNull)
                 .toList();
@@ -96,7 +96,7 @@ public class AiClientModelRepositoryImpl implements IAiClientModelRepository {
         if (!StringUtils.hasText(modelType)) {
             return List.of();
         }
-        return aiClientModelDao.queryByModelType(modelType).stream()
+        return clientModelDaoSupport.getBaseMapper().queryByModelType(modelType).stream()
                 .map(this::toDto)
                 .filter(Objects::nonNull)
                 .toList();
@@ -104,7 +104,7 @@ public class AiClientModelRepositoryImpl implements IAiClientModelRepository {
 
     @Override
     public List<AiClientModelDTO> queryEnabledModels() {
-        return aiClientModelDao.queryEnabledModels().stream()
+        return clientModelDaoSupport.getBaseMapper().queryEnabledModels().stream()
                 .map(this::toDto)
                 .filter(Objects::nonNull)
                 .toList();
@@ -112,7 +112,7 @@ public class AiClientModelRepositoryImpl implements IAiClientModelRepository {
 
     @Override
     public List<AiClientModelDTO> queryAll() {
-        return aiClientModelDao.queryAll().stream()
+        return clientModelDaoSupport.getBaseMapper().queryAll().stream()
                 .map(this::toDto)
                 .filter(Objects::nonNull)
                 .toList();

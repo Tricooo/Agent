@@ -1,6 +1,6 @@
 package com.tricoq.domain.agent.service.rag;
 
-import com.tricoq.domain.agent.adapter.repository.IRagRepository;
+import com.tricoq.domain.agent.adapter.repository.IAiClientRagOrderRepository;
 import com.tricoq.domain.agent.model.dto.AiRagOrderDTO;
 import com.tricoq.domain.agent.service.IRagService;
 import jakarta.annotation.Resource;
@@ -30,7 +30,7 @@ public class RagService implements IRagService {
     private PgVectorStore vectorStore;
 
     @Resource
-    private IRagRepository ragRepository;
+    private IAiClientRagOrderRepository ragRepository;
 
     @Override
     public void storeRagFile(String name, String tag, List<MultipartFile> files) {
@@ -48,7 +48,7 @@ public class RagService implements IRagService {
             AiRagOrderDTO aiRagOrderVO = new AiRagOrderDTO();
             aiRagOrderVO.setRagName(name);
             aiRagOrderVO.setKnowledgeTag(tag);
-            ragRepository.createTagOrder(aiRagOrderVO);
+            ragRepository.insert(aiRagOrderVO);
         }
     }
 

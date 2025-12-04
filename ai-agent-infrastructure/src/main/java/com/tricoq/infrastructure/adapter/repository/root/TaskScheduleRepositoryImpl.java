@@ -1,4 +1,4 @@
-package com.tricoq.infrastructure.adapter.repository;
+package com.tricoq.infrastructure.adapter.repository.root;
 
 import com.tricoq.domain.agent.model.dto.AiAgentTaskScheduleDTO;
 import com.tricoq.domain.agent.adapter.repository.ITaskScheduleRepository;

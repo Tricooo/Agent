@@ -2,8 +2,8 @@ package com.tricoq.infrastructure.adapter.repository;
 
 import com.tricoq.domain.agent.adapter.repository.IAiClientSystemPromptRepository;
 import com.tricoq.domain.agent.model.dto.AiClientSystemPromptDTO;
-import com.tricoq.infrastructure.dao.IAiClientSystemPromptDao;
 import com.tricoq.infrastructure.dao.po.AiClientSystemPrompt;
+import com.tricoq.infrastructure.support.AiClientSystemPromptDaoSupport;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 import org.springframework.util.StringUtils;
@@ -14,12 +14,13 @@ import java.util.Objects;
 
 /**
  * 系统提示词仓储实现
+ * @author trico qiang
  */
 @Repository
 @RequiredArgsConstructor
 public class AiClientSystemPromptRepositoryImpl implements IAiClientSystemPromptRepository {
 
-    private final IAiClientSystemPromptDao aiClientSystemPromptDao;
+    private final AiClientSystemPromptDaoSupport systemPromptDaoSupport;
 
     @Override
     public boolean insert(AiClientSystemPromptDTO prompt) {
@@ -30,7 +31,7 @@ public class AiClientSystemPromptRepositoryImpl implements IAiClientSystemPrompt
         LocalDateTime now = LocalDateTime.now();
         po.setCreateTime(now);
         po.setUpdateTime(now);
-        return aiClientSystemPromptDao.insert(po) > 0;
+        return systemPromptDaoSupport.save(po);
     }
 
     @Override
@@ -41,7 +42,7 @@ public class AiClientSystemPromptRepositoryImpl implements IAiClientSystemPrompt
         AiClientSystemPrompt po = toPo(prompt);
         po.setId(prompt.getId());
         po.setUpdateTime(LocalDateTime.now());
-        return aiClientSystemPromptDao.updateById(po) > 0;
+        return systemPromptDaoSupport.updateById(po);
     }
 
     @Override
@@ -51,17 +52,17 @@ public class AiClientSystemPromptRepositoryImpl implements IAiClientSystemPrompt
         }
         AiClientSystemPrompt po = toPo(prompt);
         po.setUpdateTime(LocalDateTime.now());
-        return aiClientSystemPromptDao.updateByPromptId(po) > 0;
+        return systemPromptDaoSupport.getBaseMapper().updateByPromptId(po) > 0;
     }
 
     @Override
     public boolean deleteById(Long id) {
-        return id != null && aiClientSystemPromptDao.deleteById(id) > 0;
+        return id != null && systemPromptDaoSupport.removeById(id);
     }
 
     @Override
     public boolean deleteByPromptId(String promptId) {
-        return StringUtils.hasText(promptId) && aiClientSystemPromptDao.deleteByPromptId(promptId) > 0;
+        return StringUtils.hasText(promptId) && systemPromptDaoSupport.getBaseMapper().deleteByPromptId(promptId) > 0;
     }
 
     @Override
@@ -69,7 +70,7 @@ public class AiClientSystemPromptRepositoryImpl implements IAiClientSystemPrompt
         if (id == null) {
             return null;
         }
-        return toDto(aiClientSystemPromptDao.queryById(id));
+        return toDto(systemPromptDaoSupport.getById(id));
     }
 
     @Override
@@ -77,12 +78,12 @@ public class AiClientSystemPromptRepositoryImpl implements IAiClientSystemPrompt
         if (!StringUtils.hasText(promptId)) {
             return null;
         }
-        return toDto(aiClientSystemPromptDao.queryByPromptId(promptId));
+        return toDto(systemPromptDaoSupport.getBaseMapper().queryByPromptId(promptId));
     }
 
     @Override
     public List<AiClientSystemPromptDTO> queryAll() {
-        return aiClientSystemPromptDao.queryAll().stream()
+        return systemPromptDaoSupport.getBaseMapper().queryAll().stream()
                 .map(this::toDto)
                 .filter(Objects::nonNull)
                 .toList();
@@ -90,7 +91,7 @@ public class AiClientSystemPromptRepositoryImpl implements IAiClientSystemPrompt
 
     @Override
     public List<AiClientSystemPromptDTO> queryEnabledPrompts() {
-        return aiClientSystemPromptDao.queryEnabledPrompts().stream()
+        return systemPromptDaoSupport.getBaseMapper().queryEnabledPrompts().stream()
                 .map(this::toDto)
                 .filter(Objects::nonNull)
                 .toList();
@@ -101,7 +102,7 @@ public class AiClientSystemPromptRepositoryImpl implements IAiClientSystemPrompt
         if (!StringUtils.hasText(promptName)) {
             return List.of();
         }
-        return aiClientSystemPromptDao.queryByPromptName(promptName).stream()
+        return systemPromptDaoSupport.getBaseMapper().queryByPromptName(promptName).stream()
                 .map(this::toDto)
                 .filter(Objects::nonNull)
                 .toList();

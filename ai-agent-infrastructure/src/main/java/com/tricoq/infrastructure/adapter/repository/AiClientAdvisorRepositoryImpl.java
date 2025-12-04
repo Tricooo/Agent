@@ -2,8 +2,8 @@ package com.tricoq.infrastructure.adapter.repository;
 
 import com.tricoq.domain.agent.adapter.repository.IAiClientAdvisorRepository;
 import com.tricoq.domain.agent.model.dto.AiClientAdvisorDTO;
-import com.tricoq.infrastructure.dao.IAiClientAdvisorDao;
 import com.tricoq.infrastructure.dao.po.AiClientAdvisor;
+import com.tricoq.infrastructure.support.AiClientAdvisorDaoSupport;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 import org.springframework.util.StringUtils;
@@ -14,12 +14,13 @@ import java.util.Objects;
 
 /**
  * 顾问配置仓储实现
+ * @author trico qiang
  */
 @Repository
 @RequiredArgsConstructor
 public class AiClientAdvisorRepositoryImpl implements IAiClientAdvisorRepository {
 
-    private final IAiClientAdvisorDao aiClientAdvisorDao;
+    private final AiClientAdvisorDaoSupport advisorDaoSupport;
 
     @Override
     public boolean insert(AiClientAdvisorDTO advisor) {
@@ -30,7 +31,7 @@ public class AiClientAdvisorRepositoryImpl implements IAiClientAdvisorRepository
         LocalDateTime now = LocalDateTime.now();
         po.setCreateTime(now);
         po.setUpdateTime(now);
-        return aiClientAdvisorDao.insert(po) > 0;
+        return advisorDaoSupport.save(po);
     }
 
     @Override
@@ -41,7 +42,7 @@ public class AiClientAdvisorRepositoryImpl implements IAiClientAdvisorRepository
         AiClientAdvisor po = toPo(advisor);
         po.setId(advisor.getId());
         po.setUpdateTime(LocalDateTime.now());
-        return aiClientAdvisorDao.updateById(po) > 0;
+        return advisorDaoSupport.updateById(po);
     }
 
     @Override
@@ -51,17 +52,17 @@ public class AiClientAdvisorRepositoryImpl implements IAiClientAdvisorRepository
         }
         AiClientAdvisor po = toPo(advisor);
         po.setUpdateTime(LocalDateTime.now());
-        return aiClientAdvisorDao.updateByAdvisorId(po) > 0;
+        return advisorDaoSupport.getBaseMapper().updateByAdvisorId(po) > 0;
     }
 
     @Override
     public boolean deleteById(Long id) {
-        return id != null && aiClientAdvisorDao.deleteById(id) > 0;
+        return id != null && advisorDaoSupport.removeById(id);
     }
 
     @Override
     public boolean deleteByAdvisorId(String advisorId) {
-        return StringUtils.hasText(advisorId) && aiClientAdvisorDao.deleteByAdvisorId(advisorId) > 0;
+        return StringUtils.hasText(advisorId) && advisorDaoSupport.getBaseMapper().deleteByAdvisorId(advisorId) > 0;
     }
 
     @Override
@@ -69,7 +70,7 @@ public class AiClientAdvisorRepositoryImpl implements IAiClientAdvisorRepository
         if (id == null) {
             return null;
         }
-        return toDto(aiClientAdvisorDao.queryById(id));
+        return toDto(advisorDaoSupport.getById(id));
     }
 
     @Override
@@ -77,7 +78,7 @@ public class AiClientAdvisorRepositoryImpl implements IAiClientAdvisorRepository
         if (!StringUtils.hasText(advisorId)) {
             return null;
         }
-        return toDto(aiClientAdvisorDao.queryByAdvisorId(advisorId));
+        return toDto(advisorDaoSupport.getBaseMapper().queryByAdvisorId(advisorId));
     }
 
     @Override
@@ -85,7 +86,7 @@ public class AiClientAdvisorRepositoryImpl implements IAiClientAdvisorRepository
         if (status == null) {
             return List.of();
         }
-        return aiClientAdvisorDao.queryByStatus(status).stream()
+        return advisorDaoSupport.getBaseMapper().queryByStatus(status).stream()
                 .map(this::toDto)
                 .filter(Objects::nonNull)
                 .toList();
@@ -96,7 +97,7 @@ public class AiClientAdvisorRepositoryImpl implements IAiClientAdvisorRepository
         if (!StringUtils.hasText(advisorType)) {
             return List.of();
         }
-        return aiClientAdvisorDao.queryByAdvisorType(advisorType).stream()
+        return advisorDaoSupport.getBaseMapper().queryByAdvisorType(advisorType).stream()
                 .map(this::toDto)
                 .filter(Objects::nonNull)
                 .toList();
@@ -104,7 +105,7 @@ public class AiClientAdvisorRepositoryImpl implements IAiClientAdvisorRepository
 
     @Override
     public List<AiClientAdvisorDTO> queryAll() {
-        return aiClientAdvisorDao.queryAll().stream()
+        return advisorDaoSupport.getBaseMapper().queryAll().stream()
                 .map(this::toDto)
                 .filter(Objects::nonNull)
                 .toList();

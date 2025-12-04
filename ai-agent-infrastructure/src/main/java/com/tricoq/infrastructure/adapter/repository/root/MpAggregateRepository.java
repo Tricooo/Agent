@@ -1,4 +1,4 @@
-package com.tricoq.infrastructure.adapter.repository;
+package com.tricoq.infrastructure.adapter.repository.root;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;

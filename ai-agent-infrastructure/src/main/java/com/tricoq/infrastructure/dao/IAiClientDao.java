@@ -19,20 +19,6 @@ import java.util.Set;
 public interface IAiClientDao extends BaseMapper<AiClient> {
 
     /**
-     * 插入AI客户端配置
-     * @param aiClient AI客户端配置对象
-     * @return 影响行数
-     */
-    int insert(AiClient aiClient);
-
-    /**
-     * 根据ID更新AI客户端配置
-     * @param aiClient AI客户端配置对象
-     * @return 影响行数
-     */
-    int updateById(AiClient aiClient);
-
-    /**
      * 根据客户端ID更新AI客户端配置
      * @param aiClient AI客户端配置对象
      * @return 影响行数
@@ -40,25 +26,11 @@ public interface IAiClientDao extends BaseMapper<AiClient> {
     int updateByClientId(AiClient aiClient);
 
     /**
-     * 根据ID删除AI客户端配置
-     * @param id 主键ID
-     * @return 影响行数
-     */
-    int deleteById(Long id);
-
-    /**
      * 根据客户端ID删除AI客户端配置
      * @param clientId 客户端ID
      * @return 影响行数
      */
     int deleteByClientId(String clientId);
-
-    /**
-     * 根据ID查询AI客户端配置
-     * @param id 主键ID
-     * @return AI客户端配置对象
-     */
-    AiClient queryById(Long id);
 
     /**
      * 根据客户端ID查询AI客户端配置

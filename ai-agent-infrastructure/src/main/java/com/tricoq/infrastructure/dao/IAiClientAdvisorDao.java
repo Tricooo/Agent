@@ -18,20 +18,6 @@ import java.util.Set;
 public interface IAiClientAdvisorDao extends BaseMapper<AiClientAdvisor> {
 
     /**
-     * 插入顾问配置
-     * @param aiClientAdvisor 顾问配置对象
-     * @return 影响行数
-     */
-    int insert(AiClientAdvisor aiClientAdvisor);
-
-    /**
-     * 根据ID更新顾问配置
-     * @param aiClientAdvisor 顾问配置对象
-     * @return 影响行数
-     */
-    int updateById(AiClientAdvisor aiClientAdvisor);
-
-    /**
      * 根据顾问ID更新顾问配置
      * @param aiClientAdvisor 顾问配置对象
      * @return 影响行数
@@ -39,25 +25,11 @@ public interface IAiClientAdvisorDao extends BaseMapper<AiClientAdvisor> {
     int updateByAdvisorId(AiClientAdvisor aiClientAdvisor);
 
     /**
-     * 根据ID删除顾问配置
-     * @param id 主键ID
-     * @return 影响行数
-     */
-    int deleteById(Long id);
-
-    /**
      * 根据顾问ID删除顾问配置
      * @param advisorId 顾问ID
      * @return 影响行数
      */
     int deleteByAdvisorId(String advisorId);
-
-    /**
-     * 根据ID查询顾问配置
-     * @param id 主键ID
-     * @return 顾问配置对象
-     */
-    AiClientAdvisor queryById(Long id);
 
     /**
      * 根据顾问ID查询顾问配置

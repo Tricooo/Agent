@@ -1,4 +1,4 @@
-package com.tricoq.infrastructure.adapter.repository;
+package com.tricoq.infrastructure.adapter.repository.root;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.tricoq.domain.agent.adapter.repository.IAgentDrawConfigRepository;
@@ -6,7 +6,7 @@ import com.tricoq.domain.agent.model.aggregate.AiAgentDrawConfigAggregate;
 import com.tricoq.domain.agent.model.entity.DrawConfigQueryCommandEntity;
 import com.tricoq.infrastructure.dao.IAiAgentDrawConfigDao;
 import com.tricoq.infrastructure.dao.po.AiAgentDrawConfig;
-import com.tricoq.infrastructure.service.AiAgentDrawConfigService;
+import com.tricoq.infrastructure.support.AiAgentDrawConfigDaoSupport;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Repository;
@@ -14,8 +14,6 @@ import org.springframework.stereotype.Repository;
 import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Objects;
-import java.util.stream.Collectors;
 
 /**
  *
@@ -29,7 +27,7 @@ public class AgentDrawConfigRepositoryImpl
         extends MpAggregateRepository<AiAgentDrawConfigAggregate, AiAgentDrawConfig, String, Long, IAiAgentDrawConfigDao>
         implements IAgentDrawConfigRepository {
 
-    private final AiAgentDrawConfigService drawConfigService;
+    private final AiAgentDrawConfigDaoSupport drawConfigDaoSupport;
 
     /**
      * 领域对象 -> 数据库实体
@@ -97,7 +95,7 @@ public class AgentDrawConfigRepositoryImpl
 
     @Override
     protected AiAgentDrawConfig getByAggregateId(String s) {
-        return drawConfigService.queryByConfigId(s);
+        return drawConfigDaoSupport.queryByConfigId(s);
     }
 
     /**
@@ -121,7 +119,7 @@ public class AgentDrawConfigRepositoryImpl
 
     @Override
     public AiAgentDrawConfigAggregate queryByConfigId(String configId) {
-        return toAggregate(drawConfigService.queryByConfigId(configId));
+        return toAggregate(drawConfigDaoSupport.queryByConfigId(configId));
     }
 
     @Override

@@ -12,24 +12,6 @@
         <result column="update_time" property="updateTime"/>
     </resultMap>
 
-    <insert id="insert" parameterType="com.tricoq.infrastructure.dao.po.AiClient" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO ai_client (
-            client_id, client_name, description, status, create_time, update_time
-        ) VALUES (
-            #{clientId}, #{clientName}, #{description}, #{status}, #{createTime}, #{updateTime}
-        )
-    </insert>
-
-    <update id="updateById" parameterType="com.tricoq.infrastructure.dao.po.AiClient">
-        UPDATE ai_client SET
-            client_id = #{clientId},
-            client_name = #{clientName},
-            description = #{description},
-            status = #{status},
-            update_time = #{updateTime}
-        WHERE id = #{id}
-    </update>
-
     <update id="updateByClientId" parameterType="com.tricoq.infrastructure.dao.po.AiClient">
         UPDATE ai_client SET
             client_name = #{clientName},
@@ -39,19 +21,9 @@
         WHERE client_id = #{clientId}
     </update>
 
-    <delete id="deleteById" parameterType="java.lang.Long">
-        DELETE FROM ai_client WHERE id = #{id}
-    </delete>
-
     <delete id="deleteByClientId" parameterType="java.lang.String">
         DELETE FROM ai_client WHERE client_id = #{clientId}
     </delete>
-
-    <select id="queryById" parameterType="java.lang.Long" resultMap="AiClientMap">
-        SELECT id, client_id, client_name, description, status, create_time, update_time
-        FROM ai_client
-        WHERE id = #{id}
-    </select>
 
     <select id="queryByClientId" parameterType="java.lang.String" resultMap="AiClientMap">
         SELECT id, client_id, client_name, description, status, create_time, update_time

@@ -1,4 +1,4 @@
-package com.tricoq.infrastructure.adapter.repository;
+package com.tricoq.infrastructure.adapter.repository.root;
 
 import com.tricoq.domain.agent.adapter.repository.IAgentRepository;
 import com.tricoq.domain.agent.model.aggregate.AiAgentAggregate;
@@ -8,7 +8,7 @@ import com.tricoq.domain.agent.model.valobj.AiAgentClientFlowConfigVO;
 import com.tricoq.infrastructure.dao.IAiAgentDao;
 import com.tricoq.infrastructure.dao.po.AiAgent;
 import com.tricoq.infrastructure.dao.po.AiAgentFlowConfig;
-import com.tricoq.infrastructure.service.AiAgentFlowConfigService;
+import com.tricoq.infrastructure.support.AiAgentFlowConfigDaoSupport;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Repository;
@@ -32,14 +32,14 @@ import java.util.stream.Collectors;
 public class AgentRepositoryImpl extends MpAggregateRepository<AiAgentAggregate, AiAgent, String, Long, IAiAgentDao>
         implements IAgentRepository {
 
-    private final AiAgentFlowConfigService agentFlowConfigService;
+    private final AiAgentFlowConfigDaoSupport agentFlowConfigDaoSupport;
 
     @Override
     public Map<String, AiAgentClientFlowConfigDTO> queryAiAgentFlowConfigByAgentId(String agentId) {
         if (agentId == null) {
             return Map.of();
         }
-        List<AiAgentFlowConfig> configs = agentFlowConfigService.queryByAgentId(agentId);
+        List<AiAgentFlowConfig> configs = agentFlowConfigDaoSupport.queryByAgentId(agentId);
         if (CollectionUtils.isEmpty(configs)) {
             return Map.of();
         }
@@ -61,7 +61,7 @@ public class AgentRepositoryImpl extends MpAggregateRepository<AiAgentAggregate,
         if (StringUtils.isBlank(aiAgentId)) {
             return Collections.emptyList();
         }
-        List<AiAgentFlowConfig> flowConfigs = agentFlowConfigService.queryByAgentId(aiAgentId);
+        List<AiAgentFlowConfig> flowConfigs = agentFlowConfigDaoSupport.queryByAgentId(aiAgentId);
         return flowConfigs.stream().map(flowConfig -> AiAgentClientFlowConfigDTO.builder()
                         .clientId(flowConfig.getClientId())
                         .clientName(flowConfig.getClientName())
@@ -117,7 +117,7 @@ public class AgentRepositoryImpl extends MpAggregateRepository<AiAgentAggregate,
                         .status(1)
                         .build())
                 .toList();
-        return agentFlowConfigService.saveBatch(configs);
+        return agentFlowConfigDaoSupport.saveBatch(configs);
     }
 
     @Override
@@ -150,7 +150,7 @@ public class AgentRepositoryImpl extends MpAggregateRepository<AiAgentAggregate,
         if (data == null) {
             return null;
         }
-        List<AiAgentClientFlowConfigVO> flowConfigs = agentFlowConfigService.queryByAgentId(data.getAgentId())
+        List<AiAgentClientFlowConfigVO> flowConfigs = agentFlowConfigDaoSupport.queryByAgentId(data.getAgentId())
                 .stream()
                 .map(flow -> AiAgentClientFlowConfigVO.builder()
                         .agentId(flow.getAgentId())

@@ -140,6 +140,7 @@ public class AiAgentDrawAdminService {
             return false;
         }
         String agentId = configAggregate.getAgentId();
+        //todo 补全删除逻辑
         boolean result = agentRepository.removeByAggregateId(agentId);
         boolean delResult = agentDrawConfigRepository.removeByAggregateId(configId);
         return result && delResult;

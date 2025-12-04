@@ -2,8 +2,8 @@ package com.tricoq.infrastructure.adapter.repository;
 
 import com.tricoq.domain.agent.adapter.repository.IAiClientRagOrderRepository;
 import com.tricoq.domain.agent.model.dto.AiRagOrderDTO;
-import com.tricoq.infrastructure.dao.IAiClientRagOrderDao;
 import com.tricoq.infrastructure.dao.po.AiClientRagOrder;
+import com.tricoq.infrastructure.support.AiClientRagOrderDaoSupport;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 import org.springframework.util.StringUtils;
@@ -14,12 +14,13 @@ import java.util.Objects;
 
 /**
  * 知识库配置仓储实现
+ * @author trico qiang
  */
 @Repository
 @RequiredArgsConstructor
 public class AiClientRagOrderRepositoryImpl implements IAiClientRagOrderRepository {
 
-    private final IAiClientRagOrderDao aiClientRagOrderDao;
+    private final AiClientRagOrderDaoSupport ragOrderDaoSupport;
 
     @Override
     public boolean insert(AiRagOrderDTO ragOrder) {
@@ -30,7 +31,7 @@ public class AiClientRagOrderRepositoryImpl implements IAiClientRagOrderReposito
         LocalDateTime now = LocalDateTime.now();
         po.setCreateTime(now);
         po.setUpdateTime(now);
-        return aiClientRagOrderDao.insert(po) > 0;
+        return ragOrderDaoSupport.save(po);
     }
 
     @Override
@@ -41,7 +42,7 @@ public class AiClientRagOrderRepositoryImpl implements IAiClientRagOrderReposito
         AiClientRagOrder po = toPo(ragOrder);
         po.setId(ragOrder.getId());
         po.setUpdateTime(LocalDateTime.now());
-        return aiClientRagOrderDao.updateById(po) > 0;
+        return ragOrderDaoSupport.updateById(po);
     }
 
     @Override
@@ -51,17 +52,17 @@ public class AiClientRagOrderRepositoryImpl implements IAiClientRagOrderReposito
         }
         AiClientRagOrder po = toPo(ragOrder);
         po.setUpdateTime(LocalDateTime.now());
-        return aiClientRagOrderDao.updateByRagId(po) > 0;
+        return ragOrderDaoSupport.getBaseMapper().updateByRagId(po) > 0;
     }
 
     @Override
     public boolean deleteById(Long id) {
-        return id != null && aiClientRagOrderDao.deleteById(id) > 0;
+        return id != null && ragOrderDaoSupport.removeById(id);
     }
 
     @Override
     public boolean deleteByRagId(String ragId) {
-        return StringUtils.hasText(ragId) && aiClientRagOrderDao.deleteByRagId(ragId) > 0;
+        return StringUtils.hasText(ragId) && ragOrderDaoSupport.getBaseMapper().deleteByRagId(ragId) > 0;
     }
 
     @Override
@@ -69,7 +70,7 @@ public class AiClientRagOrderRepositoryImpl implements IAiClientRagOrderReposito
         if (id == null) {
             return null;
         }
-        return toDto(aiClientRagOrderDao.queryById(id));
+        return toDto(ragOrderDaoSupport.getById(id));
     }
 
     @Override
@@ -77,12 +78,12 @@ public class AiClientRagOrderRepositoryImpl implements IAiClientRagOrderReposito
         if (!StringUtils.hasText(ragId)) {
             return null;
         }
-        return toDto(aiClientRagOrderDao.queryByRagId(ragId));
+        return toDto(ragOrderDaoSupport.getBaseMapper().queryByRagId(ragId));
     }
 
     @Override
     public List<AiRagOrderDTO> queryEnabledRagOrders() {
-        return aiClientRagOrderDao.queryEnabledRagOrders().stream()
+        return ragOrderDaoSupport.getBaseMapper().queryEnabledRagOrders().stream()
                 .map(this::toDto)
                 .filter(Objects::nonNull)
                 .toList();
@@ -93,7 +94,7 @@ public class AiClientRagOrderRepositoryImpl implements IAiClientRagOrderReposito
         if (!StringUtils.hasText(knowledgeTag)) {
             return List.of();
         }
-        return aiClientRagOrderDao.queryByKnowledgeTag(knowledgeTag).stream()
+        return ragOrderDaoSupport.getBaseMapper().queryByKnowledgeTag(knowledgeTag).stream()
                 .map(this::toDto)
                 .filter(Objects::nonNull)
                 .toList();
@@ -101,7 +102,7 @@ public class AiClientRagOrderRepositoryImpl implements IAiClientRagOrderReposito
 
     @Override
     public List<AiRagOrderDTO> queryAll() {
-        return aiClientRagOrderDao.queryAll().stream()
+        return ragOrderDaoSupport.getBaseMapper().queryAll().stream()
                 .map(this::toDto)
                 .filter(Objects::nonNull)
                 .toList();
