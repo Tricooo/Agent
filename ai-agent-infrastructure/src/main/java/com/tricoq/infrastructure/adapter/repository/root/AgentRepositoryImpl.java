@@ -12,6 +12,7 @@ import com.tricoq.infrastructure.support.AiAgentFlowConfigDaoSupport;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
 
 import java.io.Serializable;
@@ -102,11 +103,18 @@ public class AgentRepositoryImpl extends MpAggregateRepository<AiAgentAggregate,
     }
 
     @Override
-    public boolean saveFlowConfig(List<AiAgentClientFlowConfigVO> aiAgentClientFlowConfigs) {
-        if (CollectionUtils.isEmpty(aiAgentClientFlowConfigs)) {
+    @Transactional(rollbackFor = Exception.class)
+    public boolean saveOrUpdateByAggregateId(AiAgentAggregate aggregate) {
+        boolean saved = super.saveOrUpdateByAggregateId(aggregate);
+        if (!saved) {
+            return false;
+        }
+        agentFlowConfigDaoSupport.deleteByAgentId(aggregate.getAgentId());
+        List<AiAgentClientFlowConfigVO> flowConfigs = aggregate.getFlowConfigs();
+        if (CollectionUtils.isEmpty(flowConfigs)) {
             return true;
         }
-        List<AiAgentFlowConfig> configs = aiAgentClientFlowConfigs.stream()
+        List<AiAgentFlowConfig> configs = flowConfigs.stream()
                 .map(flowConfig -> AiAgentFlowConfig.builder()
                         .agentId(flowConfig.getAgentId())
                         .clientId(flowConfig.getClientId())

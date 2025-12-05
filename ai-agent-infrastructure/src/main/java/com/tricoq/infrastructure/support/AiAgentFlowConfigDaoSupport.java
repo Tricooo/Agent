@@ -18,6 +18,10 @@ public class AiAgentFlowConfigDaoSupport extends ServiceImpl<IAiAgentFlowConfigD
     public List<AiAgentFlowConfig> queryByAgentId(String agentId) {
         return this.baseMapper.queryByAgentId(agentId);
     }
+
+    public int deleteByAgentId(String agentId) {
+        return this.baseMapper.deleteByAgentId(agentId);
+    }
 }
 
 

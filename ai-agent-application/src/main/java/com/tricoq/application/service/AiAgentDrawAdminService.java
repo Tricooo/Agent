@@ -88,11 +88,6 @@ public class AiAgentDrawAdminService {
         if (!clientRepository.saveOrUpdateClientConfigByAggregate(aiClientAggregates, null)) {
             throw new Exception("client config保存失败");
         }
-
-        //解析agent flow
-        if (!agentRepository.saveFlowConfig(aiAgent.getFlowConfigs())) {
-            throw new Exception("client flow config保存失败");
-        }
     }
 
     public List<AiAgentDrawConfigResponseDTO> queryDrawConfigList(AiAgentDrawConfigQueryRequestDTO request) {
