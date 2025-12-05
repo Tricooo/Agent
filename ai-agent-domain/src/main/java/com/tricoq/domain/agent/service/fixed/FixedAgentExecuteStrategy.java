@@ -6,6 +6,7 @@ import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
 import com.tricoq.domain.agent.model.dto.AiAgentClientFlowConfigDTO;
 import com.tricoq.domain.agent.model.enums.AiAgentEnumVO;
 import com.tricoq.domain.agent.service.IExecuteStrategy;
+import com.tricoq.domain.agent.shared.ExecuteOutputPort;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
@@ -36,7 +37,7 @@ public class FixedAgentExecuteStrategy implements IExecuteStrategy {
     public static final String CHAT_MEMORY_RETRIEVE_SIZE_KEY = "chat_memory_response_size";
 
     @Override
-    public void execute(ExecuteCommandEntity requestParameter, ResponseBodyEmitter emitter) {
+    public void execute(ExecuteCommandEntity requestParameter, ExecuteOutputPort port) {
         // 1. 获取配置客户端
         List<AiAgentClientFlowConfigDTO> aiAgentClientList = (List<AiAgentClientFlowConfigDTO>) repository
                 .queryAiAgentFlowConfigByAgentId(requestParameter.getAgentId()).values();

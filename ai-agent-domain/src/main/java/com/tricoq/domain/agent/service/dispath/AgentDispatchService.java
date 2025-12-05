@@ -1,15 +1,15 @@
 package com.tricoq.domain.agent.service.dispath;
 
 import com.tricoq.domain.agent.adapter.repository.IAgentRepository;
-import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
 import com.tricoq.domain.agent.model.dto.AiAgentDTO;
+import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
 import com.tricoq.domain.agent.service.IAgentDispatchService;
 import com.tricoq.domain.agent.service.IExecuteStrategy;
+import com.tricoq.domain.agent.shared.ExecuteOutputPort;
 import com.tricoq.types.exception.BizException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter;
 
 import java.util.Map;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -32,7 +32,7 @@ public class AgentDispatchService implements IAgentDispatchService {
     private final ThreadPoolExecutor executor;
 
     @Override
-    public void dispatch(ExecuteCommandEntity commandEntity, ResponseBodyEmitter emitter) {
+    public void dispatch(ExecuteCommandEntity commandEntity, ExecuteOutputPort port) {
         AiAgentDTO aiAgentVO = agentRepository.queryAgentByAgentId(commandEntity.getAgentId());
 
         String strategy = aiAgentVO.getStrategy();
@@ -44,17 +44,13 @@ public class AgentDispatchService implements IAgentDispatchService {
         // 3. 异步执行AutoAgent
         executor.execute(() -> {
             try {
-                executeStrategy.execute(commandEntity, emitter);
+                executeStrategy.execute(commandEntity, port);
             } catch (Exception e) {
                 log.error("AutoAgent执行异常：{}", e.getMessage(), e);
-                try {
-                    emitter.send("执行异常：" + e.getMessage());
-                } catch (Exception ex) {
-                    log.error("发送异常信息失败：{}", ex.getMessage(), ex);
-                }
+                port.error(e);
             } finally {
                 try {
-                    emitter.complete();
+                    port.complete();
                 } catch (Exception e) {
                     log.error("完成流式输出失败：{}", e.getMessage(), e);
                 }

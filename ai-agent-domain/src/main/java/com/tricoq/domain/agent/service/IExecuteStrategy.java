@@ -1,7 +1,7 @@
 package com.tricoq.domain.agent.service;
 
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
-import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter;
+import com.tricoq.domain.agent.shared.ExecuteOutputPort;
 
 /**
  *
@@ -11,5 +11,5 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter
  */
 public interface IExecuteStrategy {
 
-    void execute(ExecuteCommandEntity commandEntity, ResponseBodyEmitter emitter);
+    void execute(ExecuteCommandEntity commandEntity, ExecuteOutputPort port);
 }

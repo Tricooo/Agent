@@ -3,6 +3,7 @@ package com.tricoq.domain.agent.service.execute.flow.step.factory;
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
 import com.tricoq.domain.agent.model.dto.AiAgentClientFlowConfigDTO;
 import com.tricoq.domain.agent.service.execute.flow.step.RootFlowNode;
+import com.tricoq.domain.agent.shared.ExecuteOutputPort;
 import com.tricoq.types.framework.chain.StrategyHandler;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -55,7 +56,7 @@ public class DefaultFlowAgentExecuteStrategyFactory {
 
         private Map<String, String> stepsMap;
 
-        private ResponseBodyEmitter emitter;
+        private ExecuteOutputPort port;
         @Builder.Default
         private StringBuilder executeHistory = new StringBuilder();
 

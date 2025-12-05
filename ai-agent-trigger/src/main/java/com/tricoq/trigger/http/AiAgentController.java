@@ -7,6 +7,7 @@ import com.tricoq.api.dto.ArmoryAgentRequestDTO;
 import com.tricoq.api.dto.AutoAgentRequestDTO;
 import com.tricoq.api.response.Response;
 import com.tricoq.application.facade.AgentExecutionFacade;
+import com.tricoq.domain.agent.shared.ExecuteOutputPort;
 import com.tricoq.types.enums.ResponseCode;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -41,13 +43,15 @@ public class AiAgentController implements IAiAgentService {
     @Override
     public ResponseBodyEmitter autoAgent(@RequestBody AutoAgentRequestDTO request, HttpServletResponse response) {
         log.info("AutoAgent流式执行请求开始，请求信息：{}", JSON.toJSONString(request));
-        try {
-            response.setHeader("Cache-Control", "no-cache");
-            response.setHeader("Connection", "keep-alive");
-            response.setHeader("Content-Type", "text/event-stream");
-            response.setCharacterEncoding("UTF-8");
 
-            return agentExecutionFacade.autoAgent(request);
+        response.setHeader("Cache-Control", "no-cache");
+        response.setHeader("Connection", "keep-alive");
+        response.setHeader("Content-Type", "text/event-stream");
+        response.setCharacterEncoding("UTF-8");
+
+        ResponseBodyEmitter emitter = new ResponseBodyEmitter(Long.MAX_VALUE);
+        try {
+            return agentExecutionFacade.autoAgent(request, emitter);
         } catch (Exception e) {
             log.error("AutoAgent请求处理异常：{}", e.getMessage(), e);
             ResponseBodyEmitter errorEmitter = new ResponseBodyEmitter();

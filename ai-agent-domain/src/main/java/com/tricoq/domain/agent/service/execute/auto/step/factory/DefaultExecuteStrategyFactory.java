@@ -3,6 +3,7 @@ package com.tricoq.domain.agent.service.execute.auto.step.factory;
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
 import com.tricoq.domain.agent.model.dto.AiAgentClientFlowConfigDTO;
 import com.tricoq.domain.agent.service.execute.auto.step.RootExecuteNode;
+import com.tricoq.domain.agent.shared.ExecuteOutputPort;
 import com.tricoq.types.framework.chain.StrategyHandler;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -44,11 +45,11 @@ public class DefaultExecuteStrategyFactory {
         private Integer step = 1;
         private Integer maxStep;
         @Builder.Default
-        private StringBuilder executionHistory  = new StringBuilder();
+        private StringBuilder executionHistory = new StringBuilder();
         private String analyzeResult;
         private String executeResult;
         private String supervisionResult;
         private String finalSummary;
-        private ResponseBodyEmitter emitter;
+        private ExecuteOutputPort port;
     }
 }

@@ -4,6 +4,7 @@ import com.tricoq.domain.agent.adapter.repository.ITaskScheduleRepository;
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
 import com.tricoq.domain.agent.model.dto.AiAgentTaskScheduleDTO;
 import com.tricoq.domain.agent.service.IAgentDispatchService;
+import com.tricoq.domain.agent.shared.ExecuteOutputPort;
 import com.tricoq.types.framework.schedule.model.TaskScheduleVO;
 import com.tricoq.types.framework.schedule.provider.ITaskDataProvider;
 import lombok.RequiredArgsConstructor;
@@ -49,11 +50,11 @@ public class AgentTaskJob implements ITaskDataProvider {
                     taskSchedule.setTaskLogic((id, taskParam) -> {
                         try {
                             agentDispatchService.dispatch(ExecuteCommandEntity.builder()
-                                    .agentId(schedule.getAgentId())
-                                    .userInput(taskParam)
-                                    .maxSteps(1)
-                                    .sessionId(String.valueOf(System.nanoTime()))
-                                    .build(), new ResponseBodyEmitter()
+                                            .agentId(schedule.getAgentId())
+                                            .userInput(taskParam)
+                                            .maxSteps(1)
+                                            .sessionId(String.valueOf(System.nanoTime()))
+                                            .build(), jobPort(schedule.getId())
                             );
                         } catch (Exception e) {
                             log.error("任务执行失败:{}", e.getMessage());
@@ -63,6 +64,25 @@ public class AgentTaskJob implements ITaskDataProvider {
                 }
         ).toList();
     }
+
+    private ExecuteOutputPort jobPort(Long scheduleId) {
+        return new ExecuteOutputPort() {
+            @Override
+            public void send(String json) {
+                // 可选：记录日志，便于排障
+                log.debug("Task {} output: {}", scheduleId, json);
+            }
+            @Override
+            public void complete() {
+                log.debug("Task {} completed", scheduleId);
+            }
+            @Override
+            public void error(Throwable t) {
+                log.warn("Task {} error", scheduleId, t);
+            }
+        };
+    }
+
 
     /**
      * 查询所有无效的任务ID

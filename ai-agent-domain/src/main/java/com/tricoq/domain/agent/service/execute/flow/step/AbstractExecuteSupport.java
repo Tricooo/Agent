@@ -5,6 +5,7 @@ import com.tricoq.domain.agent.model.entity.AutoAgentExecuteResultEntity;
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
 import com.tricoq.domain.agent.model.enums.AiAgentEnumVO;
 import com.tricoq.domain.agent.service.execute.flow.step.factory.DefaultFlowAgentExecuteStrategyFactory;
+import com.tricoq.domain.agent.shared.ExecuteOutputPort;
 import com.tricoq.types.framework.chain.AbstractMultiThreadStrategyRouter;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -82,7 +83,7 @@ public abstract class AbstractExecuteSupport extends AbstractMultiThreadStrategy
 
     protected void sendSseResult(DefaultFlowAgentExecuteStrategyFactory.DynamicContext dynamicContext,
                                  AutoAgentExecuteResultEntity resultEntity) {
-        ResponseBodyEmitter emitter = dynamicContext.getEmitter();
+        ExecuteOutputPort emitter = dynamicContext.getPort();
         if (null != emitter) {
             try {
                 emitter.send("data: " + JSON.toJSONString(resultEntity) + "\n\n");

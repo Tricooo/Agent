@@ -5,6 +5,7 @@ import com.tricoq.domain.agent.model.entity.AutoAgentExecuteResultEntity;
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
 import com.tricoq.domain.agent.service.IExecuteStrategy;
 import com.tricoq.domain.agent.service.execute.auto.step.factory.DefaultExecuteStrategyFactory;
+import com.tricoq.domain.agent.shared.ExecuteOutputPort;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -24,7 +25,7 @@ public class AutoAgentExecuteStrategy implements IExecuteStrategy {
     private final DefaultExecuteStrategyFactory executeStrategyFactory;
 
     @Override
-    public void execute(ExecuteCommandEntity commandEntity, ResponseBodyEmitter emitter) {
+    public void execute(ExecuteCommandEntity commandEntity, ExecuteOutputPort port) {
 
         var strategyHandler = executeStrategyFactory.strategy();
         DefaultExecuteStrategyFactory.ExecuteContext context = DefaultExecuteStrategyFactory.ExecuteContext.builder()
@@ -34,7 +35,7 @@ public class AutoAgentExecuteStrategy implements IExecuteStrategy {
                 .executionHistory(new StringBuilder())
                 .step(1)
                 .maxStep(commandEntity.getMaxSteps() == null ? 3 : commandEntity.getMaxSteps())
-                .emitter(emitter)
+                .port(port)
                 .build();
         String apply = strategyHandler.apply(commandEntity, context);
         log.info("执行完毕:{}", apply);
@@ -42,8 +43,7 @@ public class AutoAgentExecuteStrategy implements IExecuteStrategy {
         try {
             AutoAgentExecuteResultEntity completeResult = AutoAgentExecuteResultEntity
                     .createCompleteResult(commandEntity.getSessionId());
-            String response = "data: " + JSON.toJSONString(completeResult) + "\n\n";
-            emitter.send(response);
+            port.send(JSON.toJSONString(completeResult));
         } catch (Exception e) {
             log.error("发送完成标识失败：{}", e.getMessage(), e);
         }

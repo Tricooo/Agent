@@ -4,11 +4,11 @@ import com.alibaba.fastjson.JSON;
 import com.tricoq.domain.agent.model.entity.AutoAgentExecuteResultEntity;
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
 import com.tricoq.domain.agent.service.execute.auto.step.factory.DefaultExecuteStrategyFactory;
+import com.tricoq.domain.agent.shared.ExecuteOutputPort;
 import com.tricoq.types.framework.chain.AbstractMultiThreadStrategyRouter;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationContext;
-import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter;
 
 /**
  * @author trico qiang
@@ -42,10 +42,10 @@ public abstract class AbstractExecuteSupport extends
 
     protected void sendSseResult(DefaultExecuteStrategyFactory.ExecuteContext dynamicContext,
                                  AutoAgentExecuteResultEntity resultEntity) {
-        ResponseBodyEmitter emitter = dynamicContext.getEmitter();
+        ExecuteOutputPort emitter = dynamicContext.getPort();
         if (null != emitter) {
             try {
-                emitter.send("data: " + JSON.toJSONString(resultEntity) + "\n\n");
+                emitter.send(JSON.toJSONString(resultEntity));
             }catch (Exception e) {
                 log.error("发送SSE结果失败：{}", e.getMessage(), e);
             }

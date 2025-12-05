@@ -5,11 +5,11 @@ import com.tricoq.domain.agent.model.entity.AutoAgentExecuteResultEntity;
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
 import com.tricoq.domain.agent.service.IExecuteStrategy;
 import com.tricoq.domain.agent.service.execute.flow.step.factory.DefaultFlowAgentExecuteStrategyFactory;
+import com.tricoq.domain.agent.shared.ExecuteOutputPort;
 import com.tricoq.types.framework.chain.StrategyHandler;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter;
 
 /**
  * 流程执行策略
@@ -24,7 +24,7 @@ public class FlowAgentExecuteStrategy implements IExecuteStrategy {
     private DefaultFlowAgentExecuteStrategyFactory defaultFlowAgentExecuteStrategyFactory;
 
     @Override
-    public void execute(ExecuteCommandEntity executeCommandEntity, ResponseBodyEmitter emitter) {
+    public void execute(ExecuteCommandEntity executeCommandEntity, ExecuteOutputPort port) {
         StrategyHandler<ExecuteCommandEntity, DefaultFlowAgentExecuteStrategyFactory.DynamicContext, String> executeHandler
                 = defaultFlowAgentExecuteStrategyFactory.strategy();
 
@@ -32,7 +32,7 @@ public class FlowAgentExecuteStrategy implements IExecuteStrategy {
                 .maxStep(executeCommandEntity.getMaxSteps() != null ? executeCommandEntity.getMaxSteps() : 4)
                 .sessionId(executeCommandEntity.getSessionId())
                 .userInput(executeCommandEntity.getUserInput())
-                .emitter(emitter)
+                .port(port)
                 .build();
 
         String apply = executeHandler.apply(executeCommandEntity, dynamicContext);
@@ -42,8 +42,7 @@ public class FlowAgentExecuteStrategy implements IExecuteStrategy {
         try {
             AutoAgentExecuteResultEntity completeResult = AutoAgentExecuteResultEntity.createCompleteResult(executeCommandEntity.getSessionId());
             // 发送SSE格式的数据
-            String sseData = "data: " + JSON.toJSONString(completeResult) + "\n\n";
-            emitter.send(sseData);
+            port.send(JSON.toJSONString(completeResult));
         } catch (Exception e) {
             log.error("发送完成标识失败：{}", e.getMessage(), e);
         }
