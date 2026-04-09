@@ -1,6 +1,7 @@
 package com.tricoq.domain.agent.service.armory.node;
 
 import com.alibaba.fastjson.JSON;
+import com.tricoq.domain.agent.adapter.port.IMcpClientProvider;
 import com.tricoq.domain.agent.model.entity.ArmoryCommandEntity;
 import com.tricoq.domain.agent.model.enums.AiAgentEnumVO;
 import com.tricoq.domain.agent.model.dto.AiClientToolMcpDTO;
@@ -32,6 +33,8 @@ public class AiClientToolMcpNode extends AbstractArmorySupport {
 
     private final AiClientModelNode aiClientModelNode;
 
+    private final IMcpClientProvider mcpClientProvider;
+
     /**
      * 节点自身处理逻辑
      *
@@ -49,8 +52,7 @@ public class AiClientToolMcpNode extends AbstractArmorySupport {
         }
 
         for (AiClientToolMcpDTO vo : mcpNodes) {
-            McpSyncClient mcpSyncClient = createMcpSyncClient(vo);
-            registerBean(beanName(vo.getMcpId()), McpSyncClient.class, mcpSyncClient);
+            mcpClientProvider.getOrCreate(vo);
         }
         return router(requestParam, dynamicContext);
     }
@@ -58,58 +60,6 @@ public class AiClientToolMcpNode extends AbstractArmorySupport {
     @Override
     protected String beanName(String id) {
         return AiAgentEnumVO.AI_CLIENT_TOOL_MCP.getBeanName(id);
-    }
-
-    private McpSyncClient createMcpSyncClient(AiClientToolMcpDTO vo) {
-
-        String transportType = vo.getTransportType();
-        switch (transportType) {
-            case "sse" -> {
-                AiClientToolMcpDTO.TransportConfigSse configSse = vo.getTransportConfigSse();
-                String originalBaseUri = configSse.getBaseUri();
-                String baseUri;
-                String sseEndpoint;
-                int queryParamStartIndex = originalBaseUri.indexOf("sse");
-                if (queryParamStartIndex != -1) {
-                    baseUri = originalBaseUri.substring(0, queryParamStartIndex - 1);
-                    sseEndpoint = originalBaseUri.substring(queryParamStartIndex - 1);
-                } else {
-                    baseUri = originalBaseUri;
-                    sseEndpoint = configSse.getSseEndpoint();
-                }
-
-                sseEndpoint = StringUtils.isBlank(sseEndpoint) ? "/sse" : sseEndpoint;
-                var transport = HttpClientSseClientTransport.builder(baseUri)
-                        .sseEndpoint(sseEndpoint)
-                        .build();
-                McpSyncClient client = McpClient.sync(transport)
-                        .requestTimeout(Duration.ofSeconds(vo.getRequestTimeout()))
-                        .build();
-                //与mcp server通讯，获取工具的能力以及出入参
-                McpSchema.InitializeResult initializeResult = client.initialize();
-                log.info("Tool SSE MCP Initialized {}", initializeResult);
-                return client;
-            }
-
-            case "stdio" -> {
-                AiClientToolMcpDTO.TransportConfigStdio configStdio = vo.getTransportConfigStdio();
-                var stdioMap = configStdio.getStdio();
-                AiClientToolMcpDTO.TransportConfigStdio.Stdio stdio = stdioMap.get(vo.getMcpId());
-                ServerParameters parameters = ServerParameters.builder(stdio.getCommand())
-                        .env(stdio.getEnv())
-                        .args(stdio.getArgs())
-                        .build();
-
-                McpSyncClient client = McpClient.sync(new StdioClientTransport(parameters))
-                        .requestTimeout(Duration.ofSeconds(vo.getRequestTimeout()))
-                        .build();
-                McpSchema.InitializeResult initializeResult = client.initialize();
-
-                log.info("Tool Stdio MCP Initialized {}", initializeResult);
-                return client;
-            }
-        }
-        throw new RuntimeException("err! transportType " + transportType + " not exist!");
     }
 
     @Override

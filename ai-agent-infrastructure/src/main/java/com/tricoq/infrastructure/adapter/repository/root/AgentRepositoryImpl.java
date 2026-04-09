@@ -17,6 +17,7 @@ import org.springframework.util.CollectionUtils;
 
 import java.io.Serializable;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -36,7 +37,7 @@ public class AgentRepositoryImpl extends MpAggregateRepository<AiAgentAggregate,
     private final AiAgentFlowConfigDaoSupport agentFlowConfigDaoSupport;
 
     @Override
-    public Map<String, AiAgentClientFlowConfigDTO> queryAiAgentFlowConfigByAgentId(String agentId) {
+    public Map<String, AiAgentClientFlowConfigDTO> queryAiAgentFlowConfigMapByAgentId(String agentId) {
         if (agentId == null) {
             return Map.of();
         }
@@ -54,15 +55,18 @@ public class AgentRepositoryImpl extends MpAggregateRepository<AiAgentAggregate,
                         .build())
                 .collect(Collectors.toMap(AiAgentClientFlowConfigDTO::getClientType,
                         Function.identity(),
-                        (v1, v2) -> v1));
+                        (v1, v2) -> v1,
+                        LinkedHashMap::new));
     }
 
+
+
     @Override
-    public List<AiAgentClientFlowConfigDTO> queryAiAgentClientsByAgentId(String aiAgentId) {
-        if (StringUtils.isBlank(aiAgentId)) {
+    public List<AiAgentClientFlowConfigDTO> queryAiAgentFlowConfigListByAgentId(String agentId) {
+        if (StringUtils.isBlank(agentId)) {
             return Collections.emptyList();
         }
-        List<AiAgentFlowConfig> flowConfigs = agentFlowConfigDaoSupport.queryByAgentId(aiAgentId);
+        List<AiAgentFlowConfig> flowConfigs = agentFlowConfigDaoSupport.queryByAgentId(agentId);
         return flowConfigs.stream().map(flowConfig -> AiAgentClientFlowConfigDTO.builder()
                         .clientId(flowConfig.getClientId())
                         .clientName(flowConfig.getClientName())

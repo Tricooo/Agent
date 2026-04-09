@@ -32,13 +32,21 @@ public class RagService implements IRagService {
     @Resource
     private IAiClientRagOrderRepository ragRepository;
 
+    /**
+     * 上传的文件会先做文档解析，再按 token 切分成适合检索的小片段，并给每个片段打上知识标签，后续检索时可以按标签召回对应知识
+     * @param name
+     * @param tag
+     * @param files
+     */
     @Override
     public void storeRagFile(String name, String tag, List<MultipartFile> files) {
         for (MultipartFile file : files) {
+            //把上传的文件解析成可读取的文档内容
             TikaDocumentReader documentReader = new TikaDocumentReader(file.getResource());
+            //把长文档切成多个较小文本块，方便后面做向量化和检索
             List<Document> documentList = tokenTextSplitter.apply(documentReader.get());
 
-            // 添加知识库标签
+            //给每个文本块打上知识库标签，后面检索时可以按标签过滤
             documentList.forEach(doc -> doc.getMetadata().put("knowledge", tag));
 
             // 存储知识库文件

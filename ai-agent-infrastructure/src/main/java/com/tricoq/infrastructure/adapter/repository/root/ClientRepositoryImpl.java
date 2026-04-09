@@ -159,6 +159,32 @@ public class ClientRepositoryImpl extends MpAggregateRepository<AiClientAggregat
                 .flatMap(Set::stream)
                 .collect(Collectors.toSet());
         List<AiClientToolMcp> mcps = toolMcpDaoSupport.queryByMcpIdsEnabled(mcpIdSet);
+        return toAiClientToolMcpDTOs(mcps);
+    }
+
+    @Override
+    public List<AiClientToolMcpDTO> queryAiClientToolMcpsByModelIds(List<String> modelIdList) {
+        if (CollectionUtils.isEmpty(modelIdList)) {
+            return List.of();
+        }
+        Set<String> modelIdSet = new HashSet<>(modelIdList);
+        List<AiClientConfig> modelConfigs = clientConfigDaoSupport
+                .queryBySourceTypeAndIdsEnabled(AiAgentEnumVO.AI_CLIENT_MODEL.getCode(), modelIdSet);
+        Set<String> mcpIdSet = modelConfigs.stream()
+                .filter(config -> AiAgentEnumVO.AI_CLIENT_TOOL_MCP.getCode().equals(config.getTargetType()))
+                .map(AiClientConfig::getTargetId)
+                .collect(Collectors.toSet());
+        if (mcpIdSet.isEmpty()) {
+            return List.of();
+        }
+        List<AiClientToolMcp> mcps = toolMcpDaoSupport.queryByMcpIdsEnabled(mcpIdSet);
+        return toAiClientToolMcpDTOs(mcps);
+    }
+
+    private List<AiClientToolMcpDTO> toAiClientToolMcpDTOs(List<AiClientToolMcp> mcps) {
+        if (CollectionUtils.isEmpty(mcps)) {
+            return List.of();
+        }
         return mcps.stream().map(mcp -> {
             String transportConfig = mcp.getTransportConfig();
             if (!StringUtils.hasText(transportConfig)) {

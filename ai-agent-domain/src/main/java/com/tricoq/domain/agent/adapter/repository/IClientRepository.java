@@ -35,6 +35,8 @@ public interface IClientRepository extends IAggregateRepository<AiClientAggregat
 
     List<AiClientModelDTO> queryAiClientModelsByModelIds(List<String> modelIdList);
 
+    List<AiClientToolMcpDTO> queryAiClientToolMcpsByModelIds(List<String> modelIdList);
+
     boolean saveOrUpdateClientConfigByAggregate(List<AiClientAggregate> aiClientAggregates, String extraParams);
 
     // ===== 管理端基础配置 =====

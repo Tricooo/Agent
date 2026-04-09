@@ -34,14 +34,15 @@ public class RootFlowNode extends AbstractExecuteSupport {
      * @return 结果
      */
     @Override
-    protected String doApply(ExecuteCommandEntity requestParam, DefaultFlowAgentExecuteStrategyFactory.DynamicContext dynamicContext) {
+    protected String doApply(ExecuteCommandEntity requestParam,
+                             DefaultFlowAgentExecuteStrategyFactory.DynamicContext dynamicContext) {
         log.info("=== 流程执行开始 ====");
         log.info("用户输入: {}", requestParam.getUserInput());
         log.info("最大执行步数: {}", requestParam.getMaxSteps());
         log.info("会话ID: {}", requestParam.getSessionId());
 
         Map<String, AiAgentClientFlowConfigDTO> configMap = agentRepository
-                .queryAiAgentFlowConfigByAgentId(requestParam.getAgentId());
+                .queryAiAgentFlowConfigMapByAgentId(requestParam.getAgentId());
         if (configMap.isEmpty()) {
             throw new IllegalArgumentException("agent未配置");
         }

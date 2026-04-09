@@ -35,7 +35,8 @@ public class Step1McpToolsAnalysisNode extends AbstractExecuteSupport {
      * @return 结果
      */
     @Override
-    protected String doApply(ExecuteCommandEntity requestParam, DefaultFlowAgentExecuteStrategyFactory.DynamicContext dynamicContext) {
+    protected String doApply(ExecuteCommandEntity requestParam,
+                             DefaultFlowAgentExecuteStrategyFactory.DynamicContext dynamicContext) {
         log.info("\n--- 步骤1: MCP工具能力分析（仅分析阶段，不执行用户请求） ---");
 
         Map<String, AiAgentClientFlowConfigDTO> configMap = dynamicContext.getConfigMap();
@@ -58,7 +59,7 @@ public class Step1McpToolsAnalysisNode extends AbstractExecuteSupport {
                         %s
                         
                         ## 分析要求
-                        请基于上述实际的MCP工具信息，针对用户请求进行详细的工具能力分析（仅分析，不执行）：
+                        请基于当前可调用的MCP工具能力进行分析，针对用户请求进行详细的工具能力分析（仅分析，不执行）：
                         
                         ### 1. 工具匹配分析
                         - 分析每个可用工具的核心功能和适用场景

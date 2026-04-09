@@ -33,6 +33,7 @@ public class AgentDispatchService implements IAgentDispatchService {
 
     @Override
     public void dispatch(ExecuteCommandEntity commandEntity, ExecuteOutputPort port) {
+        //Todo 主要使用agent的策略，channel的作用是什么额
         AiAgentDTO aiAgentVO = agentRepository.queryAgentByAgentId(commandEntity.getAgentId());
 
         String strategy = aiAgentVO.getStrategy();

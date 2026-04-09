@@ -28,7 +28,8 @@ public class FlowAgentExecuteStrategy implements IExecuteStrategy {
         StrategyHandler<ExecuteCommandEntity, DefaultFlowAgentExecuteStrategyFactory.DynamicContext, String> executeHandler
                 = defaultFlowAgentExecuteStrategyFactory.strategy();
 
-        DefaultFlowAgentExecuteStrategyFactory.DynamicContext dynamicContext = DefaultFlowAgentExecuteStrategyFactory.DynamicContext.builder()
+        DefaultFlowAgentExecuteStrategyFactory.DynamicContext dynamicContext = DefaultFlowAgentExecuteStrategyFactory
+                .DynamicContext.builder()
                 .maxStep(executeCommandEntity.getMaxSteps() != null ? executeCommandEntity.getMaxSteps() : 4)
                 .sessionId(executeCommandEntity.getSessionId())
                 .userInput(executeCommandEntity.getUserInput())

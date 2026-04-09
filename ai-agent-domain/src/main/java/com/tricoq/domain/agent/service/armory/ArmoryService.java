@@ -35,7 +35,7 @@ public class ArmoryService implements IArmoryService {
 
     @Override
     public void acceptArmoryAgent(String agentId) {
-        List<AiAgentClientFlowConfigDTO> flowConfigs = agentRepository.queryAiAgentClientsByAgentId(agentId);
+        List<AiAgentClientFlowConfigDTO> flowConfigs = agentRepository.queryAiAgentFlowConfigListByAgentId(agentId);
         if (flowConfigs.isEmpty()) {
             return;
         }

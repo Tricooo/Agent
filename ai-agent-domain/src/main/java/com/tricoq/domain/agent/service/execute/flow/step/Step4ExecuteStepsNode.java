@@ -27,12 +27,14 @@ import java.util.regex.Pattern;
 @Slf4j
 public class Step4ExecuteStepsNode extends AbstractExecuteSupport {
     @Override
-    public String doApply(ExecuteCommandEntity request, DefaultFlowAgentExecuteStrategyFactory.DynamicContext dynamicContext) {
+    public String doApply(ExecuteCommandEntity request,
+                          DefaultFlowAgentExecuteStrategyFactory.DynamicContext dynamicContext) {
         log.info("开始执行第四步：按顺序执行规划步骤");
 
         try {
             // 获取配置信息
-            AiAgentClientFlowConfigDTO aiAgentClientFlowConfigVO = dynamicContext.getConfigMap().get(AiClientTypeEnumVO.EXECUTOR_CLIENT.getCode());
+            AiAgentClientFlowConfigDTO aiAgentClientFlowConfigVO = dynamicContext.getConfigMap()
+                    .get(AiClientTypeEnumVO.EXECUTOR_CLIENT.getCode());
 
             // 获取规划客户端
             ChatClient executorChatClient = getChatClient(aiAgentClientFlowConfigVO.getClientId());
@@ -131,7 +133,8 @@ public class Step4ExecuteStepsNode extends AbstractExecuteSupport {
     /**
      * 执行单个步骤
      */
-    private void executeStep(ChatClient executorChatClient, Integer stepNumber, String stepKey, String stepContent, DefaultFlowAgentExecuteStrategyFactory.DynamicContext dynamicContext) {
+    private void executeStep(ChatClient executorChatClient, Integer stepNumber, String stepKey,
+                             String stepContent, DefaultFlowAgentExecuteStrategyFactory.DynamicContext dynamicContext) {
         log.info("\n--- 开始执行 {} ---", stepKey);
         log.info("步骤内容: {}", stepContent.substring(0, Math.min(200, stepContent.length())) + "...");
 
@@ -213,7 +216,8 @@ public class Step4ExecuteStepsNode extends AbstractExecuteSupport {
     /**
      * 构建步骤执行提示词
      */
-    private String buildStepExecutionPrompt(String stepContent, DefaultFlowAgentExecuteStrategyFactory.DynamicContext dynamicContext) {
+    private String buildStepExecutionPrompt(String stepContent,
+                                            DefaultFlowAgentExecuteStrategyFactory.DynamicContext dynamicContext) {
         return "你是一个智能执行助手，需要执行以下步骤:\n\n" +
                 "**步骤内容:**\n" +
                 stepContent + "\n\n" +

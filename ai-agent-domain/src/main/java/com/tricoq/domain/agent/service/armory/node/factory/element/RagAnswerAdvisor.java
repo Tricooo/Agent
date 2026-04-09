@@ -6,6 +6,7 @@ import org.springframework.ai.chat.client.advisor.api.AdvisorChain;
 import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisorChain;
 import org.springframework.ai.chat.client.advisor.api.StreamAdvisorChain;
+import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -19,6 +20,7 @@ import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 import reactor.core.publisher.Flux;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -60,14 +62,16 @@ public class RagAnswerAdvisor implements BaseAdvisor {
     @Override
     public ChatClientRequest before(ChatClientRequest chatClientRequest, AdvisorChain advisorChain) {
         //复制上下文 防止修改原始上下文 别的顾问可能也会用到原始上下文 不要造成污染
+        //  - prompt — 就是发给 AI 模型的 Prompt 对象，里面包含一组 Message（SystemMessage、UserMessage、AssistantMessage 等）加上可选的
+        //  ChatOptions。这是模型实际看到的对话内容。
+        //  - context — 一个 Map<String, Object>，是 Advisor 链中各节点之间传递数据的载体。它不会发给模型，而是在 Advisor 链内部流转。比如你代码里往 context
+        //  放 "qa_retrieved_documents" 和 "question_answer_context"，后续的 after() 方法或其他 Advisor 可以从 context 中读取这些数据。
         Map<String, Object> unmodifiedContext = Map.copyOf(chatClientRequest.context());
         Map<String, Object> context = new HashMap<>(unmodifiedContext);
 
         String userText = chatClientRequest.prompt().getUserMessage().getText();
         String advisedUserText = userText + System.lineSeparator() + userTextAdvisor;
 
-        //这里填充userText的占位符，但是目前还没用到
-//        String query = new PromptTemplate(userText).render();
         String query = userText;
 
         SearchRequest request = SearchRequest.from(searchRequest).query(query)
@@ -87,15 +91,15 @@ public class RagAnswerAdvisor implements BaseAdvisor {
         //给人看 便于看到引用的文本
         advisedUserParams.put("qa_retrieved_documents", documents);
 
+        PromptTemplate promptTemplate = new PromptTemplate(advisedUserText);
+        String rendered = promptTemplate.render(Map.of("question_answer_context", documentContext));
+
+        List<Message> instructions = chatClientRequest.prompt().getInstructions();
+        instructions.set(instructions.size() - 1, new UserMessage(rendered));
+
         return ChatClientRequest.builder()
                 .prompt(Prompt.builder()
-                        .messages(
-                                new UserMessage(advisedUserText)
-                                //这条可以省去以节省token，以为context已经将占位符替换，模型可以拿到上下文
-                                //AssistantMessage 用于在 Prompt 中表示助手（AI 模型）先前“说过”的内容
-                                //多加一条助手消息可能会让部分模型“困惑”或影响消息权重
-                                //, new AssistantMessage(JSON.toJSONString(advisedUserParams))
-                        )
+                        .messages(instructions)
                         .build())
                 .context(advisedUserParams)
                 .build();

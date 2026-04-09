@@ -59,7 +59,8 @@ public class Step1AnalyzeNode extends AbstractExecuteSupport {
                 requestParam.getUserInput(),
                 step,
                 dynamicContext.getMaxStep(),
-                !dynamicContext.getExecutionHistory().isEmpty() ? dynamicContext.getExecutionHistory().toString() : "[首次执行]",
+                !dynamicContext.getExecutionHistory().isEmpty() ?
+                        dynamicContext.getExecutionHistory().toString() : "[首次执行]",
                 currentTask
         );
 
@@ -98,7 +99,8 @@ public class Step1AnalyzeNode extends AbstractExecuteSupport {
     /**
      * 解析任务分析结果
      */
-    private void parseAnalysisResult(DefaultExecuteStrategyFactory.ExecuteContext dynamicContext, String analysisResult, String sessionId) {
+    private void parseAnalysisResult(DefaultExecuteStrategyFactory.ExecuteContext dynamicContext,
+                                     String analysisResult, String sessionId) {
         int step = dynamicContext.getStep();
         log.info("\n📊 === 第 {} 步分析结果 ===", step);
 

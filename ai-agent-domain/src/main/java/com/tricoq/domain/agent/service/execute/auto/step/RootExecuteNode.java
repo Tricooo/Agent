@@ -40,7 +40,7 @@ public class RootExecuteNode extends AbstractExecuteSupport {
         log.info("会话ID: {}", requestParam.getSessionId());
 
         Map<String, AiAgentClientFlowConfigDTO> configs = agentRepository
-                .queryAiAgentFlowConfigByAgentId(requestParam.getAgentId());
+                .queryAiAgentFlowConfigMapByAgentId(requestParam.getAgentId());
         dynamicContext.getFlowConfigMap().putAll(configs);
         return router(requestParam, dynamicContext);
     }

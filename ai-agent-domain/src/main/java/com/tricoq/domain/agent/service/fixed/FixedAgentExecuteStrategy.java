@@ -1,7 +1,9 @@
 package com.tricoq.domain.agent.service.fixed;
 
 
+import com.alibaba.fastjson2.JSON;
 import com.tricoq.domain.agent.adapter.repository.IAgentRepository;
+import com.tricoq.domain.agent.model.entity.AutoAgentExecuteResultEntity;
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
 import com.tricoq.domain.agent.model.dto.AiAgentClientFlowConfigDTO;
 import com.tricoq.domain.agent.model.enums.AiAgentEnumVO;
@@ -12,7 +14,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Service;
-import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter;
 
 
 import java.time.LocalDate;
@@ -39,8 +40,8 @@ public class FixedAgentExecuteStrategy implements IExecuteStrategy {
     @Override
     public void execute(ExecuteCommandEntity requestParameter, ExecuteOutputPort port) {
         // 1. 获取配置客户端
-        List<AiAgentClientFlowConfigDTO> aiAgentClientList = (List<AiAgentClientFlowConfigDTO>) repository
-                .queryAiAgentFlowConfigByAgentId(requestParameter.getAgentId()).values();
+        List<AiAgentClientFlowConfigDTO> aiAgentClientList = repository
+                .queryAiAgentFlowConfigListByAgentId(requestParameter.getAgentId());
 
         // 2. 循环执行客户端
         String content = "";
@@ -51,6 +52,7 @@ public class FixedAgentExecuteStrategy implements IExecuteStrategy {
             //使用chat memory存储content是为了维持人和系统的连续性，用户一般只关系最终的执行结果，所以content可以只存最终结果
             //用户请求是需要都存储的
             content = chatClient.prompt(requestParameter.getUserInput() + "，" + content)
+                    //spec-配置器 请求级配置-当前调用生效
                     .system(s -> s.param("current_date", LocalDate.now().toString()))
                     .advisors(a -> a
                             .param(CHAT_MEMORY_CONVERSATION_ID_KEY, requestParameter.getSessionId())
@@ -59,6 +61,14 @@ public class FixedAgentExecuteStrategy implements IExecuteStrategy {
 
             log.info("智能体对话进行，客户端ID {}", requestParameter.getAgentId());
         }
+
+        AutoAgentExecuteResultEntity result = AutoAgentExecuteResultEntity.createSummaryResult(
+                content, requestParameter.getSessionId());
+        port.send(JSON.toJSONString(result));
+
+        AutoAgentExecuteResultEntity completeResult = AutoAgentExecuteResultEntity.createCompleteResult(
+                requestParameter.getSessionId());
+        port.send(JSON.toJSONString(completeResult));
 
         log.info("智能体对话请求，结果 {} {}", requestParameter.getAgentId(), content);
     }
