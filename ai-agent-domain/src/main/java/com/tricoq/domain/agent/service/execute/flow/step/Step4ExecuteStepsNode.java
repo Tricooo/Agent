@@ -8,12 +8,11 @@ import com.tricoq.domain.agent.model.enums.AiClientTypeEnumVO;
 import com.tricoq.domain.agent.service.execute.flow.step.factory.DefaultFlowAgentExecuteStrategyFactory;
 import com.tricoq.types.framework.chain.StrategyHandler;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.tika.utils.StringUtils;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Component;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * 步骤执行节点。
@@ -31,12 +30,15 @@ public class Step4ExecuteStepsNode extends AbstractExecuteSupport {
                           DefaultFlowAgentExecuteStrategyFactory.DynamicContext dynamicContext) {
         log.info("开始执行第四步：按顺序执行规划步骤");
 
+        DefaultFlowAgentExecuteStrategyFactory.FlowState state = dynamicContext.getState();
+        DefaultFlowAgentExecuteStrategyFactory.FlowInput input = dynamicContext.getInput();
+
         try {
-            AiAgentClientFlowConfigDTO config = dynamicContext.getConfigMap()
+            AiAgentClientFlowConfigDTO config = dynamicContext.getFlowConfigMap()
                     .get(AiClientTypeEnumVO.EXECUTOR_CLIENT.getCode());
             ChatClient executorChatClient = getChatClient(config.getClientId());
 
-            List<FlowStepDTO> plannedSteps = dynamicContext.getPlannedSteps();
+            List<FlowStepDTO> plannedSteps = state.getPlannedSteps();
             if (plannedSteps == null || plannedSteps.isEmpty()) {
                 return "步骤列表为空，无法执行";
             }
@@ -48,16 +50,16 @@ public class Step4ExecuteStepsNode extends AbstractExecuteSupport {
 
             // 发送SSE结果
             AutoAgentExecuteResultEntity result = AutoAgentExecuteResultEntity.createExecutionResult(
-                    dynamicContext.getStep(),
+                    state.getCurrentStep(),
                     "已完成所有规划步骤的执行",
                     request.getSessionId());
             sendSseResult(dynamicContext, result);
 
             sendSummaryResult(dynamicContext, request.getSessionId());
-            sendCompleteResult(dynamicContext, request.getSessionId());
+            //sendCompleteResult(dynamicContext, request.getSessionId());
 
-            dynamicContext.setStep(dynamicContext.getStep() + 1);
-            dynamicContext.setCompleted(true);
+            state.setCurrentStep(state.getCurrentStep() + 1);
+            state.setCompleted(true);
 
             log.info("第四步执行完成：所有规划步骤已执行");
             return "所有规划步骤执行完成";
@@ -81,6 +83,9 @@ public class Step4ExecuteStepsNode extends AbstractExecuteSupport {
         int stepNo = step.getStepNo();
         log.info("\n--- 开始执行 第{}步: {} ---", stepNo, step.getTitle());
 
+        DefaultFlowAgentExecuteStrategyFactory.FlowState state = dynamicContext.getState();
+        DefaultFlowAgentExecuteStrategyFactory.FlowInput input = dynamicContext.getInput();
+
         try {
             String executionResult = executorChatClient.prompt()
                     .user(buildStepExecutionPrompt(step, dynamicContext))
@@ -95,13 +100,20 @@ public class Step4ExecuteStepsNode extends AbstractExecuteSupport {
                     executionResult.substring(0, Math.min(150, executionResult.length())));
 
             // 保存执行结果
-            dynamicContext.setValue("step" + stepNo + "Result", executionResult);
+            var resultDTO = DefaultFlowAgentExecuteStrategyFactory.FlowStepResultDTO.builder()
+                    .stepNo(stepNo)
+                    .status(DefaultFlowAgentExecuteStrategyFactory.FlowStepStatus.SUCCESS)
+                    .stepTitle(step.getTitle())
+                    .result(executionResult)
+                    .build();
+
+            state.getStepResults().put(stepNo, resultDTO);
 
             // 发送步骤执行结果的SSE
             AutoAgentExecuteResultEntity stepResult = AutoAgentExecuteResultEntity.createExecutionResult(
                     stepNo,
                     "第" + stepNo + "步 执行完成: " + executionResult.substring(0, Math.min(500, executionResult.length())),
-                    dynamicContext.getSessionId());
+                    input.getSessionId());
             sendSseResult(dynamicContext, stepResult);
 
             //todo 这里的等待需要吗？
@@ -110,7 +122,6 @@ public class Step4ExecuteStepsNode extends AbstractExecuteSupport {
         } catch (Exception e) {
             //todo 这里步骤执行失败没有阻止执行 如果步骤 2 依赖步骤 1 的结果，步骤 1 失败后继续执行步骤 2 没有意义
             log.error("执行步骤 {} 时发生错误: {}", stepNo, e.getMessage());
-            dynamicContext.setValue("step" + stepNo + "Error", e.getMessage());
             handleStepExecutionError(stepNo, step.getTitle(), e, dynamicContext);
         }
 
@@ -123,21 +134,18 @@ public class Step4ExecuteStepsNode extends AbstractExecuteSupport {
     private void handleStepExecutionError(int stepNo, String stepTitle, Exception e,
                                           DefaultFlowAgentExecuteStrategyFactory.DynamicContext dynamicContext) {
         log.warn("步骤 {} 执行失败，记录错误", stepNo);
-
-        Map<String, Integer> errorStats = dynamicContext.getValue("stepErrorStats");
-        if (errorStats == null) {
-            errorStats = new HashMap<>();
-            dynamicContext.setValue("stepErrorStats", errorStats);
-        }
-        errorStats.put("step" + stepNo, errorStats.getOrDefault("step" + stepNo, 0) + 1);
-
-        dynamicContext.setValue("step" + stepNo + "Status", "FAILED_WITH_ERROR");
-
+        var resultDTO = DefaultFlowAgentExecuteStrategyFactory.FlowStepResultDTO.builder()
+                .stepNo(stepNo)
+                .stepTitle(stepTitle)
+                .status(DefaultFlowAgentExecuteStrategyFactory.FlowStepStatus.FAILED)
+                .errorMessage(e.getMessage())
+                .build();
+        dynamicContext.getState().getStepResults().put(stepNo, resultDTO);
         try {
             AutoAgentExecuteResultEntity errorResult = AutoAgentExecuteResultEntity.createExecutionResult(
                     stepNo,
                     "第" + stepNo + "步 执行失败: " + e.getMessage(),
-                    dynamicContext.getSessionId());
+                    dynamicContext.getInput().getSessionId());
             sendSseResult(dynamicContext, errorResult);
         } catch (Exception sseException) {
             log.error("发送错误SSE结果失败", sseException);
@@ -154,10 +162,17 @@ public class Step4ExecuteStepsNode extends AbstractExecuteSupport {
         String prevResultSection = "";
         if (step.getStepNo() > 1) {
             //todo 如果步骤之间跨步依赖，可能需要传入累积上下文
-            String prevResult = dynamicContext.getValue("step" + (step.getStepNo() - 1) + "Result");
-            if (prevResult != null) {
+            DefaultFlowAgentExecuteStrategyFactory.FlowStepResultDTO resultDTO = dynamicContext
+                    .getState()
+                    .getStepResults()
+                    .get(step.getStepNo() - 1);
+            if (null != resultDTO) {
+                String result = resultDTO.getResult();
+                if (StringUtils.isBlank(result)) {
+                    throw new RuntimeException();
+                }
                 prevResultSection = "\n**前置步骤执行结果:**\n"
-                        + prevResult.substring(0, Math.min(500, prevResult.length())) + "\n";
+                        + result.substring(0, Math.min(500, result.length())) + "\n";
             }
         }
 
@@ -197,7 +212,7 @@ public class Step4ExecuteStepsNode extends AbstractExecuteSupport {
                 step.getExecutionInstruction(),
                 step.getToolHint() != null ? step.getToolHint() : "无指定工具",
                 step.getExpectedOutput(),
-                dynamicContext.getUserInput());
+                dynamicContext.getInput().getUserInput());
     }
 
     /**
@@ -208,12 +223,14 @@ public class Step4ExecuteStepsNode extends AbstractExecuteSupport {
         StringBuilder summaryContent = new StringBuilder();
         summaryContent.append("## 执行步骤完成总结\n\n");
 
-        List<FlowStepDTO> steps = dynamicContext.getPlannedSteps();
+        DefaultFlowAgentExecuteStrategyFactory.FlowState state = dynamicContext.getState();
+        List<FlowStepDTO> steps = state.getPlannedSteps();
         if (steps != null) {
             summaryContent.append("### 已完成的工作\n");
             for (FlowStepDTO step : steps) {
-                String status = dynamicContext.getValue("step" + step.getStepNo() + "Status");
-                String icon = "FAILED_WITH_ERROR".equals(status) ? "x" : "v";
+                DefaultFlowAgentExecuteStrategyFactory.FlowStepStatus status = state.getStepResults()
+                        .get(step.getStepNo()).getStatus();
+                String icon = DefaultFlowAgentExecuteStrategyFactory.FlowStepStatus.FAILED.equals(status) ? "x" : "v";
                 summaryContent.append(String.format("- [%s] 第%d步: %s\n",
                         icon, step.getStepNo(), step.getTitle()));
             }

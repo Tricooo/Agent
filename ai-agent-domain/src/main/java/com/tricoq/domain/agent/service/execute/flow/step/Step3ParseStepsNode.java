@@ -32,7 +32,8 @@ public class Step3ParseStepsNode extends AbstractExecuteSupport {
                              DefaultFlowAgentExecuteStrategyFactory.DynamicContext dynamicContext) {
         log.info("\n--- 步骤3: 规划步骤校验 ---");
 
-        List<FlowStepDTO> plannedSteps = dynamicContext.getPlannedSteps();
+        DefaultFlowAgentExecuteStrategyFactory.FlowState state = dynamicContext.getState();
+        List<FlowStepDTO> plannedSteps = state.getPlannedSteps();
 
         // 校验步骤列表非空
         if (plannedSteps == null || plannedSteps.isEmpty()) {
@@ -68,13 +69,13 @@ public class Step3ParseStepsNode extends AbstractExecuteSupport {
         }
 
         AutoAgentExecuteResultEntity result = AutoAgentExecuteResultEntity.createAnalysisSubResult(
-                dynamicContext.getStep(),
+                state.getCurrentStep(),
                 "analysis_progress",
                 parseResult.toString(),
                 requestParam.getSessionId());
         sendSseResult(dynamicContext, result);
 
-        dynamicContext.setStep(dynamicContext.getStep() + 1);
+        state.setCurrentStep(state.getCurrentStep() + 1);
 
         return router(requestParam, dynamicContext);
     }

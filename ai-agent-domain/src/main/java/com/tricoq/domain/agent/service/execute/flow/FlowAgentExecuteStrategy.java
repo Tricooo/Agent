@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 
 /**
  * 流程执行策略
+ *
  * @author xiaofuge bugstack.cn @小傅哥
  * 2025/8/5 09:56
  */
@@ -30,15 +31,22 @@ public class FlowAgentExecuteStrategy implements IExecuteStrategy {
 
         DefaultFlowAgentExecuteStrategyFactory.DynamicContext dynamicContext = DefaultFlowAgentExecuteStrategyFactory
                 .DynamicContext.builder()
-                .maxStep(executeCommandEntity.getMaxSteps() != null ? executeCommandEntity.getMaxSteps() : 4)
-                .sessionId(executeCommandEntity.getSessionId())
-                .userInput(executeCommandEntity.getUserInput())
+                .input(DefaultFlowAgentExecuteStrategyFactory.FlowInput
+                        .builder()
+                        .userInput(executeCommandEntity.getUserInput())
+                        .sessionId(executeCommandEntity.getSessionId())
+                        .maxStep(executeCommandEntity.getMaxSteps() != null ? executeCommandEntity.getMaxSteps() : DefaultFlowAgentExecuteStrategyFactory.DEFAULT_MAX_STEP)
+                        .agentId(executeCommandEntity.getAgentId())
+                        .build())
+                .state(DefaultFlowAgentExecuteStrategyFactory.FlowState
+                        .builder()
+                        .build())
                 .port(port)
                 .build();
 
         String apply = executeHandler.apply(executeCommandEntity, dynamicContext);
         log.info("流程执行结果:{}", apply);
-        
+
         // 发送完成标识
         try {
             AutoAgentExecuteResultEntity completeResult = AutoAgentExecuteResultEntity.createCompleteResult(executeCommandEntity.getSessionId());

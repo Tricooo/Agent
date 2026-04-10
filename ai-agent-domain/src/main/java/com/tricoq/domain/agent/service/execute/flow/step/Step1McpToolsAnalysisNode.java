@@ -39,7 +39,7 @@ public class Step1McpToolsAnalysisNode extends AbstractExecuteSupport {
                              DefaultFlowAgentExecuteStrategyFactory.DynamicContext dynamicContext) {
         log.info("\n--- 步骤1: MCP工具能力分析（仅分析阶段，不执行用户请求） ---");
 
-        Map<String, AiAgentClientFlowConfigDTO> configMap = dynamicContext.getConfigMap();
+        Map<String, AiAgentClientFlowConfigDTO> configMap = dynamicContext.getFlowConfigMap();
         AiAgentClientFlowConfigDTO config = Optional
                 .ofNullable(configMap.get(AiClientTypeEnumVO.TOOL_MCP_CLIENT.getCode()))
                 .orElseThrow();
@@ -53,6 +53,8 @@ public class Step1McpToolsAnalysisNode extends AbstractExecuteSupport {
             prompt。这么详细的分析指令可能导致 LLM 输出很长的分析报告，实际被 Step2
             消费时大部分内容是冗余的。可以考虑精简，聚焦在"工具匹配度"和"调用方式"两个核心点上
         */
+        DefaultFlowAgentExecuteStrategyFactory.FlowInput input = dynamicContext.getInput();
+        DefaultFlowAgentExecuteStrategyFactory.FlowState state = dynamicContext.getState();
         String mcpAnalysisPrompt = String.format(
                 """
                         # MCP工具能力分析任务
@@ -96,24 +98,24 @@ public class Step1McpToolsAnalysisNode extends AbstractExecuteSupport {
                         - 为后续执行阶段提供建议
                         
                         请确保分析结果准确、详细、可操作，并再次强调这仅是分析阶段。""",
-                dynamicContext.getUserInput(),
-                dynamicContext.getToolListPrompt()
+                input.getUserInput(),
+                state.getToolListPrompt()
         );
 
         String mcpAnalysisResult = mcpAnalysisClient.prompt().user(mcpAnalysisPrompt).call().content();
-        dynamicContext.setMcpAnalysisResult(mcpAnalysisResult);
+        state.setMcpAnalysisResult(mcpAnalysisResult);
 
         log.info("MCP工具分析结果（仅分析，未执行实际操作）: {}", mcpAnalysisResult);
 
         // 发送SSE结果
         AutoAgentExecuteResultEntity result = AutoAgentExecuteResultEntity.createAnalysisSubResult(
-                dynamicContext.getStep(),
+                state.getCurrentStep(),
                 "analysis_tools",
                 mcpAnalysisResult,
                 requestParam.getSessionId());
         sendSseResult(dynamicContext, result);
 
-        dynamicContext.setStep(dynamicContext.getStep() + 1);
+        state.setCurrentStep(state.getCurrentStep() + 1);
 
         return router(requestParam, dynamicContext);
     }

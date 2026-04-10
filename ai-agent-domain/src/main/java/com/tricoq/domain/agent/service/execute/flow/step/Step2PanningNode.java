@@ -9,6 +9,7 @@ import com.tricoq.domain.agent.service.execute.flow.step.factory.DefaultFlowAgen
 import com.tricoq.types.framework.chain.StrategyHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
@@ -36,25 +37,32 @@ public class Step2PanningNode extends AbstractExecuteSupport {
         log.info("\n--- 步骤2: 执行步骤规划 ---");
 
         AiAgentClientFlowConfigDTO config = Optional
-                .ofNullable(dynamicContext.getConfigMap().get(AiClientTypeEnumVO.PLANNING_CLIENT.getCode()))
+                .ofNullable(dynamicContext.getFlowConfigMap().get(AiClientTypeEnumVO.PLANNING_CLIENT.getCode()))
                 .orElseThrow();
 
         ChatClient planningClient = Optional
                 .ofNullable(getChatClient(config.getClientId()))
                 .orElseThrow();
 
+        DefaultFlowAgentExecuteStrategyFactory.FlowInput input = dynamicContext.getInput();
+        DefaultFlowAgentExecuteStrategyFactory.FlowState state = dynamicContext.getState();
+
         String planningPrompt = buildPlanningPrompt(
-                dynamicContext.getUserInput(),
-                dynamicContext.getMcpAnalysisResult(),
-                dynamicContext.getToolListPrompt());
+                input.getUserInput(),
+                state.getMcpAnalysisResult(),
+                state.getToolListPrompt());
 
         // 使用 Spring AI Structured Output 直接输出结构化步骤
         List<FlowStepDTO> plannedSteps = planningClient.prompt()
                 .user(planningPrompt)
                 .call()
-                .entity(new ParameterizedTypeReference<>() {});
+                .entity(new ParameterizedTypeReference<>() {
+                });
 
-        dynamicContext.setPlannedSteps(plannedSteps);
+        if (CollectionUtils.isEmpty(plannedSteps)) {
+            throw new RuntimeException("规划节点失败");
+        }
+        state.setPlannedSteps(plannedSteps);
 
         log.info("规划完成，共 {} 个步骤", plannedSteps.size());
         for (FlowStepDTO step : plannedSteps) {
@@ -65,13 +73,13 @@ public class Step2PanningNode extends AbstractExecuteSupport {
         // 发送SSE结果 — 把结构化步骤格式化为可读文本推给前端
         String planSummary = formatPlanForDisplay(plannedSteps);
         AutoAgentExecuteResultEntity result = AutoAgentExecuteResultEntity.createAnalysisSubResult(
-                dynamicContext.getStep(),
+                state.getCurrentStep(),
                 "analysis_strategy",
                 planSummary,
                 requestParam.getSessionId());
         sendSseResult(dynamicContext, result);
 
-        dynamicContext.setStep(dynamicContext.getStep() + 1);
+        state.setCurrentStep(state.getCurrentStep() + 1);
 
         return router(requestParam, dynamicContext);
     }
@@ -89,30 +97,30 @@ public class Step2PanningNode extends AbstractExecuteSupport {
      */
     private String buildPlanningPrompt(String userRequest, String mcpToolsAnalysis, String toolListPrompt) {
         return String.format("""
-                # 智能执行计划生成
-
-                ## 用户请求
-                ```
-                %s
-                ```
-
-                ## MCP工具能力分析结果
-                %s
-
-                ## 可用工具清单
-                %s
-
-                ## 规划要求
-                请基于用户请求和工具分析结果，生成 3-5 个执行步骤。
-
-                核心原则：
-                1. 完整保留用户需求中的所有详细信息，传递到每个步骤的 executionInstruction 中
-                2. 每个步骤的 toolHint 必须使用可用工具清单中的确切工具名称
-                3. 每个步骤应专注于单一功能，避免混合不同类型的操作
-                4. 合理安排步骤顺序，前置步骤的产出应为后续步骤提供输入
-                5. executionInstruction 要具体可执行，包含工具调用参数和操作细节
-                6. expectedOutput 要明确，便于判断步骤是否执行成功
-                """,
+                        # 智能执行计划生成
+                        
+                        ## 用户请求
+                        ```
+                        %s
+                        ```
+                        
+                        ## MCP工具能力分析结果
+                        %s
+                        
+                        ## 可用工具清单
+                        %s
+                        
+                        ## 规划要求
+                        请基于用户请求和工具分析结果，生成 3-5 个执行步骤。
+                        
+                        核心原则：
+                        1. 完整保留用户需求中的所有详细信息，传递到每个步骤的 executionInstruction 中
+                        2. 每个步骤的 toolHint 必须使用可用工具清单中的确切工具名称
+                        3. 每个步骤应专注于单一功能，避免混合不同类型的操作
+                        4. 合理安排步骤顺序，前置步骤的产出应为后续步骤提供输入
+                        5. executionInstruction 要具体可执行，包含工具调用参数和操作细节
+                        6. expectedOutput 要明确，便于判断步骤是否执行成功
+                        """,
                 userRequest,
                 mcpToolsAnalysis,
                 toolListPrompt);

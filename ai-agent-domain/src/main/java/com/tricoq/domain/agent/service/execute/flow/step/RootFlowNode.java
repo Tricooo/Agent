@@ -53,7 +53,7 @@ public class RootFlowNode extends AbstractExecuteSupport {
         if (configMap.isEmpty()) {
             throw new IllegalArgumentException("该Agent未配置Flow执行链路");
         }
-        dynamicContext.getConfigMap().putAll(configMap);
+        dynamicContext.getFlowConfigMap().putAll(configMap);
 
         //提取执行器可用的工具列表
         AiAgentClientFlowConfigDTO executeClientConfig = configMap.get(AiClientTypeEnumVO.EXECUTOR_CLIENT.getCode());
@@ -66,7 +66,7 @@ public class RootFlowNode extends AbstractExecuteSupport {
             log.warn("此agent链路执行client无可用mcp tool,agent id: {},client id: {}", requestParam.getAgentId(),
                     clientId);
         }
-        dynamicContext.setToolListPrompt(McpToolCatalogDTO.toPromptText(tools));
+        dynamicContext.getState().setToolListPrompt(McpToolCatalogDTO.toPromptText(tools));
         return router(requestParam, dynamicContext);
     }
 
