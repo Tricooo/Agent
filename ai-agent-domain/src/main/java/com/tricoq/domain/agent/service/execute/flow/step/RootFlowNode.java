@@ -10,6 +10,7 @@ import com.tricoq.domain.agent.service.execute.flow.step.factory.DefaultFlowAgen
 import com.tricoq.types.framework.chain.StrategyHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -50,17 +51,21 @@ public class RootFlowNode extends AbstractExecuteSupport {
         Map<String, AiAgentClientFlowConfigDTO> configMap = agentRepository
                 .queryAiAgentFlowConfigMapByAgentId(requestParam.getAgentId());
         if (configMap.isEmpty()) {
-            throw new IllegalArgumentException("agent未配置");
+            throw new IllegalArgumentException("该Agent未配置Flow执行链路");
         }
         dynamicContext.getConfigMap().putAll(configMap);
 
         //提取执行器可用的工具列表
         AiAgentClientFlowConfigDTO executeClientConfig = configMap.get(AiClientTypeEnumVO.EXECUTOR_CLIENT.getCode());
-        if(null == executeClientConfig){
+        if (null == executeClientConfig) {
             throw new IllegalArgumentException("执行client未配置");
         }
         String clientId = executeClientConfig.getClientId();
         List<McpToolCatalogDTO> tools = toolCatalogService.resolveToolsByClient(clientId);
+        if (CollectionUtils.isEmpty(tools)) {
+            log.warn("此agent链路执行client无可用mcp tool,agent id: {},client id: {}", requestParam.getAgentId(),
+                    clientId);
+        }
         dynamicContext.setToolListPrompt(McpToolCatalogDTO.toPromptText(tools));
         return router(requestParam, dynamicContext);
     }

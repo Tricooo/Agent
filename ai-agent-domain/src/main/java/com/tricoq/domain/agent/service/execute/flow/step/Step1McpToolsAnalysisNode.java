@@ -43,10 +43,16 @@ public class Step1McpToolsAnalysisNode extends AbstractExecuteSupport {
         AiAgentClientFlowConfigDTO config = Optional
                 .ofNullable(configMap.get(AiClientTypeEnumVO.TOOL_MCP_CLIENT.getCode()))
                 .orElseThrow();
+
+        //todo client 类型的命名和定位可能需要重新审视 TOOL_MCP_CLIENT
         ChatClient mcpAnalysisClient = Optional
                 .ofNullable(getChatClient(config.getClientId()))
                 .orElseThrow();
-
+        //todo
+        /*  prompt 过长: 92 行的分析 prompt 非常详细（5个大节），但 Step1 的产出 mcpAnalysisResult 在 Step2 中只作为参考文本嵌入规划
+            prompt。这么详细的分析指令可能导致 LLM 输出很长的分析报告，实际被 Step2
+            消费时大部分内容是冗余的。可以考虑精简，聚焦在"工具匹配度"和"调用方式"两个核心点上
+        */
         String mcpAnalysisPrompt = String.format(
                 """
                         # MCP工具能力分析任务

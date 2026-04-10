@@ -40,14 +40,15 @@ public class ToolCatalogService implements IToolCatalogService {
     @Override
     public List<McpToolCatalogDTO> resolveToolsByClient(String clientId) {
         List<AiClientToolMcpDTO> mcps = clientRepository.queryAiClientToolMcpsByClientIds(List.of(clientId));
-        return mcps.stream().map(mcp -> {
-            McpSyncClient mcpClient = mcpClientProvider.getOrCreate(mcp);
-            return McpToolCatalogDTO.builder().mcpId(mcp.getMcpId())
-                    .mcpName(mcp.getMcpName())
-                    .tools(listToolSpecs(mcpClient))
-                    .status(mcp.getStatus())
-                    .build();
-        }).toList();
+        return mcps.stream().filter(mcp -> Integer.valueOf(1).equals(mcp.getStatus()))
+                .map(mcp -> {
+                    McpSyncClient mcpClient = mcpClientProvider.getOrCreate(mcp);
+                    return McpToolCatalogDTO.builder().mcpId(mcp.getMcpId())
+                            .mcpName(mcp.getMcpName())
+                            .tools(listToolSpecs(mcpClient))
+                            .status(mcp.getStatus())
+                            .build();
+                }).toList();
     }
 
     private List<ToolSpecDTO> listToolSpecs(McpSyncClient mcpClient) {
@@ -78,8 +79,8 @@ public class ToolCatalogService implements IToolCatalogService {
         List<String> optionalArgs = inputProperties.isEmpty()
                 ? List.of()
                 : inputProperties.keySet().stream()
-                .filter(arg -> !requiredArgSet.contains(arg))
-                .toList();
+                  .filter(arg -> !requiredArgSet.contains(arg))
+                  .toList();
 
         return ToolSpecDTO.builder()
                 .toolName(tool.name())

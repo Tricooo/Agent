@@ -81,7 +81,6 @@ public class McpToolCatalogDTO {
         }
     }
 
-    @SuppressWarnings("unchecked")
     private static String extractDescription(Object schema) {
         if (schema instanceof Map<?, ?> map) {
             Object desc = map.get("description");

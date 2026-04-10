@@ -1,5 +1,6 @@
 package com.tricoq.domain.agent.service.execute.flow.step.factory;
 
+import com.tricoq.domain.agent.model.dto.FlowStepDTO;
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
 import com.tricoq.domain.agent.model.dto.AiAgentClientFlowConfigDTO;
 import com.tricoq.domain.agent.service.execute.flow.step.RootFlowNode;
@@ -13,7 +14,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -57,6 +60,13 @@ public class DefaultFlowAgentExecuteStrategyFactory {
         private String planningResult;
 
         private Map<String, String> stepsMap;
+
+        /**
+         * 结构化的执行步骤列表，由 Step2 通过 Spring AI Structured Output 产出。
+         * 替代 planningResult + stepsMap 的松散链路。
+         */
+        @Builder.Default
+        private List<FlowStepDTO> plannedSteps = new ArrayList<>();
 
         private ExecuteOutputPort port;
         @Builder.Default
