@@ -109,21 +109,21 @@ public class Step2PanningNode extends AbstractExecuteSupport {
         // 2. 工具能力分析
         prompt.append("## 🔧 MCP工具能力分析结果\n");
         prompt.append(mcpToolsAnalysis).append("\n\n");
-
-        // 3. 工具映射验证 - 使用动态获取的工具信息
-        prompt.append("## ✅ 工具映射验证要求\n");
-        prompt.append("**重要提醒：** 在生成执行步骤时，必须严格遵循以下工具映射规则：\n\n");
-
-        // 动态获取实际的MCP工具信息
-        String actualToolsInfo = getActualMcpToolsInfo();
-        prompt.append("### 可用工具清单\n");
-        prompt.append(actualToolsInfo).append("\n");
-
-        prompt.append("### 工具选择原则\n");
-        prompt.append("- **精确匹配**: 每个步骤必须使用上述工具清单中的确切函数名称\n");
-        prompt.append("- **功能对应**: 根据MCP工具分析结果中的匹配度选择最适合的工具\n");
-        prompt.append("- **参数完整**: 确保每个工具调用都包含必需的参数说明\n");
-        prompt.append("- **依赖关系**: 考虑工具间的数据流转和依赖关系\n\n");
+//
+//        // 3. 工具映射验证 - 使用动态获取的工具信息
+//        prompt.append("## ✅ 工具映射验证要求\n");
+//        prompt.append("**重要提醒：** 在生成执行步骤时，必须严格遵循以下工具映射规则：\n\n");
+//
+//        // 动态获取实际的MCP工具信息
+//        String actualToolsInfo = getActualMcpToolsInfo();
+//        prompt.append("### 可用工具清单\n");
+//        prompt.append(actualToolsInfo).append("\n");
+//
+//        prompt.append("### 工具选择原则\n");
+//        prompt.append("- **精确匹配**: 每个步骤必须使用上述工具清单中的确切函数名称\n");
+//        prompt.append("- **功能对应**: 根据MCP工具分析结果中的匹配度选择最适合的工具\n");
+//        prompt.append("- **参数完整**: 确保每个工具调用都包含必需的参数说明\n");
+//        prompt.append("- **依赖关系**: 考虑工具间的数据流转和依赖关系\n\n");
 
         // 4. 执行计划要求
         prompt.append("## 📝 执行计划要求\n");

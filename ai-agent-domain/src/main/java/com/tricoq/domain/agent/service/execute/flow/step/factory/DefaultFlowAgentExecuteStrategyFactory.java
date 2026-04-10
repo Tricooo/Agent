@@ -48,6 +48,8 @@ public class DefaultFlowAgentExecuteStrategyFactory {
         @Builder.Default
         private boolean completed = false;
 
+        private String toolListPrompt;
+
         private Map<String, Object> executionContext;
 
         private String mcpAnalysisResult;

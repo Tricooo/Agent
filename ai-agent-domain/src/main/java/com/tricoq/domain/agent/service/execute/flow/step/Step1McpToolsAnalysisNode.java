@@ -1,8 +1,8 @@
 package com.tricoq.domain.agent.service.execute.flow.step;
 
+import com.tricoq.domain.agent.model.dto.AiAgentClientFlowConfigDTO;
 import com.tricoq.domain.agent.model.entity.AutoAgentExecuteResultEntity;
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
-import com.tricoq.domain.agent.model.dto.AiAgentClientFlowConfigDTO;
 import com.tricoq.domain.agent.model.enums.AiClientTypeEnumVO;
 import com.tricoq.domain.agent.service.execute.flow.step.factory.DefaultFlowAgentExecuteStrategyFactory;
 import com.tricoq.types.framework.chain.StrategyHandler;
@@ -58,8 +58,11 @@ public class Step1McpToolsAnalysisNode extends AbstractExecuteSupport {
                         ## 用户请求
                         %s
                         
+                        ## 可用的MCP工具列表
+                        %s
+                        
                         ## 分析要求
-                        请基于当前可调用的MCP工具能力进行分析，针对用户请求进行详细的工具能力分析（仅分析，不执行）：
+                        请基于当前**可用的MCP工具列表**进行分析，针对用户请求进行详细的工具能力分析（仅分析，不执行）：
                         
                         ### 1. 工具匹配分析
                         - 分析每个可用工具的核心功能和适用场景
@@ -87,7 +90,8 @@ public class Step1McpToolsAnalysisNode extends AbstractExecuteSupport {
                         - 为后续执行阶段提供建议
                         
                         请确保分析结果准确、详细、可操作，并再次强调这仅是分析阶段。""",
-                dynamicContext.getUserInput()
+                dynamicContext.getUserInput(),
+                dynamicContext.getToolListPrompt()
         );
 
         String mcpAnalysisResult = mcpAnalysisClient.prompt().user(mcpAnalysisPrompt).call().content();

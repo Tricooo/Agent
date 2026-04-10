@@ -85,7 +85,8 @@ public class Step4ExecuteStepsNode extends AbstractExecuteSupport {
     /**
      * 按顺序执行规划步骤
      */
-    private void executeStepsInOrder(ChatClient executorChatClient, Map<String, String> stepsMap, DefaultFlowAgentExecuteStrategyFactory.DynamicContext dynamicContext) {
+    private void executeStepsInOrder(ChatClient executorChatClient, Map<String, String> stepsMap,
+                                     DefaultFlowAgentExecuteStrategyFactory.DynamicContext dynamicContext) {
         if (stepsMap == null || stepsMap.isEmpty()) {
             log.warn("步骤映射为空，无法执行");
             return;
@@ -146,7 +147,7 @@ public class Step4ExecuteStepsNode extends AbstractExecuteSupport {
 
             // 使用执行器ChatClient来执行具体步骤
             String executionResult = executorChatClient.prompt()
-                    .user(buildStepExecutionPrompt(stepContent, dynamicContext))
+                    .user(buildStepExecutionPrompt(stepNumber, stepContent, dynamicContext))
                     .call()
                     .content();
 
@@ -216,26 +217,41 @@ public class Step4ExecuteStepsNode extends AbstractExecuteSupport {
     /**
      * 构建步骤执行提示词
      */
-    private String buildStepExecutionPrompt(String stepContent,
+    private String buildStepExecutionPrompt(Integer stepNumber,
+                                            String stepContent,
                                             DefaultFlowAgentExecuteStrategyFactory.DynamicContext dynamicContext) {
-        return "你是一个智能执行助手，需要执行以下步骤:\n\n" +
-                "**步骤内容:**\n" +
-                stepContent + "\n\n" +
-                "**用户原始请求:**\n" +
-                dynamicContext.getUserInput() + "\n\n" +
-                "**执行要求:**\n" +
-                "1. 仔细分析步骤内容，理解需要执行的具体任务\n" +
-                "2. 如果涉及MCP工具调用，请使用相应的工具\n" +
-                "3. 提供详细的执行过程和结果\n" +
-                "4. 如果遇到问题，请说明具体的错误信息\n" +
-                "5. **重要**: 执行完成后，必须在回复末尾明确输出执行结果，格式如下:\n" +
-                "   ```\n" +
-                "   === 执行结果 ===\n" +
-                "   状态: [成功/失败]\n" +
-                "   结果描述: [具体的执行结果描述]\n" +
-                "   输出数据: [如果有具体的输出数据，请在此列出]\n" +
-                "   ```\n\n" +
-                "请开始执行这个步骤，并严格按照要求提供详细的执行报告和结果输出。";
+
+        String prevResult = dynamicContext.getValue("step" + (stepNumber - 1) + "Result");
+
+        String prePrompt = "你是一个智能执行助手，需要执行以下步骤:";
+        //需要每一步的前序上下文，而不是整个规划步骤的上下文
+        if (prevResult != null) {
+            prePrompt += "\n**前置步骤执行结果:**\n" + prevResult.substring(0, Math.min(500, prevResult.length())) + "\n\n";
+        }
+
+        return prePrompt + String.format("""
+                        **步骤内容:**
+                        %s
+                        
+                        **用户原始请求:**
+                        %s
+                        
+                        **执行要求:**
+                        1. 仔细分析步骤内容，理解需要执行的具体任务
+                        2. 如果涉及MCP工具调用，请使用相应的工具
+                        3. 提供详细的执行过程和结果
+                        4. 如果遇到问题，请说明具体的错误信息
+                        5. **重要**: 执行完成后，必须在回复末尾明确输出执行结果，格式如下:
+                           ```
+                           === 执行结果 ===
+                           状态: [成功/失败]
+                           结果描述: [具体的执行结果描述]
+                           输出数据: [如果有具体的输出数据，请在此列出]
+                           ```
+                        
+                        请开始执行这个步骤，并严格按照要求提供详细的执行报告和结果输出。""",
+                stepContent,
+                dynamicContext.getUserInput());
     }
 
     /**

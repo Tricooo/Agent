@@ -1,14 +1,18 @@
 package com.tricoq.domain.agent.service.execute.flow.step;
 
 import com.tricoq.domain.agent.adapter.repository.IAgentRepository;
+import com.tricoq.domain.agent.model.dto.McpToolCatalogDTO;
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
 import com.tricoq.domain.agent.model.dto.AiAgentClientFlowConfigDTO;
+import com.tricoq.domain.agent.model.enums.AiClientTypeEnumVO;
+import com.tricoq.domain.agent.service.IToolCatalogService;
 import com.tricoq.domain.agent.service.execute.flow.step.factory.DefaultFlowAgentExecuteStrategyFactory;
 import com.tricoq.types.framework.chain.StrategyHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -25,6 +29,8 @@ public class RootFlowNode extends AbstractExecuteSupport {
     private final IAgentRepository agentRepository;
 
     private final Step1McpToolsAnalysisNode step1McpToolsAnalysisNode;
+
+    private final IToolCatalogService toolCatalogService;
 
     /**
      * 节点自身处理逻辑
@@ -47,6 +53,15 @@ public class RootFlowNode extends AbstractExecuteSupport {
             throw new IllegalArgumentException("agent未配置");
         }
         dynamicContext.getConfigMap().putAll(configMap);
+
+        //提取执行器可用的工具列表
+        AiAgentClientFlowConfigDTO executeClientConfig = configMap.get(AiClientTypeEnumVO.EXECUTOR_CLIENT.getCode());
+        if(null == executeClientConfig){
+            throw new IllegalArgumentException("执行client未配置");
+        }
+        String clientId = executeClientConfig.getClientId();
+        List<McpToolCatalogDTO> tools = toolCatalogService.resolveToolsByClient(clientId);
+        dynamicContext.setToolListPrompt(McpToolCatalogDTO.toPromptText(tools));
         return router(requestParam, dynamicContext);
     }
 
