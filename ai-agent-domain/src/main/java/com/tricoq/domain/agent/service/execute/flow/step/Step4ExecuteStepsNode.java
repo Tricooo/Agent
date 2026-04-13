@@ -1,9 +1,9 @@
 package com.tricoq.domain.agent.service.execute.flow.step;
 
+import com.tricoq.domain.agent.model.dto.AiAgentClientFlowConfigDTO;
 import com.tricoq.domain.agent.model.dto.FlowStepDTO;
 import com.tricoq.domain.agent.model.entity.AutoAgentExecuteResultEntity;
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
-import com.tricoq.domain.agent.model.dto.AiAgentClientFlowConfigDTO;
 import com.tricoq.domain.agent.model.enums.AiClientTypeEnumVO;
 import com.tricoq.domain.agent.service.execute.flow.step.factory.DefaultFlowAgentExecuteStrategyFactory;
 import com.tricoq.types.framework.chain.StrategyHandler;
@@ -44,26 +44,27 @@ public class Step4ExecuteStepsNode extends AbstractExecuteSupport {
                 return "步骤列表为空，无法执行";
             }
 
-            // 按顺序执行每个步骤
             for (FlowStepDTO step : plannedSteps) {
                 executeStep(executorChatClient, step, dynamicContext);
             }
 
-            // 发送SSE结果
+            ExecutionOverview overview = summarizeExecution(plannedSteps, state.getStepResults());
+            String executionMessage = buildExecutionMessage(overview);
+
             AutoAgentExecuteResultEntity result = AutoAgentExecuteResultEntity.createExecutionResult(
                     state.getCurrentStep(),
-                    "已完成所有规划步骤的执行",
+                    executionMessage,
                     request.getSessionId());
             sendSseResult(dynamicContext, result);
 
-            sendSummaryResult(dynamicContext, request.getSessionId());
-            //sendCompleteResult(dynamicContext, request.getSessionId());
+            sendSummaryResult(dynamicContext, request.getSessionId(), overview);
+            // sendCompleteResult(dynamicContext, request.getSessionId());
 
             state.setCurrentStep(state.getCurrentStep() + 1);
             state.setCompleted(true);
 
-            log.info("第四步执行完成：所有规划步骤已执行");
-            return "所有规划步骤执行完成";
+            log.info("第四步执行结束：{}", executionMessage);
+            return executionMessage;
         } catch (Exception e) {
             log.error("第四步执行失败", e);
             return "执行步骤失败: " + e.getMessage();
@@ -95,25 +96,20 @@ public class Step4ExecuteStepsNode extends AbstractExecuteSupport {
         }
         log.info("\n--- 开始执行 第{}步: {} ---", stepNo, step.getTitle());
 
-
         DefaultFlowAgentExecuteStrategyFactory.FlowInput input = dynamicContext.getInput();
 
         try {
-            //因为目前是链式执行，所以节点失败重试逻辑比较简单
             String executionResult = executeWithRetry(() -> executorChatClient.prompt()
                             .user(buildStepExecutionPrompt(step, dynamicContext))
                             .call()
-                            .content(), "执行步骤" + stepNo,  // 操作名称，用于日志
+                            .content(), "执行步骤" + stepNo,
                     3);
-            //assert 在生产环境默认关闭（JVM 不加 -ea），这行等于无效校验
-            //assert executionResult != null;
-            if (null == executionResult) {
+            if (executionResult == null) {
                 throw new RuntimeException("执行失败，步骤编号：" + stepNo);
             }
             log.info("步骤 {} 执行结果: {}...", stepNo,
                     executionResult.substring(0, Math.min(150, executionResult.length())));
 
-            // 保存执行结果
             var resultDTO = DefaultFlowAgentExecuteStrategyFactory.FlowStepResultDTO.builder()
                     .stepNo(stepNo)
                     .status(DefaultFlowAgentExecuteStrategyFactory.FlowStepStatus.SUCCESS)
@@ -123,15 +119,11 @@ public class Step4ExecuteStepsNode extends AbstractExecuteSupport {
 
             state.getStepResults().put(stepNo, resultDTO);
 
-            // 发送步骤执行结果的SSE
             AutoAgentExecuteResultEntity stepResult = AutoAgentExecuteResultEntity.createExecutionResult(
                     stepNo,
                     "第" + stepNo + "步 执行完成: " + executionResult.substring(0, Math.min(500, executionResult.length())),
                     input.getSessionId());
             sendSseResult(dynamicContext, stepResult);
-
-            //todo 这里的等待需要吗？
-            //Thread.sleep(1000);
 
         } catch (Exception e) {
             log.error("执行步骤 {} 时发生错误: {}", stepNo, e.getMessage());
@@ -143,10 +135,6 @@ public class Step4ExecuteStepsNode extends AbstractExecuteSupport {
 
     /**
      * 检查所依赖的步骤是否成功执行
-     *
-     * @param step
-     * @param dynamicContext
-     * @return
      */
     private boolean canExecuteStep(FlowStepDTO step,
                                    DefaultFlowAgentExecuteStrategyFactory.DynamicContext dynamicContext) {
@@ -197,7 +185,6 @@ public class Step4ExecuteStepsNode extends AbstractExecuteSupport {
      */
     private String buildStepExecutionPrompt(FlowStepDTO step,
                                             DefaultFlowAgentExecuteStrategyFactory.DynamicContext dynamicContext) {
-        // 读取依赖步骤的执行结果
         StringBuilder prevResultSection = new StringBuilder();
         List<Integer> deps = step.getDependsOn();
         if (deps != null && !deps.isEmpty()) {
@@ -208,7 +195,8 @@ public class Step4ExecuteStepsNode extends AbstractExecuteSupport {
                 if (depResult != null && StringUtils.isNotBlank(depResult.getResult())) {
                     String truncated = depResult.getResult()
                             .substring(0, Math.min(500, depResult.getResult().length()));
-                    prevResultSection.append(String.format("- 第%d步(%s): %s\n", depNo, depResult.getStepTitle(), truncated));
+                    prevResultSection.append(String.format("- 第%d步(%s): %s\n",
+                            depNo, depResult.getStepTitle(), truncated));
                 }
             }
         }
@@ -256,34 +244,95 @@ public class Step4ExecuteStepsNode extends AbstractExecuteSupport {
      * 发送总结结果到流式输出
      */
     private void sendSummaryResult(DefaultFlowAgentExecuteStrategyFactory.DynamicContext dynamicContext,
-                                   String sessionId) {
+                                   String sessionId,
+                                   ExecutionOverview overview) {
         StringBuilder summaryContent = new StringBuilder();
         summaryContent.append("## 执行步骤完成总结\n\n");
 
         DefaultFlowAgentExecuteStrategyFactory.FlowState state = dynamicContext.getState();
         List<FlowStepDTO> steps = state.getPlannedSteps();
         if (steps != null) {
-            summaryContent.append("### 已完成的工作\n");
+            summaryContent.append("### 步骤执行明细\n");
             for (FlowStepDTO step : steps) {
                 DefaultFlowAgentExecuteStrategyFactory.FlowStepResultDTO resultDTO =
                         state.getStepResults().get(step.getStepNo());
                 DefaultFlowAgentExecuteStrategyFactory.FlowStepStatus status =
-                        resultDTO != null ? resultDTO.getStatus()
-                                : DefaultFlowAgentExecuteStrategyFactory.FlowStepStatus.SKIPPED;
-                String icon = DefaultFlowAgentExecuteStrategyFactory.FlowStepStatus.SUCCESS.equals(status) ? "v" : "x";
+                        resultDTO != null ? resultDTO.getStatus() : null;
                 summaryContent.append(String.format("- [%s] 第%d步: %s\n",
-                        icon, step.getStepNo(), step.getTitle()));
+                        formatStatusLabel(status), step.getStepNo(), step.getTitle()));
             }
             summaryContent.append("\n");
         }
 
         summaryContent.append("### 执行状态\n");
-        summaryContent.append("所有规划步骤已执行完成\n");
+        summaryContent.append(buildExecutionStatusText(overview));
 
         AutoAgentExecuteResultEntity result = AutoAgentExecuteResultEntity.createSummaryResult(
                 summaryContent.toString(), sessionId);
         sendSseResult(dynamicContext, result);
         log.info("已发送总结结果");
+    }
+
+    private ExecutionOverview summarizeExecution(List<FlowStepDTO> plannedSteps,
+                                                 Map<Integer, DefaultFlowAgentExecuteStrategyFactory.FlowStepResultDTO> stepResults) {
+        int successCount = 0;
+        int failedCount = 0;
+        int skippedCount = 0;
+        int unknownCount = 0;
+
+        for (FlowStepDTO step : plannedSteps) {
+            DefaultFlowAgentExecuteStrategyFactory.FlowStepResultDTO result = stepResults.get(step.getStepNo());
+            if (result == null || result.getStatus() == null) {
+                unknownCount++;
+                continue;
+            }
+            switch (result.getStatus()) {
+                case SUCCESS -> successCount++;
+                case FAILED -> failedCount++;
+                case SKIPPED -> skippedCount++;
+            }
+        }
+
+        return new ExecutionOverview(plannedSteps.size(), successCount, failedCount, skippedCount, unknownCount);
+    }
+
+    private String buildExecutionMessage(ExecutionOverview overview) {
+        if (overview.isAllSucceeded()) {
+            return String.format("已完成所有规划步骤的执行（共%d步，全部成功）", overview.totalSteps);
+        }
+        return String.format("规划步骤执行结束：成功%d步，失败%d步，跳过%d步%s",
+                overview.successSteps,
+                overview.failedSteps,
+                overview.skippedSteps,
+                overview.unknownSteps > 0 ? String.format("，未记录%d步", overview.unknownSteps) : "");
+    }
+
+    private String buildExecutionStatusText(ExecutionOverview overview) {
+        StringBuilder builder = new StringBuilder();
+        if (overview.isAllSucceeded()) {
+            builder.append("全部规划步骤均执行成功\n");
+        } else {
+            builder.append("本次执行已结束，但并非所有步骤都成功完成\n");
+        }
+        builder.append(String.format("- 总步骤数: %d\n", overview.totalSteps));
+        builder.append(String.format("- 成功: %d\n", overview.successSteps));
+        builder.append(String.format("- 失败: %d\n", overview.failedSteps));
+        builder.append(String.format("- 跳过: %d\n", overview.skippedSteps));
+        if (overview.unknownSteps > 0) {
+            builder.append(String.format("- 未记录: %d\n", overview.unknownSteps));
+        }
+        return builder.toString();
+    }
+
+    private String formatStatusLabel(DefaultFlowAgentExecuteStrategyFactory.FlowStepStatus status) {
+        if (status == null) {
+            return "UNKNOWN";
+        }
+        return switch (status) {
+            case SUCCESS -> "SUCCESS";
+            case FAILED -> "FAILED";
+            case SKIPPED -> "SKIPPED";
+        };
     }
 
     /**
@@ -294,5 +343,25 @@ public class Step4ExecuteStepsNode extends AbstractExecuteSupport {
         AutoAgentExecuteResultEntity result = AutoAgentExecuteResultEntity.createCompleteResult(sessionId);
         sendSseResult(dynamicContext, result);
         log.info("已发送完成标识");
+    }
+
+    private static final class ExecutionOverview {
+        private final int totalSteps;
+        private final int successSteps;
+        private final int failedSteps;
+        private final int skippedSteps;
+        private final int unknownSteps;
+
+        private ExecutionOverview(int totalSteps, int successSteps, int failedSteps, int skippedSteps, int unknownSteps) {
+            this.totalSteps = totalSteps;
+            this.successSteps = successSteps;
+            this.failedSteps = failedSteps;
+            this.skippedSteps = skippedSteps;
+            this.unknownSteps = unknownSteps;
+        }
+
+        private boolean isAllSucceeded() {
+            return totalSteps > 0 && successSteps == totalSteps;
+        }
     }
 }
