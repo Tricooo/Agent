@@ -8,11 +8,13 @@ import com.tricoq.domain.agent.model.enums.AiClientTypeEnumVO;
 import com.tricoq.domain.agent.service.execute.flow.step.factory.DefaultFlowAgentExecuteStrategyFactory;
 import com.tricoq.types.framework.chain.StrategyHandler;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.tika.utils.StringUtils;
+import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 步骤执行节点。
@@ -31,7 +33,6 @@ public class Step4ExecuteStepsNode extends AbstractExecuteSupport {
         log.info("开始执行第四步：按顺序执行规划步骤");
 
         DefaultFlowAgentExecuteStrategyFactory.FlowState state = dynamicContext.getState();
-        DefaultFlowAgentExecuteStrategyFactory.FlowInput input = dynamicContext.getInput();
 
         try {
             AiAgentClientFlowConfigDTO config = dynamicContext.getFlowConfigMap()
@@ -81,16 +82,29 @@ public class Step4ExecuteStepsNode extends AbstractExecuteSupport {
     private void executeStep(ChatClient executorChatClient, FlowStepDTO step,
                              DefaultFlowAgentExecuteStrategyFactory.DynamicContext dynamicContext) {
         int stepNo = step.getStepNo();
+        DefaultFlowAgentExecuteStrategyFactory.FlowState state = dynamicContext.getState();
+        if (!canExecuteStep(step, dynamicContext)) {
+            var skippedDTO = DefaultFlowAgentExecuteStrategyFactory.FlowStepResultDTO.builder()
+                    .stepNo(stepNo)
+                    .stepTitle(step.getTitle())
+                    .status(DefaultFlowAgentExecuteStrategyFactory.FlowStepStatus.SKIPPED)
+                    .errorMessage("前置依赖步骤未成功，跳过执行")
+                    .build();
+            state.getStepResults().put(stepNo, skippedDTO);
+            return;
+        }
         log.info("\n--- 开始执行 第{}步: {} ---", stepNo, step.getTitle());
 
-        DefaultFlowAgentExecuteStrategyFactory.FlowState state = dynamicContext.getState();
+
         DefaultFlowAgentExecuteStrategyFactory.FlowInput input = dynamicContext.getInput();
 
         try {
-            String executionResult = executorChatClient.prompt()
-                    .user(buildStepExecutionPrompt(step, dynamicContext))
-                    .call()
-                    .content();
+            //因为目前是链式执行，所以节点失败重试逻辑比较简单
+            String executionResult = executeWithRetry(() -> executorChatClient.prompt()
+                            .user(buildStepExecutionPrompt(step, dynamicContext))
+                            .call()
+                            .content(), "执行步骤" + stepNo,  // 操作名称，用于日志
+                    3);
             //assert 在生产环境默认关闭（JVM 不加 -ea），这行等于无效校验
             //assert executionResult != null;
             if (null == executionResult) {
@@ -120,12 +134,37 @@ public class Step4ExecuteStepsNode extends AbstractExecuteSupport {
             //Thread.sleep(1000);
 
         } catch (Exception e) {
-            //todo 这里步骤执行失败没有阻止执行 如果步骤 2 依赖步骤 1 的结果，步骤 1 失败后继续执行步骤 2 没有意义
             log.error("执行步骤 {} 时发生错误: {}", stepNo, e.getMessage());
             handleStepExecutionError(stepNo, step.getTitle(), e, dynamicContext);
         }
 
         log.info("--- 完成执行 第{}步 ---", stepNo);
+    }
+
+    /**
+     * 检查所依赖的步骤是否成功执行
+     *
+     * @param step
+     * @param dynamicContext
+     * @return
+     */
+    private boolean canExecuteStep(FlowStepDTO step,
+                                   DefaultFlowAgentExecuteStrategyFactory.DynamicContext dynamicContext) {
+        List<Integer> dependsOn = step.getDependsOn();
+        if (CollectionUtils.isEmpty(dependsOn)) {
+            return Boolean.TRUE;
+        }
+        DefaultFlowAgentExecuteStrategyFactory.FlowState state = dynamicContext.getState();
+        Map<Integer, DefaultFlowAgentExecuteStrategyFactory.FlowStepResultDTO> stepResults = state.getStepResults();
+        for (Integer depend : dependsOn) {
+            DefaultFlowAgentExecuteStrategyFactory.FlowStepResultDTO result = stepResults.get(depend);
+            if (result == null ||
+                    !result.getStatus().equals(DefaultFlowAgentExecuteStrategyFactory.FlowStepStatus.SUCCESS)) {
+                log.warn("步骤 {} 的前置依赖步骤 {} 未成功（result={}），跳过", step.getStepNo(), depend, result);
+                return Boolean.FALSE;
+            }
+        }
+        return Boolean.TRUE;
     }
 
     /**
@@ -158,26 +197,24 @@ public class Step4ExecuteStepsNode extends AbstractExecuteSupport {
      */
     private String buildStepExecutionPrompt(FlowStepDTO step,
                                             DefaultFlowAgentExecuteStrategyFactory.DynamicContext dynamicContext) {
-        // 读取前一步的执行结果
-        String prevResultSection = "";
-        if (step.getStepNo() > 1) {
-            //todo 如果步骤之间跨步依赖，可能需要传入累积上下文
-            DefaultFlowAgentExecuteStrategyFactory.FlowStepResultDTO resultDTO = dynamicContext
-                    .getState()
-                    .getStepResults()
-                    .get(step.getStepNo() - 1);
-            if (null != resultDTO) {
-                String result = resultDTO.getResult();
-                if (StringUtils.isBlank(result)) {
-                    throw new RuntimeException();
+        // 读取依赖步骤的执行结果
+        StringBuilder prevResultSection = new StringBuilder();
+        List<Integer> deps = step.getDependsOn();
+        if (deps != null && !deps.isEmpty()) {
+            prevResultSection.append("\n**前置步骤执行结果:**\n");
+            for (Integer depNo : deps) {
+                DefaultFlowAgentExecuteStrategyFactory.FlowStepResultDTO depResult = dynamicContext.getState()
+                        .getStepResults().get(depNo);
+                if (depResult != null && StringUtils.isNotBlank(depResult.getResult())) {
+                    String truncated = depResult.getResult()
+                            .substring(0, Math.min(500, depResult.getResult().length()));
+                    prevResultSection.append(String.format("- 第%d步(%s): %s\n", depNo, depResult.getStepTitle(), truncated));
                 }
-                prevResultSection = "\n**前置步骤执行结果:**\n"
-                        + result.substring(0, Math.min(500, result.length())) + "\n";
             }
         }
 
         return String.format("""
-                        你是一个智能执行助手，需要执行以下步骤:
+                        你是一个智能执行助手，需要依赖以下步骤执行结果:
                         %s
                         **当前步骤:** 第%d步 - %s
                         
@@ -228,9 +265,12 @@ public class Step4ExecuteStepsNode extends AbstractExecuteSupport {
         if (steps != null) {
             summaryContent.append("### 已完成的工作\n");
             for (FlowStepDTO step : steps) {
-                DefaultFlowAgentExecuteStrategyFactory.FlowStepStatus status = state.getStepResults()
-                        .get(step.getStepNo()).getStatus();
-                String icon = DefaultFlowAgentExecuteStrategyFactory.FlowStepStatus.FAILED.equals(status) ? "x" : "v";
+                DefaultFlowAgentExecuteStrategyFactory.FlowStepResultDTO resultDTO =
+                        state.getStepResults().get(step.getStepNo());
+                DefaultFlowAgentExecuteStrategyFactory.FlowStepStatus status =
+                        resultDTO != null ? resultDTO.getStatus()
+                                : DefaultFlowAgentExecuteStrategyFactory.FlowStepStatus.SKIPPED;
+                String icon = DefaultFlowAgentExecuteStrategyFactory.FlowStepStatus.SUCCESS.equals(status) ? "v" : "x";
                 summaryContent.append(String.format("- [%s] 第%d步: %s\n",
                         icon, step.getStepNo(), step.getTitle()));
             }

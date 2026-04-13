@@ -6,6 +6,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 /**
  * Flow 执行步骤的结构化定义。
  * 由 Step2（规划节点）通过 Spring AI Structured Output 直接输出，
@@ -37,4 +39,11 @@ public class FlowStepDTO {
 
     @JsonPropertyDescription("预期产出描述，说明这一步应该输出什么")
     private String expectedOutput;
+
+    //为并行执行埋好了结构基础如果要支持并行，dependsOn 字段已经描述了步骤间的 DAG 依赖关系，可以通过拓扑排序找出可以并行的步骤，用
+    //CompletableFuture.allOf 并发执行同层步骤
+    @JsonPropertyDescription("当前步骤依赖的前置步骤编号列表，为空或null表示不依赖任何步骤，" +
+            "例如[1,2]表示需要第1步和第2步执行成功后才能执行"
+    )
+    private List<Integer> dependsOn;
 }
