@@ -41,6 +41,7 @@ public class DefaultExecuteStrategyFactory {
         @Builder.Default
         private final Map<String, AiAgentClientFlowConfigDTO> flowConfigMap = new HashMap<>();
         private String currentTask;
+        //当前 Auto 链路是否已被系统认定为结束，进入总结/收尾阶段
         @Builder.Default
         private boolean isCompleted = false;
         @Builder.Default

@@ -5,6 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.util.StringUtils;
 
 /**
@@ -18,6 +19,7 @@ import org.springframework.util.StringUtils;
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
+@Slf4j
 public class AutoAnalyzeResultDTO {
 
     public enum TaskStatus {
@@ -27,9 +29,11 @@ public class AutoAnalyzeResultDTO {
         CONTINUE
     }
 
+    //Step1 分析节点的结构化结论，表示“分析器认为任务是否已完成” 只由step1产出 离散状态更适合做控制流
     @JsonPropertyDescription("任务状态：COMPLETED 表示任务已完成，CONTINUE 表示需要继续执行")
     private TaskStatus taskStatus;
 
+    //Analyzer 对当前任务完成度的估计值，用于展示、观察、诊断，不作为主控制字段
     @JsonPropertyDescription("完成度百分比，范围 0-100，100 表示完全完成")
     private Integer completionPercent;
 
@@ -54,6 +58,9 @@ public class AutoAnalyzeResultDTO {
         }
         if (taskStatus == TaskStatus.CONTINUE && !StringUtils.hasText(nextStrategy)) {
             throw new IllegalStateException("AutoAnalyzeResultDTO.nextStrategy 不能为空，当 taskStatus=CONTINUE 时必须提供下一步策略");
+        }
+        if (taskStatus == TaskStatus.COMPLETED && completionPercent < 100) {
+            log.warn("分析结果状态与完成度不一致...");
         }
     }
 }

@@ -80,8 +80,8 @@ public class Step1AnalyzeNode extends AbstractExecuteSupport {
         pushAnalysisToSse(dynamicContext, analyzeResult, requestParam.getSessionId());
         dynamicContext.setAnalyzeResultDTO(analyzeResult);
 
-        if (analyzeResult.getTaskStatus() == TaskStatus.COMPLETED
-                || analyzeResult.getCompletionPercent() >= 100) {
+        //只保留单个指标驱动控制流
+        if (analyzeResult.getTaskStatus() == TaskStatus.COMPLETED) {
             dynamicContext.setCompleted(true);
             log.info("任务分析显示已完成");
         }

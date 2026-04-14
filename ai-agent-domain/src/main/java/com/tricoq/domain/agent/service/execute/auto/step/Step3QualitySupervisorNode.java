@@ -60,6 +60,8 @@ public class Step3QualitySupervisorNode extends AbstractExecuteSupport {
         String supervisionPrompt = buildSupervisionPrompt(flowConfig, originalUserInput, executeResult);
 
         AutoSupervisionResultDTO supervisionResult = qualitySupervisorClient.prompt(supervisionPrompt)
+                //role memory 用来保留“这个角色自己的连续性”；
+                //shared state 用来传递“跨角色必须消费的事实”。
                 .advisors(a -> a
                         .param(CHAT_MEMORY_CONVERSATION_ID_KEY, buildConversationId(requestParam.getSessionId(),
                                 SUPERVISOR_MEMORY_SUFFIX))
