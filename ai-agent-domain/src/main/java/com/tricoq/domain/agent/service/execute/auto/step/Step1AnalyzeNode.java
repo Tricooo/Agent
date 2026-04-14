@@ -1,16 +1,17 @@
 package com.tricoq.domain.agent.service.execute.auto.step;
 
+import com.tricoq.domain.agent.model.dto.AutoAnalyzeResultDTO;
+import com.tricoq.domain.agent.model.dto.AutoAnalyzeResultDTO.TaskStatus;
 import com.tricoq.domain.agent.model.entity.AutoAgentExecuteResultEntity;
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
+import com.tricoq.domain.agent.service.execute.auto.step.factory.DefaultExecuteStrategyFactory;
 import com.tricoq.domain.agent.model.dto.AiAgentClientFlowConfigDTO;
 import com.tricoq.domain.agent.model.enums.AiAgentEnumVO;
 import com.tricoq.domain.agent.model.enums.AiClientTypeEnumVO;
-import com.tricoq.domain.agent.service.execute.auto.step.factory.DefaultExecuteStrategyFactory;
 import com.tricoq.types.framework.chain.StrategyHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.MapUtils;
-import org.apache.commons.lang3.StringUtils;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Component;
 
@@ -18,8 +19,11 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
+ * 任务状态分析节点。
+ * 使用 Spring AI Structured Output 直接输出 {@link AutoAnalyzeResultDTO}，
+ * 替代原来的字符串 contains("COMPLETED") 魔法字符串检测。
+ *
  * @author trico qiang
- * @date 11/3/25
  */
 @Component
 @RequiredArgsConstructor
@@ -46,40 +50,40 @@ public class Step1AnalyzeNode extends AbstractExecuteSupport {
         ChatClient analyzeClient = Optional
                 .ofNullable((ChatClient) getBean(AiAgentEnumVO.AI_CLIENT.getBeanName(flowConfig.getClientId())))
                 .orElseThrow(() -> new IllegalArgumentException("不存在的任务分析 client"));
-        String currentTask = Optional.ofNullable(dynamicContext.getCurrentTask())
-                .orElseThrow(() -> new IllegalArgumentException("不存在任务提示词"));
 
         Integer step = dynamicContext.getStep();
+        log.info("\n=== 执行第 {} 步 ===", step);
+        log.info("阶段1: 任务状态分析");
 
-        log.info("\n🎯 === 执行第 {} 步 ===", step);
+        String analysisPrompt = buildAnalysisPrompt(requestParam.getUserInput(), step,
+                dynamicContext.getMaxStep(), dynamicContext.getExecutionHistory().toString(),
+                dynamicContext.getCurrentTask());
 
-        // 第一阶段：任务分析
-        log.info("\n📊 阶段1: 任务状态分析");
-        String analysisPrompt = String.format(flowConfig.getStepPrompt(),
-                requestParam.getUserInput(),
-                step,
-                dynamicContext.getMaxStep(),
-                !dynamicContext.getExecutionHistory().isEmpty() ?
-                        dynamicContext.getExecutionHistory().toString() : "[首次执行]",
-                currentTask
-        );
+        AutoAnalyzeResultDTO analyzeResult = analyzeClient.prompt(analysisPrompt)
+                .advisors(a -> a
+                        .param(CHAT_MEMORY_CONVERSATION_ID_KEY, requestParam.getSessionId())
+                        .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 1024))
+                .call()
+                .entity(AutoAnalyzeResultDTO.class);
 
-        String analyzeResult = Optional.ofNullable(analyzeClient.prompt(analysisPrompt).advisors(a ->
-                        a.param(CHAT_MEMORY_CONVERSATION_ID_KEY, requestParam.getSessionId())
-                                //todo 这里的作用？
-                                .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 1024))
-                .call().content()).orElseThrow(() -> new RuntimeException("任务解析结果为空"));
-        parseAnalysisResult(dynamicContext, analyzeResult, requestParam.getSessionId());
+        if (analyzeResult == null) {
+            throw new RuntimeException("任务解析结果为空");
+        }
 
-        // 检查是否已完成
-        if (analyzeResult.contains("任务状态: COMPLETED") ||
-                analyzeResult.contains("完成度评估: 100%")) {
-            dynamicContext.setCompleted(Boolean.TRUE);
-            log.info("✅ 任务分析显示已完成！");
+        log.info("分析完成: status={}, percent={}%, nextStrategy={}",
+                analyzeResult.getTaskStatus(), analyzeResult.getCompletionPercent(),
+                analyzeResult.getNextStrategy());
+
+        pushAnalysisToSse(dynamicContext, analyzeResult, requestParam.getSessionId());
+
+        if (analyzeResult.getTaskStatus() == TaskStatus.COMPLETED
+                || analyzeResult.getCompletionPercent() >= 100) {
+            dynamicContext.setCompleted(true);
+            log.info("任务分析显示已完成");
             return null;
         }
 
-        dynamicContext.setAnalyzeResult(analyzeResult);
+        dynamicContext.setAnalyzeResultDTO(analyzeResult);
         return router(requestParam, dynamicContext);
     }
 
@@ -88,108 +92,71 @@ public class Step1AnalyzeNode extends AbstractExecuteSupport {
             ExecuteCommandEntity requestParam,
             DefaultExecuteStrategyFactory.ExecuteContext dynamicContext) {
         if (dynamicContext.isCompleted()) {
-            //这里的强依赖关系容易造成循环依赖
-//            return step4LogExecutionSummaryNode;
             return getBean("step4LogExecutionSummaryNode");
         }
         return getBean("step2ExecuteNode");
-//        return step2ExecuteNode;
     }
 
     /**
-     * 解析任务分析结果
+     * 构建分析阶段提示词。
+     * Spring AI 会在消息末尾自动注入 JSON Schema，无需手动指定输出格式。
      */
-    private void parseAnalysisResult(DefaultExecuteStrategyFactory.ExecuteContext dynamicContext,
-                                     String analysisResult, String sessionId) {
-        int step = dynamicContext.getStep();
-        log.info("\n📊 === 第 {} 步分析结果 ===", step);
+    private String buildAnalysisPrompt(String userInput, int step, int maxStep,
+                                        String executionHistory, String currentTask) {
+        String historySection = executionHistory.isBlank() ? "[首次执行，无历史记录]" : executionHistory;
+        return String.format("""
+                # 任务状态分析
 
-        String[] lines = analysisResult.split("\n");
-        String currentSection = "";
-        StringBuilder sectionContent = new StringBuilder();
+                ## 用户原始目标
+                %s
 
-        for (String line : lines) {
-            line = line.trim();
-            if (line.isEmpty()) {
-                continue;
-            }
+                ## 当前执行进度
+                - 当前步骤：第 %d 步（共 %d 步）
+                - 当前任务：%s
 
-            if (line.contains("任务状态分析:")) {
-                // 发送上一个section的内容
-                sendAnalysisSubResult(dynamicContext, currentSection, sectionContent.toString(), sessionId);
-                currentSection = "analysis_status";
-                sectionContent = new StringBuilder();
-                log.info("\n🎯 任务状态分析:");
-                continue;
-            } else if (line.contains("执行历史评估:")) {
-                // 发送上一个section的内容
-                sendAnalysisSubResult(dynamicContext, currentSection, sectionContent.toString(), sessionId);
-                currentSection = "analysis_history";
-                sectionContent = new StringBuilder();
-                log.info("\n📈 执行历史评估:");
-                continue;
-            } else if (line.contains("下一步策略:")) {
-                // 发送上一个section的内容
-                sendAnalysisSubResult(dynamicContext, currentSection, sectionContent.toString(), sessionId);
-                currentSection = "analysis_strategy";
-                sectionContent = new StringBuilder();
-                log.info("\n🚀 下一步策略:");
-                continue;
-            } else if (line.contains("完成度评估:")) {
-                // 发送上一个section的内容
-                sendAnalysisSubResult(dynamicContext, currentSection, sectionContent.toString(), sessionId);
-                currentSection = "analysis_progress";
-                sectionContent = new StringBuilder();
-                String progress = line.substring(line.indexOf(":") + 1).trim();
-                log.info("\n📊 完成度评估: {}", progress);
-                sectionContent.append(line).append("\n");
-                continue;
-            } else if (line.contains("任务状态:")) {
-                // 发送上一个section的内容
-                sendAnalysisSubResult(dynamicContext, currentSection, sectionContent.toString(), sessionId);
-                currentSection = "analysis_task_status";
-                sectionContent = new StringBuilder();
-                String status = line.substring(line.indexOf(":") + 1).trim();
-                if (status.equals("COMPLETED")) {
-                    log.info("\n✅ 任务状态: 已完成");
-                } else {
-                    log.info("\n🔄 任务状态: 继续执行");
-                }
-                sectionContent.append(line).append("\n");
-                continue;
-            }
+                ## 执行历史
+                %s
 
-            // 收集当前section的内容
-            if (!currentSection.isEmpty()) {
-                sectionContent.append(line).append("\n");
-                switch (currentSection) {
-                    case "analysis_status":
-                        log.info("   📋 {}", line);
-                        break;
-                    case "analysis_history":
-                        log.info("   📊 {}", line);
-                        break;
-                    case "analysis_strategy":
-                        log.info("   🎯 {}", line);
-                        break;
-                    default:
-                        log.info("   📝 {}", line);
-                        break;
-                }
-            }
-        }
-
-        // 发送最后一个section的内容
-        sendAnalysisSubResult(dynamicContext, currentSection, sectionContent.toString(), sessionId);
+                ## 分析要求
+                请综合以上信息，评估当前任务执行状态：
+                1. 判断任务是否已完全完成（completionPercent = 100 且 taskStatus = COMPLETED）
+                2. 如果未完成，评估执行历史的质量和下一步策略
+                3. nextStrategy 要具体可执行，作为下一步执行节点的行动指南
+                """,
+                userInput, step, maxStep, currentTask, historySection);
     }
 
-    private void sendAnalysisSubResult(DefaultExecuteStrategyFactory.ExecuteContext dynamicContext,
-                                       String subType, String content, String sessionId) {
-        if (StringUtils.isBlank(subType) || StringUtils.isBlank(content)) {
-            return;
+    /**
+     * 将结构化分析结果推送到 SSE。
+     * 保持与原有前端协议兼容的 subType 字段。
+     */
+    private void pushAnalysisToSse(DefaultExecuteStrategyFactory.ExecuteContext dynamicContext,
+                                    AutoAnalyzeResultDTO result, String sessionId) {
+        int step = dynamicContext.getStep();
+
+        sendSseResult(dynamicContext, AutoAgentExecuteResultEntity.createAnalysisSubResult(
+                step, "analysis_task_status",
+                "任务状态: " + result.getTaskStatus() + " | 完成度: " + result.getCompletionPercent() + "%",
+                sessionId));
+
+        if (result.getStatusDescription() != null) {
+            sendSseResult(dynamicContext, AutoAgentExecuteResultEntity.createAnalysisSubResult(
+                    step, "analysis_status", result.getStatusDescription(), sessionId));
         }
-        AutoAgentExecuteResultEntity analysisSubResult = AutoAgentExecuteResultEntity
-                .createAnalysisSubResult(dynamicContext.getStep(), subType, content, sessionId);
-        sendSseResult(dynamicContext, analysisSubResult);
+
+        if (result.getHistoryEvaluation() != null) {
+            sendSseResult(dynamicContext, AutoAgentExecuteResultEntity.createAnalysisSubResult(
+                    step, "analysis_history", result.getHistoryEvaluation(), sessionId));
+        }
+
+        if (result.getNextStrategy() != null) {
+            sendSseResult(dynamicContext, AutoAgentExecuteResultEntity.createAnalysisSubResult(
+                    step, "analysis_strategy", result.getNextStrategy(), sessionId));
+        }
+
+        sendSseResult(dynamicContext, AutoAgentExecuteResultEntity.createAnalysisSubResult(
+                step, "analysis_progress",
+                "完成度评估: " + result.getCompletionPercent() + "%",
+                sessionId));
     }
 }

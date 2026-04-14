@@ -1,7 +1,10 @@
 package com.tricoq.domain.agent.service.execute.auto.step.factory;
 
-import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
 import com.tricoq.domain.agent.model.dto.AiAgentClientFlowConfigDTO;
+import com.tricoq.domain.agent.model.dto.AutoAnalyzeResultDTO;
+import com.tricoq.domain.agent.model.dto.AutoExecuteResultDTO;
+import com.tricoq.domain.agent.model.dto.AutoSupervisionResultDTO;
+import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
 import com.tricoq.domain.agent.service.execute.auto.step.RootExecuteNode;
 import com.tricoq.domain.agent.shared.ExecuteOutputPort;
 import com.tricoq.types.framework.chain.StrategyHandler;
@@ -11,7 +14,6 @@ import lombok.Data;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -46,9 +48,12 @@ public class DefaultExecuteStrategyFactory {
         private Integer maxStep;
         @Builder.Default
         private StringBuilder executionHistory = new StringBuilder();
-        private String analyzeResult;
-        private String executeResult;
-        private String supervisionResult;
+        /** Step1 结构化分析结果，替代原 analyzeResult String */
+        private AutoAnalyzeResultDTO analyzeResultDTO;
+        /** Step2 结构化执行结果，替代原 executeResult String */
+        private AutoExecuteResultDTO executeResultDTO;
+        /** Step3 结构化监督结果，替代原 supervisionResult String */
+        private AutoSupervisionResultDTO supervisionResultDTO;
         private String finalSummary;
         private ExecuteOutputPort port;
     }

@@ -1,5 +1,7 @@
 package com.tricoq.domain.agent.service.execute.auto.step;
 
+import com.tricoq.domain.agent.model.dto.AutoAnalyzeResultDTO;
+import com.tricoq.domain.agent.model.dto.AutoExecuteResultDTO;
 import com.tricoq.domain.agent.model.entity.AutoAgentExecuteResultEntity;
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
 import com.tricoq.domain.agent.model.dto.AiAgentClientFlowConfigDTO;
@@ -17,8 +19,11 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
+ * 精准任务执行节点。
+ * 使用 Spring AI Structured Output 直接输出 {@link AutoExecuteResultDTO}，
+ * 替代原来的字符串 split + section 关键字匹配解析。
+ *
  * @author trico qiang
- * @date 11/3/25
  */
 @Component
 @Slf4j
@@ -33,9 +38,11 @@ public class Step2ExecuteNode extends AbstractExecuteSupport {
      * @return 结果
      */
     @Override
-    protected String doApply(ExecuteCommandEntity requestParam, DefaultExecuteStrategyFactory.ExecuteContext dynamicContext) {
-        log.info("\n⚡ 阶段2: 精准任务执行");
-        String analyzeResult = Optional.ofNullable(dynamicContext.getAnalyzeResult())
+    protected String doApply(ExecuteCommandEntity requestParam,
+                             DefaultExecuteStrategyFactory.ExecuteContext dynamicContext) {
+        log.info("\n阶段2: 精准任务执行");
+
+        AutoAnalyzeResultDTO analyzeResult = Optional.ofNullable(dynamicContext.getAnalyzeResultDTO())
                 .orElseThrow(() -> new RuntimeException("任务分析未执行"));
 
         Map<String, AiAgentClientFlowConfigDTO> flowConfigMap = dynamicContext.getFlowConfigMap();
@@ -48,119 +55,93 @@ public class Step2ExecuteNode extends AbstractExecuteSupport {
                 .orElseThrow(() -> new IllegalArgumentException("没有此 client"));
         ChatClient executeClient = Optional
                 .ofNullable((ChatClient) getBean(AiAgentEnumVO.AI_CLIENT.getBeanName(flowConfig.getClientId())))
-                .orElseThrow(() -> new IllegalArgumentException("不存在的任务分析 client"));
+                .orElseThrow(() -> new IllegalArgumentException("不存在的执行 client"));
 
-        String executionPrompt = String.format(flowConfig.getStepPrompt(),requestParam.getUserInput(), analyzeResult);
+        String executionPrompt = buildExecutionPrompt(requestParam.getUserInput(), analyzeResult);
 
-        String executionResult = Optional.ofNullable(executeClient
-                .prompt(executionPrompt)
+        AutoExecuteResultDTO executeResult = executeClient.prompt(executionPrompt)
                 .advisors(a -> a
                         .param(CHAT_MEMORY_CONVERSATION_ID_KEY, requestParam.getSessionId())
                         .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 120))
-                .call().content()).orElseThrow(() -> new RuntimeException("任务执行失败"));
+                .call()
+                .entity(AutoExecuteResultDTO.class);
 
-        parseExecutionResult(dynamicContext, executionResult, requestParam.getSessionId());
-        dynamicContext.setExecuteResult(executionResult);
+        if (executeResult == null) {
+            throw new RuntimeException("任务执行失败");
+        }
 
-        // 更新执行历史
-        String stepSummary = String.format("""
+        log.info("执行完成: target={}", executeResult.getExecutionTarget());
+
+        pushExecutionToSse(dynamicContext, executeResult, requestParam.getSessionId());
+        dynamicContext.setExecuteResultDTO(executeResult);
+
+        // 更新执行历史（文本格式，供 Step1 下一轮分析用）
+        dynamicContext.getExecutionHistory().append(String.format("""
                 === 第 %d 步执行记录 ===
-                【分析阶段】%s
-                【执行阶段】%s
-                """, dynamicContext.getStep(), analyzeResult, executionResult);
-
-        dynamicContext.getExecutionHistory().append(stepSummary);
+                【分析策略】%s
+                【执行目标】%s
+                【执行结果】%s
+                """,
+                dynamicContext.getStep(),
+                analyzeResult.getNextStrategy(),
+                executeResult.getExecutionTarget(),
+                executeResult.getExecutionResult()));
 
         return router(requestParam, dynamicContext);
     }
 
     @Override
-    public StrategyHandler<ExecuteCommandEntity, DefaultExecuteStrategyFactory.ExecuteContext, String> get(ExecuteCommandEntity requestParam, DefaultExecuteStrategyFactory.ExecuteContext dynamicContext) {
+    public StrategyHandler<ExecuteCommandEntity, DefaultExecuteStrategyFactory.ExecuteContext, String> get(
+            ExecuteCommandEntity requestParam, DefaultExecuteStrategyFactory.ExecuteContext dynamicContext) {
         return getBean("step3QualitySupervisorNode");
     }
 
     /**
-     * 解析执行结果
+     * 构建执行阶段提示词。
+     * 直接使用分析节点输出的结构化策略，无需重新解析字符串。
      */
-    private void parseExecutionResult(DefaultExecuteStrategyFactory.ExecuteContext dynamicContext, String executionResult, String sessionId) {
-        int step = dynamicContext.getStep();
-        log.info("\n⚡ === 第 {} 步执行结果 ===", step);
+    private String buildExecutionPrompt(String userInput, AutoAnalyzeResultDTO analyzeResult) {
+        return String.format("""
+                # 精准任务执行
 
-        String[] lines = executionResult.split("\n");
-        String currentSection = "";
-        StringBuilder sectionContent = new StringBuilder();
+                ## 用户原始目标
+                %s
 
-        for (String line : lines) {
-            line = line.trim();
-            if (line.isEmpty()) continue;
+                ## 本次执行策略（来自任务分析节点）
+                %s
 
-            if (line.contains("执行目标:")) {
-                // 发送上一个section的内容
-                sendExecutionSubResult(dynamicContext, currentSection, sectionContent.toString(), sessionId);
-                currentSection = "execution_target";
-                sectionContent = new StringBuilder();
-                log.info("\n🎯 执行目标:");
-                continue;
-            } else if (line.contains("执行过程:")) {
-                // 发送上一个section的内容
-                sendExecutionSubResult(dynamicContext, currentSection, sectionContent.toString(), sessionId);
-                currentSection = "execution_process";
-                sectionContent = new StringBuilder();
-                log.info("\n🔧 执行过程:");
-                continue;
-            } else if (line.contains("执行结果:")) {
-                // 发送上一个section的内容
-                sendExecutionSubResult(dynamicContext, currentSection, sectionContent.toString(), sessionId);
-                currentSection = "execution_result";
-                sectionContent = new StringBuilder();
-                log.info("\n📈 执行结果:");
-                continue;
-            } else if (line.contains("质量检查:")) {
-                // 发送上一个section的内容
-                sendExecutionSubResult(dynamicContext, currentSection, sectionContent.toString(), sessionId);
-                currentSection = "execution_quality";
-                sectionContent = new StringBuilder();
-                log.info("\n🔍 质量检查:");
-                continue;
-            }
-
-            // 收集当前section的内容
-            if (!currentSection.isEmpty()) {
-                sectionContent.append(line).append("\n");
-                switch (currentSection) {
-                    case "execution_target":
-                        log.info("   🎯 {}", line);
-                        break;
-                    case "execution_process":
-                        log.info("   ⚙️ {}", line);
-                        break;
-                    case "execution_result":
-                        log.info("   📊 {}", line);
-                        break;
-                    case "execution_quality":
-                        log.info("   ✅ {}", line);
-                        break;
-                    default:
-                        log.info("   📝 {}", line);
-                        break;
-                }
-            }
-        }
-
-        // 发送最后一个section的内容
-        sendExecutionSubResult(dynamicContext, currentSection, sectionContent.toString(), sessionId);
+                ## 执行要求
+                请严格按照执行策略完成任务：
+                1. executionTarget：明确本次执行的具体目标
+                2. executionProcess：详细描述执行过程和使用的方法
+                3. executionResult：提供具体的执行输出和结果数据
+                4. qualityCheck：对执行结果进行自检，指出可能的问题
+                """,
+                userInput, analyzeResult.getNextStrategy());
     }
 
     /**
-     * 发送执行阶段细分结果到流式输出
+     * 将结构化执行结果推送到 SSE。
      */
-    private void sendExecutionSubResult(DefaultExecuteStrategyFactory.ExecuteContext dynamicContext,
-                                        String subType, String content, String sessionId) {
-        // 抽取的通用判断逻辑
-        if (!subType.isEmpty() && !content.isEmpty()) {
-            AutoAgentExecuteResultEntity result = AutoAgentExecuteResultEntity.createExecutionSubResult(
-                    dynamicContext.getStep(), subType, content, sessionId);
-            sendSseResult(dynamicContext, result);
+    private void pushExecutionToSse(DefaultExecuteStrategyFactory.ExecuteContext dynamicContext,
+                                     AutoExecuteResultDTO result, String sessionId) {
+        int step = dynamicContext.getStep();
+
+        if (result.getExecutionTarget() != null) {
+            sendSseResult(dynamicContext, AutoAgentExecuteResultEntity.createExecutionSubResult(
+                    step, "execution_target", result.getExecutionTarget(), sessionId));
+        }
+        if (result.getExecutionProcess() != null) {
+            sendSseResult(dynamicContext, AutoAgentExecuteResultEntity.createExecutionSubResult(
+                    step, "execution_process", result.getExecutionProcess(), sessionId));
+        }
+        if (result.getExecutionResult() != null) {
+            sendSseResult(dynamicContext, AutoAgentExecuteResultEntity.createExecutionSubResult(
+                    step, "execution_result", result.getExecutionResult(), sessionId));
+        }
+        if (result.getQualityCheck() != null) {
+            sendSseResult(dynamicContext, AutoAgentExecuteResultEntity.createExecutionSubResult(
+                    step, "execution_quality", result.getQualityCheck(), sessionId));
         }
     }
 }
