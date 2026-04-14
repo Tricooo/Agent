@@ -5,6 +5,8 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.util.CollectionUtils;
+import org.springframework.util.StringUtils;
 
 import java.util.List;
 
@@ -40,8 +42,26 @@ public class AutoSupervisionResultDTO {
     private List<String> suggestions;
 
     @JsonPropertyDescription("质量评分，1-10 分，10 分为满分")
-    private int qualityScore;
+    private Integer qualityScore;
 
     @JsonPropertyDescription("质量检查结论：PASS 表示通过，FAIL 表示需要重新执行，OPTIMIZE 表示建议优化")
     private QualityStatus pass;
+
+    public void validate() {
+        if (!StringUtils.hasText(qualityAssessment)) {
+            throw new IllegalStateException("AutoSupervisionResultDTO.qualityAssessment 不能为空");
+        }
+        if (qualityScore == null) {
+            throw new IllegalStateException("AutoSupervisionResultDTO.qualityScore 不能为空");
+        }
+        if (qualityScore < 1 || qualityScore > 10) {
+            throw new IllegalStateException("AutoSupervisionResultDTO.qualityScore 超出范围: " + qualityScore);
+        }
+        if (pass == null) {
+            throw new IllegalStateException("AutoSupervisionResultDTO.pass 不能为空");
+        }
+        if (pass != QualityStatus.PASS && CollectionUtils.isEmpty(suggestions)) {
+            throw new IllegalStateException("AutoSupervisionResultDTO.suggestions 不能为空，当 pass=FAIL/OPTIMIZE 时必须提供改进建议");
+        }
+    }
 }

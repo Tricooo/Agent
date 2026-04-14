@@ -9,6 +9,9 @@ import com.tricoq.types.framework.chain.AbstractMultiThreadStrategyRouter;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationContext;
+import org.springframework.util.StringUtils;
+
+import java.util.IllegalFormatException;
 
 /**
  * @author trico qiang
@@ -20,6 +23,10 @@ public abstract class AbstractExecuteSupport extends
 
     protected static final String CHAT_MEMORY_CONVERSATION_ID_KEY = "chat_memory_conversation_id";
     protected static final String CHAT_MEMORY_RETRIEVE_SIZE_KEY = "chat_memory_response_size";
+    protected static final String ANALYZER_MEMORY_SUFFIX = "-analyzer";
+    protected static final String EXECUTOR_MEMORY_SUFFIX = "-executor";
+    protected static final String SUPERVISOR_MEMORY_SUFFIX = "-supervisor";
+    protected static final String SUMMARY_MEMORY_SUFFIX = "-summary";
 
     @Resource
     private ApplicationContext applicationContext;
@@ -38,6 +45,32 @@ public abstract class AbstractExecuteSupport extends
     @SuppressWarnings("unchecked")
     protected <T> T getBean(String beanName) {
         return (T) applicationContext.getBean(beanName);
+    }
+
+    protected String buildConversationId(String sessionId, String roleSuffix) {
+        return sessionId + roleSuffix;
+    }
+
+    protected String resolveStepPrompt(String configuredStepPrompt,
+                                       String fallbackPrompt,
+                                       boolean appendStructuredOutputReminder,
+                                       Object... args) {
+        String template = StringUtils.hasText(configuredStepPrompt) ? configuredStepPrompt : fallbackPrompt;
+        try {
+            String prompt = String.format(template, args);
+            return appendStructuredOutputReminder ? appendStructuredOutputReminder(prompt) : prompt;
+        } catch (IllegalFormatException e) {
+            log.warn("stepPrompt 占位符格式不匹配，回退到默认提示词。configuredStepPrompt={}", configuredStepPrompt, e);
+            String prompt = String.format(fallbackPrompt, args);
+            return appendStructuredOutputReminder ? appendStructuredOutputReminder(prompt) : prompt;
+        }
+    }
+
+    private String appendStructuredOutputReminder(String prompt) {
+        return prompt + System.lineSeparator() + System.lineSeparator() + """
+                ## 结构化输出约束
+                请忽略模板中旧的文本输出格式示例，严格按照系统自动注入的 JSON Schema 返回结果。
+                """;
     }
 
     protected void sendSseResult(DefaultExecuteStrategyFactory.ExecuteContext dynamicContext,

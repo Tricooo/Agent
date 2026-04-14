@@ -57,11 +57,12 @@ public class Step3QualitySupervisorNode extends AbstractExecuteSupport {
                 .ofNullable((ChatClient) getBean(AiAgentEnumVO.AI_CLIENT.getBeanName(flowConfig.getClientId())))
                 .orElseThrow(() -> new IllegalArgumentException("不存在的监督 client"));
 
-        String supervisionPrompt = buildSupervisionPrompt(originalUserInput, executeResult);
+        String supervisionPrompt = buildSupervisionPrompt(flowConfig, originalUserInput, executeResult);
 
         AutoSupervisionResultDTO supervisionResult = qualitySupervisorClient.prompt(supervisionPrompt)
                 .advisors(a -> a
-                        .param(CHAT_MEMORY_CONVERSATION_ID_KEY, requestParam.getSessionId())
+                        .param(CHAT_MEMORY_CONVERSATION_ID_KEY, buildConversationId(requestParam.getSessionId(),
+                                SUPERVISOR_MEMORY_SUFFIX))
                         .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 80))
                 .call()
                 .entity(AutoSupervisionResultDTO.class);
@@ -69,6 +70,7 @@ public class Step3QualitySupervisorNode extends AbstractExecuteSupport {
         if (supervisionResult == null) {
             throw new RuntimeException("质量监督执行失败");
         }
+        supervisionResult.validate();
 
         log.info("监督完成: pass={}, score={}", supervisionResult.getPass(), supervisionResult.getQualityScore());
 
@@ -119,18 +121,27 @@ public class Step3QualitySupervisorNode extends AbstractExecuteSupport {
     /**
      * 构建监督阶段提示词。
      */
-    private String buildSupervisionPrompt(String userInput, AutoExecuteResultDTO executeResult) {
-        return String.format("""
+    private String buildSupervisionPrompt(AiAgentClientFlowConfigDTO flowConfig,
+                                          String userInput,
+                                          AutoExecuteResultDTO executeResult) {
+        String executionSummary = String.format("""
+                执行目标: %s
+                执行过程: %s
+                执行结果: %s
+                质量检查: %s
+                """,
+                executeResult.getExecutionTarget(),
+                executeResult.getExecutionProcess(),
+                executeResult.getExecutionResult(),
+                executeResult.getQualityCheck());
+        String fallbackPrompt = """
                 # 执行质量监督
 
                 ## 用户原始目标
                 %s
 
                 ## 本次执行结果
-                - 执行目标：%s
-                - 执行过程：%s
-                - 执行结果：%s
-                - 执行自检：%s
+                %s
 
                 ## 监督要求
                 请对执行结果进行客观评估：
@@ -139,12 +150,9 @@ public class Step3QualitySupervisorNode extends AbstractExecuteSupport {
                 3. suggestions：列出改进建议（PASS 时可为空，FAIL/OPTIMIZE 时必须有建议）
                 4. qualityScore：给出 1-10 的质量评分
                 5. pass：PASS（完全满足目标）、FAIL（需要重新执行）、OPTIMIZE（基本满足但可改进）
-                """,
-                userInput,
-                executeResult.getExecutionTarget(),
-                executeResult.getExecutionProcess(),
-                executeResult.getExecutionResult(),
-                executeResult.getQualityCheck());
+                """;
+        return resolveStepPrompt(flowConfig.getStepPrompt(), fallbackPrompt, true,
+                userInput, executionSummary);
     }
 
     /**

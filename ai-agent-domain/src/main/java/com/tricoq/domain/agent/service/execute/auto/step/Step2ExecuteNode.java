@@ -57,11 +57,12 @@ public class Step2ExecuteNode extends AbstractExecuteSupport {
                 .ofNullable((ChatClient) getBean(AiAgentEnumVO.AI_CLIENT.getBeanName(flowConfig.getClientId())))
                 .orElseThrow(() -> new IllegalArgumentException("不存在的执行 client"));
 
-        String executionPrompt = buildExecutionPrompt(requestParam.getUserInput(), analyzeResult);
+        String executionPrompt = buildExecutionPrompt(flowConfig, requestParam.getUserInput(), analyzeResult);
 
         AutoExecuteResultDTO executeResult = executeClient.prompt(executionPrompt)
                 .advisors(a -> a
-                        .param(CHAT_MEMORY_CONVERSATION_ID_KEY, requestParam.getSessionId())
+                        .param(CHAT_MEMORY_CONVERSATION_ID_KEY, buildConversationId(requestParam.getSessionId(),
+                                EXECUTOR_MEMORY_SUFFIX))
                         .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 120))
                 .call()
                 .entity(AutoExecuteResultDTO.class);
@@ -69,6 +70,7 @@ public class Step2ExecuteNode extends AbstractExecuteSupport {
         if (executeResult == null) {
             throw new RuntimeException("任务执行失败");
         }
+        executeResult.validate();
 
         log.info("执行完成: target={}", executeResult.getExecutionTarget());
 
@@ -100,8 +102,10 @@ public class Step2ExecuteNode extends AbstractExecuteSupport {
      * 构建执行阶段提示词。
      * 直接使用分析节点输出的结构化策略，无需重新解析字符串。
      */
-    private String buildExecutionPrompt(String userInput, AutoAnalyzeResultDTO analyzeResult) {
-        return String.format("""
+    private String buildExecutionPrompt(AiAgentClientFlowConfigDTO flowConfig,
+                                        String userInput,
+                                        AutoAnalyzeResultDTO analyzeResult) {
+        String fallbackPrompt = """
                 # 精准任务执行
 
                 ## 用户原始目标
@@ -116,7 +120,8 @@ public class Step2ExecuteNode extends AbstractExecuteSupport {
                 2. executionProcess：详细描述执行过程和使用的方法
                 3. executionResult：提供具体的执行输出和结果数据
                 4. qualityCheck：对执行结果进行自检，指出可能的问题
-                """,
+                """;
+        return resolveStepPrompt(flowConfig.getStepPrompt(), fallbackPrompt, true,
                 userInput, analyzeResult.getNextStrategy());
     }
 

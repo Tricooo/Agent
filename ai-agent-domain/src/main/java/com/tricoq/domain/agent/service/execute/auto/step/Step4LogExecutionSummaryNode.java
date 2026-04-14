@@ -74,18 +74,22 @@ public class Step4LogExecutionSummaryNode extends AbstractExecuteSupport {
         try {
             boolean isCompleted = dynamicContext.isCompleted();
             log.info("\n--- 生成{}任务的最终答案 ---", isCompleted ? "已完成" : "未完成");
-
-            String summaryPrompt = getSummaryPrompt(requestParameter, dynamicContext, isCompleted);
-
-            // 获取对话客户端 - 使用任务分析客户端进行总结
             AiAgentClientFlowConfigDTO aiAgentClientFlowConfigVO = dynamicContext.getFlowConfigMap()
                     .get(AiClientTypeEnumVO.RESPONSE_ASSISTANT.getCode());
+            if (aiAgentClientFlowConfigVO == null) {
+                throw new IllegalArgumentException("没有配置 RESPONSE_ASSISTANT client");
+            }
+
+            String summaryPrompt = getSummaryPrompt(aiAgentClientFlowConfigVO, dynamicContext, isCompleted);
+
+            // 获取对话客户端 - 使用任务分析客户端进行总结
             ChatClient chatClient = getBean(AiAgentEnumVO.AI_CLIENT.getBeanName(aiAgentClientFlowConfigVO.getClientId()));
 
             String summaryResult = chatClient
                     .prompt(summaryPrompt)
                     .advisors(a -> a
-                            .param(CHAT_MEMORY_CONVERSATION_ID_KEY, requestParameter.getSessionId() + "-summary")
+                            .param(CHAT_MEMORY_CONVERSATION_ID_KEY,
+                                    buildConversationId(requestParameter.getSessionId(), SUMMARY_MEMORY_SUFFIX))
                             .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 50))
                     .call().content();
 
@@ -100,12 +104,12 @@ public class Step4LogExecutionSummaryNode extends AbstractExecuteSupport {
         }
     }
 
-    private static String getSummaryPrompt(ExecuteCommandEntity requestParameter,
-                                           DefaultExecuteStrategyFactory.ExecuteContext dynamicContext,
-                                           boolean isCompleted) {
-        String summaryPrompt;
+    private String getSummaryPrompt(AiAgentClientFlowConfigDTO flowConfig,
+                                    DefaultExecuteStrategyFactory.ExecuteContext dynamicContext,
+                                    boolean isCompleted) {
+        String fallbackPrompt;
         if (isCompleted) {
-            summaryPrompt = String.format("""
+            fallbackPrompt = """
                             基于以下执行过程，请直接回答用户的原始问题，提供最终的答案和结果：
                             
                             **用户原始问题:** %s
@@ -122,11 +126,9 @@ public class Step4LogExecutionSummaryNode extends AbstractExecuteSupport {
                             6. 以MD语法的表格形式，优化展示结果数据
                             
                             请直接给出用户问题的最终答案：
-                            """,
-                    dynamicContext.getOriginalUserInput(),
-                    dynamicContext.getExecutionHistory().toString());
+                            """;
         } else {
-            summaryPrompt = String.format("""
+            fallbackPrompt = """
                             虽然任务未完全执行完成，但请基于已有的执行过程，尽力回答用户的原始问题：
                             
                             **用户原始问题:** %s
@@ -142,11 +144,18 @@ public class Step4LogExecutionSummaryNode extends AbstractExecuteSupport {
                             5. 以MD语法的表格形式，优化展示结果数据
                             
                             请基于现有信息给出用户问题的答案：
-                            """,
-                    dynamicContext.getOriginalUserInput(),
-                    dynamicContext.getExecutionHistory().toString());
+                            """;
         }
-        return summaryPrompt;
+        String prompt = resolveStepPrompt(flowConfig.getStepPrompt(), fallbackPrompt, false,
+                dynamicContext.getOriginalUserInput(),
+                dynamicContext.getExecutionHistory().toString());
+        if (isCompleted) {
+            return prompt;
+        }
+        return prompt + System.lineSeparator() + System.lineSeparator() + """
+                补充要求：
+                当前任务未完全完成，请基于已有信息尽力回答，并明确说明仍缺失的部分及后续建议。
+                """;
     }
 
     /**

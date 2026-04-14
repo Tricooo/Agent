@@ -14,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.MapUtils;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
 import java.util.Map;
 import java.util.Optional;
@@ -55,13 +56,14 @@ public class Step1AnalyzeNode extends AbstractExecuteSupport {
         log.info("\n=== 执行第 {} 步 ===", step);
         log.info("阶段1: 任务状态分析");
 
-        String analysisPrompt = buildAnalysisPrompt(requestParam.getUserInput(), step,
+        String analysisPrompt = buildAnalysisPrompt(flowConfig, requestParam.getUserInput(), step,
                 dynamicContext.getMaxStep(), dynamicContext.getExecutionHistory().toString(),
                 dynamicContext.getCurrentTask());
 
         AutoAnalyzeResultDTO analyzeResult = analyzeClient.prompt(analysisPrompt)
                 .advisors(a -> a
-                        .param(CHAT_MEMORY_CONVERSATION_ID_KEY, requestParam.getSessionId())
+                        .param(CHAT_MEMORY_CONVERSATION_ID_KEY, buildConversationId(requestParam.getSessionId(),
+                                ANALYZER_MEMORY_SUFFIX))
                         .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 1024))
                 .call()
                 .entity(AutoAnalyzeResultDTO.class);
@@ -69,21 +71,20 @@ public class Step1AnalyzeNode extends AbstractExecuteSupport {
         if (analyzeResult == null) {
             throw new RuntimeException("任务解析结果为空");
         }
+        analyzeResult.validate();
 
         log.info("分析完成: status={}, percent={}%, nextStrategy={}",
                 analyzeResult.getTaskStatus(), analyzeResult.getCompletionPercent(),
                 analyzeResult.getNextStrategy());
 
         pushAnalysisToSse(dynamicContext, analyzeResult, requestParam.getSessionId());
+        dynamicContext.setAnalyzeResultDTO(analyzeResult);
 
         if (analyzeResult.getTaskStatus() == TaskStatus.COMPLETED
                 || analyzeResult.getCompletionPercent() >= 100) {
             dynamicContext.setCompleted(true);
             log.info("任务分析显示已完成");
-            return null;
         }
-
-        dynamicContext.setAnalyzeResultDTO(analyzeResult);
         return router(requestParam, dynamicContext);
     }
 
@@ -101,10 +102,15 @@ public class Step1AnalyzeNode extends AbstractExecuteSupport {
      * 构建分析阶段提示词。
      * Spring AI 会在消息末尾自动注入 JSON Schema，无需手动指定输出格式。
      */
-    private String buildAnalysisPrompt(String userInput, int step, int maxStep,
-                                        String executionHistory, String currentTask) {
+    private String buildAnalysisPrompt(AiAgentClientFlowConfigDTO flowConfig,
+                                       String userInput,
+                                       int step,
+                                       int maxStep,
+                                       String executionHistory,
+                                       String currentTask) {
         String historySection = executionHistory.isBlank() ? "[首次执行，无历史记录]" : executionHistory;
-        return String.format("""
+        String currentTaskValue = StringUtils.hasText(currentTask) ? currentTask : "[尚未生成当前任务]";
+        String fallbackPrompt = """
                 # 任务状态分析
 
                 ## 用户原始目标
@@ -112,9 +118,11 @@ public class Step1AnalyzeNode extends AbstractExecuteSupport {
 
                 ## 当前执行进度
                 - 当前步骤：第 %d 步（共 %d 步）
-                - 当前任务：%s
 
                 ## 执行历史
+                %s
+
+                ## 当前任务
                 %s
 
                 ## 分析要求
@@ -122,8 +130,9 @@ public class Step1AnalyzeNode extends AbstractExecuteSupport {
                 1. 判断任务是否已完全完成（completionPercent = 100 且 taskStatus = COMPLETED）
                 2. 如果未完成，评估执行历史的质量和下一步策略
                 3. nextStrategy 要具体可执行，作为下一步执行节点的行动指南
-                """,
-                userInput, step, maxStep, currentTask, historySection);
+                """;
+        return resolveStepPrompt(flowConfig.getStepPrompt(), fallbackPrompt, true,
+                userInput, step, maxStep, historySection, currentTaskValue);
     }
 
     /**
