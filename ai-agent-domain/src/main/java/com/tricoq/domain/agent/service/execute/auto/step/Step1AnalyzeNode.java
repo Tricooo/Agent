@@ -1,18 +1,18 @@
 package com.tricoq.domain.agent.service.execute.auto.step;
 
+import com.tricoq.domain.agent.model.dto.AiAgentClientFlowConfigDTO;
 import com.tricoq.domain.agent.model.dto.AutoAnalyzeResultDTO;
 import com.tricoq.domain.agent.model.dto.AutoAnalyzeResultDTO.TaskStatus;
 import com.tricoq.domain.agent.model.entity.AutoAgentExecuteResultEntity;
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
-import com.tricoq.domain.agent.service.execute.auto.step.factory.DefaultExecuteStrategyFactory;
-import com.tricoq.domain.agent.model.dto.AiAgentClientFlowConfigDTO;
-import com.tricoq.domain.agent.model.enums.AiAgentEnumVO;
 import com.tricoq.domain.agent.model.enums.AiClientTypeEnumVO;
+import com.tricoq.domain.agent.model.request.StructuredInvocationRequest;
+import com.tricoq.domain.agent.service.execute.auto.step.factory.DefaultExecuteStrategyFactory;
+import com.tricoq.domain.agent.spi.LlmInvocationFacade;
 import com.tricoq.types.framework.chain.StrategyHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.MapUtils;
-import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -31,6 +31,8 @@ import java.util.Optional;
 @Slf4j
 public class Step1AnalyzeNode extends AbstractExecuteSupport {
 
+    private final LlmInvocationFacade facade;
+
     /**
      * 节点自身处理逻辑
      *
@@ -48,9 +50,6 @@ public class Step1AnalyzeNode extends AbstractExecuteSupport {
         AiAgentClientFlowConfigDTO flowConfig = Optional
                 .ofNullable(flowConfigMap.get(AiClientTypeEnumVO.TASK_ANALYZER_CLIENT.getCode()))
                 .orElseThrow(() -> new IllegalArgumentException("没有此 client"));
-        ChatClient analyzeClient = Optional
-                .ofNullable((ChatClient) getBean(AiAgentEnumVO.AI_CLIENT.getBeanName(flowConfig.getClientId())))
-                .orElseThrow(() -> new IllegalArgumentException("不存在的任务分析 client"));
 
         Integer step = dynamicContext.getStep();
         log.info("\n=== 执行第 {} 步 ===", step);
@@ -60,18 +59,18 @@ public class Step1AnalyzeNode extends AbstractExecuteSupport {
                 dynamicContext.getMaxStep(), dynamicContext.getExecutionHistory().toString(),
                 dynamicContext.getCurrentTask());
 
-        AutoAnalyzeResultDTO analyzeResult = analyzeClient.prompt(analysisPrompt)
-                .advisors(a -> a
-                        .param(CHAT_MEMORY_CONVERSATION_ID_KEY, buildConversationId(requestParam.getSessionId(),
-                                ANALYZER_MEMORY_SUFFIX))
-                        .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 1024))
-                .call()
-                .entity(AutoAnalyzeResultDTO.class);
-
-        if (analyzeResult == null) {
-            throw new RuntimeException("任务解析结果为空");
-        }
-        analyzeResult.validate();
+        AutoAnalyzeResultDTO analyzeResult = facade.invokeStructured(StructuredInvocationRequest
+                .<AutoAnalyzeResultDTO>builder()
+                .operationName("auto.step1.analyze")
+                .clientId(flowConfig.getClientId())
+                .prompt(analysisPrompt)
+                .sessionId(requestParam.getSessionId())
+                .roleSuffix(ANALYZER_MEMORY_SUFFIX)
+                .responseType(AutoAnalyzeResultDTO.class)
+                .retrieveSize(1024)
+                .validate(AutoAnalyzeResultDTO::validate)
+                .build()
+        );
 
         log.info("分析完成: status={}, percent={}%, nextStrategy={}",
                 analyzeResult.getTaskStatus(), analyzeResult.getCompletionPercent(),
@@ -112,19 +111,19 @@ public class Step1AnalyzeNode extends AbstractExecuteSupport {
         String currentTaskValue = StringUtils.hasText(currentTask) ? currentTask : "[尚未生成当前任务]";
         String fallbackPrompt = """
                 # 任务状态分析
-
+                
                 ## 用户原始目标
                 %s
-
+                
                 ## 当前执行进度
                 - 当前步骤：第 %d 步（共 %d 步）
-
+                
                 ## 执行历史
                 %s
-
+                
                 ## 当前任务
                 %s
-
+                
                 ## 分析要求
                 请综合以上信息，评估当前任务执行状态：
                 1. 判断任务是否已完全完成（completionPercent = 100 且 taskStatus = COMPLETED）
@@ -140,7 +139,7 @@ public class Step1AnalyzeNode extends AbstractExecuteSupport {
      * 保持与原有前端协议兼容的 subType 字段。
      */
     private void pushAnalysisToSse(DefaultExecuteStrategyFactory.ExecuteContext dynamicContext,
-                                    AutoAnalyzeResultDTO result, String sessionId) {
+                                   AutoAnalyzeResultDTO result, String sessionId) {
         int step = dynamicContext.getStep();
 
         sendSseResult(dynamicContext, AutoAgentExecuteResultEntity.createAnalysisSubResult(

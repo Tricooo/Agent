@@ -4,15 +4,15 @@ import com.tricoq.domain.agent.model.dto.AutoAnalyzeResultDTO;
 import com.tricoq.domain.agent.model.dto.AutoExecuteResultDTO;
 import com.tricoq.domain.agent.model.entity.AutoAgentExecuteResultEntity;
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
+import com.tricoq.domain.agent.model.request.StructuredInvocationRequest;
 import com.tricoq.domain.agent.model.dto.AiAgentClientFlowConfigDTO;
-import com.tricoq.domain.agent.model.enums.AiAgentEnumVO;
 import com.tricoq.domain.agent.model.enums.AiClientTypeEnumVO;
+import com.tricoq.domain.agent.spi.LlmInvocationFacade;
 import com.tricoq.domain.agent.service.execute.auto.step.factory.DefaultExecuteStrategyFactory;
 import com.tricoq.types.framework.chain.StrategyHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.MapUtils;
-import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
@@ -29,6 +29,8 @@ import java.util.Optional;
 @Slf4j
 @RequiredArgsConstructor
 public class Step2ExecuteNode extends AbstractExecuteSupport {
+
+    private final LlmInvocationFacade facade;
 
     /**
      * 节点自身处理逻辑
@@ -53,24 +55,19 @@ public class Step2ExecuteNode extends AbstractExecuteSupport {
         AiAgentClientFlowConfigDTO flowConfig = Optional
                 .ofNullable(flowConfigMap.get(AiClientTypeEnumVO.PRECISION_EXECUTOR_CLIENT.getCode()))
                 .orElseThrow(() -> new IllegalArgumentException("没有此 client"));
-        ChatClient executeClient = Optional
-                .ofNullable((ChatClient) getBean(AiAgentEnumVO.AI_CLIENT.getBeanName(flowConfig.getClientId())))
-                .orElseThrow(() -> new IllegalArgumentException("不存在的执行 client"));
 
         String executionPrompt = buildExecutionPrompt(flowConfig, requestParam.getUserInput(), analyzeResult);
 
-        AutoExecuteResultDTO executeResult = executeClient.prompt(executionPrompt)
-                .advisors(a -> a
-                        .param(CHAT_MEMORY_CONVERSATION_ID_KEY, buildConversationId(requestParam.getSessionId(),
-                                EXECUTOR_MEMORY_SUFFIX))
-                        .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 120))
-                .call()
-                .entity(AutoExecuteResultDTO.class);
-
-        if (executeResult == null) {
-            throw new RuntimeException("任务执行失败");
-        }
-        executeResult.validate();
+        AutoExecuteResultDTO executeResult = facade.invokeStructured(StructuredInvocationRequest.<AutoExecuteResultDTO>builder()
+                .operationName("step2")
+                .clientId(flowConfig.getClientId())
+                .prompt(executionPrompt)
+                .sessionId(requestParam.getSessionId())
+                .roleSuffix(EXECUTOR_MEMORY_SUFFIX)
+                .responseType(AutoExecuteResultDTO.class)
+                .retrieveSize(120)
+                .validate(AutoExecuteResultDTO::validate)
+                .build());
 
         log.info("执行完成: target={}", executeResult.getExecutionTarget());
 

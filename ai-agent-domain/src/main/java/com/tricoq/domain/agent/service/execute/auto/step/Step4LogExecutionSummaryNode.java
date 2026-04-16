@@ -3,13 +3,13 @@ package com.tricoq.domain.agent.service.execute.auto.step;
 import com.tricoq.domain.agent.model.entity.AutoAgentExecuteResultEntity;
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
 import com.tricoq.domain.agent.model.dto.AiAgentClientFlowConfigDTO;
-import com.tricoq.domain.agent.model.enums.AiAgentEnumVO;
 import com.tricoq.domain.agent.model.enums.AiClientTypeEnumVO;
+import com.tricoq.domain.agent.model.request.TextInvocationRequest;
+import com.tricoq.domain.agent.spi.LlmInvocationFacade;
 import com.tricoq.domain.agent.service.execute.auto.step.factory.DefaultExecuteStrategyFactory;
 import com.tricoq.types.framework.chain.StrategyHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Component;
 
 /**
@@ -22,6 +22,8 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @RequiredArgsConstructor
 public class Step4LogExecutionSummaryNode extends AbstractExecuteSupport {
+
+    private final LlmInvocationFacade facade;
 
     @Override
     protected String doApply(ExecuteCommandEntity requestParameter, DefaultExecuteStrategyFactory.ExecuteContext dynamicContext) {
@@ -82,16 +84,14 @@ public class Step4LogExecutionSummaryNode extends AbstractExecuteSupport {
 
             String summaryPrompt = getSummaryPrompt(aiAgentClientFlowConfigVO, dynamicContext, isCompleted);
 
-            // 获取对话客户端 - 使用任务分析客户端进行总结
-            ChatClient chatClient = getBean(AiAgentEnumVO.AI_CLIENT.getBeanName(aiAgentClientFlowConfigVO.getClientId()));
-
-            String summaryResult = chatClient
+            String summaryResult = facade.invokeText(TextInvocationRequest.builder()
+                    .operationName("step4")
+                    .clientId(aiAgentClientFlowConfigVO.getClientId())
                     .prompt(summaryPrompt)
-                    .advisors(a -> a
-                            .param(CHAT_MEMORY_CONVERSATION_ID_KEY,
-                                    buildConversationId(requestParameter.getSessionId(), SUMMARY_MEMORY_SUFFIX))
-                            .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 50))
-                    .call().content();
+                    .sessionId(requestParameter.getSessionId())
+                    .roleSuffix(SUMMARY_MEMORY_SUFFIX)
+                    .retrieveSize(50)
+                    .build());
 
             assert summaryResult != null;
             logFinalReport(dynamicContext, summaryResult, requestParameter.getSessionId());

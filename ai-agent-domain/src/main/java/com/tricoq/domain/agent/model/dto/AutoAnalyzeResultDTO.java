@@ -60,7 +60,11 @@ public class AutoAnalyzeResultDTO {
             throw new IllegalStateException("AutoAnalyzeResultDTO.nextStrategy 不能为空，当 taskStatus=CONTINUE 时必须提供下一步策略");
         }
         if (taskStatus == TaskStatus.COMPLETED && completionPercent < 100) {
-            log.warn("分析结果状态与完成度不一致...");
+            log.warn("taskStatus=COMPLETED 但 completionPercent<100，结构化结果存在语义冲突");
+        }
+
+        if (taskStatus == TaskStatus.CONTINUE && completionPercent >= 100) {
+            log.warn("taskStatus=CONTINUE 但 completionPercent>=100，结构化结果存在语义冲突");
         }
     }
 }
