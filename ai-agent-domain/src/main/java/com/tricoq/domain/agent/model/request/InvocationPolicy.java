@@ -12,4 +12,5 @@ public interface InvocationPolicy<T> {
     Long getTimeoutMillis();
     Integer getMaxAttempts();
     Supplier<T> getFallbackResult();
+    Boolean getFallbackOnNonRetryable();
 }

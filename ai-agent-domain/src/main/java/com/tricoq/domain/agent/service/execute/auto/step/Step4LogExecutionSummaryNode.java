@@ -93,6 +93,7 @@ public class Step4LogExecutionSummaryNode extends AbstractExecuteSupport {
                 .maxAttempts(2)
                 .timeoutMillis(45000L)
                 .fallbackResult(() -> buildSummaryFallback(dynamicContext.isCompleted()))
+                .fallbackOnNonRetryable(true)
                 .build());
 
         logFinalReport(dynamicContext, summaryResult, requestParameter.getSessionId());

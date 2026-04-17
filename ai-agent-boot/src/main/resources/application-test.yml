@@ -39,3 +39,11 @@ logging:
   level:
     root: info
   config: classpath:logback-spring.xml
+
+spring:
+  ai:
+    openai:
+      http:
+        connect-timeout: 5s
+        read-timeout: 30s
+        response-timeout: 30s

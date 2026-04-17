@@ -41,4 +41,10 @@ public class StructuredInvocationRequest<T> implements InvocationPolicy<T>{
      * LLM 调用彻底失败后的兜底结果；null 表示不启用 fallback，让异常往上抛
      */
     private Supplier<T> fallbackResult;
+
+    /**
+     * 是否允许“不可重试异常”直接走 fallback。
+     * 默认 false，仅对像 Step4 这类展示层收尾节点显式打开。
+     */
+    private Boolean fallbackOnNonRetryable;
 }

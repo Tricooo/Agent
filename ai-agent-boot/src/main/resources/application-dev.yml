@@ -45,6 +45,10 @@ spring:
     openai:
       base-url: https://generativelanguage.googleapis.com/v1beta/openai
       api-key: AIzaSyBUmEoiDlom1595xI684MH_cZFcra6jD4E
+      http:
+        connect-timeout: 5s
+        read-timeout: 30s
+        response-timeout: 30s
       chat:
         options:
           model: gemini-flash-latest
@@ -76,3 +80,4 @@ wrench:
   task:
     job:
       enabled: false
+

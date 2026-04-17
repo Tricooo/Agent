@@ -1,6 +1,7 @@
 package com.tricoq.infrastructure.gateway.llm;
 
 import com.tricoq.domain.agent.model.enums.AiAgentEnumVO;
+import com.tricoq.domain.agent.model.exception.LlmInvocationTimeoutException;
 import com.tricoq.domain.agent.model.request.InvocationPolicy;
 import com.tricoq.domain.agent.model.request.StructuredInvocationRequest;
 import com.tricoq.domain.agent.model.request.TextInvocationRequest;
@@ -10,16 +11,15 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.retry.NonTransientAiException;
+import org.springframework.ai.retry.TransientAiException;
 import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.net.SocketTimeoutException;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import java.util.concurrent.*;
 import java.util.function.Supplier;
 
 /**
@@ -33,6 +33,8 @@ import java.util.function.Supplier;
 public class SpringAiLlmInvocationGateway implements LlmInvocationFacade {
 
     private static final int DEFAULT_RETRIEVE_SIZE = 100;
+
+    private final ExecutorService llmInvocationExecutor;
 
     @Resource
     private ApplicationContext applicationContext;
@@ -107,7 +109,15 @@ public class SpringAiLlmInvocationGateway implements LlmInvocationFacade {
                 log.warn("[{}] 第 {} 次失败: {}", operationName, attempt, e.getMessage());
 
                 if (!shouldRetry(e)) {
-                    log.warn("[{}] 异常不可重试（{}），立即抛出", operationName, e.getClass().getSimpleName());
+                    Throwable cause = unwrap(e);
+                    if (shouldFallbackOnNonRetryable(policy) && policy.getFallbackResult() != null) {
+                        log.warn("[{}] 非重试异常（{}），直接使用 fallback", operationName,
+                                cause != null ? cause.getClass().getSimpleName() : e.getClass().getSimpleName());
+                        return policy.getFallbackResult().get();
+                    }
+
+                    log.warn("[{}] 异常不可重试（{}），立即抛出", operationName,
+                            cause != null ? cause.getClass().getSimpleName() : e.getClass().getSimpleName());
                     throw new RuntimeException(
                             String.format("[%s] 不可重试异常", operationName), e);
                 }
@@ -129,11 +139,18 @@ public class SpringAiLlmInvocationGateway implements LlmInvocationFacade {
     }
 
     private <T> T callWithTimeout(Supplier<T> action, Long timeoutMillis, String operationName) {
+        Future<T> future = llmInvocationExecutor.submit(action::get);
         try {
-            //todo 生产级Gateway 应该传一个专用线程池——避免 LLM 调用阻塞 ForkJoin 影响其他任务
-            return CompletableFuture.supplyAsync(action).orTimeout(timeoutMillis, TimeUnit.MILLISECONDS).join();
-        } catch (CompletionException e) {
-            // CompletableFuture 把真正异常包在 cause 里，解开
+            return future.get(timeoutMillis, TimeUnit.MILLISECONDS);
+        } catch (TimeoutException e) {
+            //尝试终止worker
+            future.cancel(true);
+            throw new LlmInvocationTimeoutException("[" + operationName + "] 调用超时", e);
+        } catch (InterruptedException e) {
+            future.cancel(true);
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("[" + operationName + "] 调用被中断", e);
+        } catch (ExecutionException e) {
             Throwable cause = e.getCause();
             if (cause instanceof RuntimeException re) {
                 throw re;
@@ -173,54 +190,77 @@ public class SpringAiLlmInvocationGateway implements LlmInvocationFacade {
 
     /**
      * 判断一个异常是否值得重试。
-     * 原则：明确不重试的 → false；明确重试的 → true；不确定 → true（保守）
+     * 原则：优先尊重 Spring AI 的瞬态/非瞬态语义；
+     * 再补业务白名单；未知异常默认不重试。
      */
     private boolean shouldRetry(Throwable e) {
         if (e == null) {
             return false;
         }
-
         // 1. 解包：策略壳内部的包装异常 / CompletionException 等，要看真正的 cause
-        if (e instanceof CompletionException && e.getCause() != null) {
-            return shouldRetry(e.getCause());
+        Throwable cause = unwrap(e);
+        if (cause == null) {
+            return false;
+        }
+
+        if (cause instanceof NonTransientAiException) {
+            return false;
+        }
+        if (cause instanceof TransientAiException) {
+            return true;
+        }
+        if (cause instanceof LlmInvocationTimeoutException) {
+            return false;
         }
 
         // 2. 明确不重试的：编程错误 / 参数错 / 线程中断
-        if (e instanceof IllegalArgumentException) {
+        if (cause instanceof IllegalArgumentException) {
             return false;
         }
-        if (e instanceof NullPointerException) {
+        if (cause instanceof NullPointerException) {
             return false;
         }
-        if (e instanceof InterruptedException) {
+        if (cause instanceof InterruptedException) {
+            Thread.currentThread().interrupt();
             return false;
         }
 
-        if (e instanceof IOException) {
+        // 5. timeout 默认不自动重试；部分网络 IO 仍允许重试
+        if (cause instanceof SocketTimeoutException) {
+            return false;
+        }
+        if (cause instanceof TimeoutException) {
+            return false;
+        }
+
+        if (cause instanceof IOException) {
             return true;
         }
 
         // 3. HTTP 4xx：大部分不重试，但 408（请求超时）、429（限流）例外
-        if (isHttpClientError(e)) {
-            int status = extractHttpStatus(e);
+        if (isHttpClientError(cause)) {
+            int status = extractHttpStatus(cause);
             return status == 408 || status == 429;
         }
 
         // 4. HTTP 5xx：基本都重试（服务端故障，可能很快恢复）
-        if (isHttpServerError(e)) {
+        if (isHttpServerError(cause)) {
             return true;
         }
 
-        // 5. 网络/超时类：重试
-        if (e instanceof SocketTimeoutException) {
-            return true;
-        }
-        if (e instanceof TimeoutException) {
-            return true;
-        }
+        return false;
+    }
 
-        // 6. 默认：重试（保守策略）
-        return true;
+    private boolean shouldFallbackOnNonRetryable(InvocationPolicy<?> policy) {
+        return Boolean.TRUE.equals(policy.getFallbackOnNonRetryable());
+    }
+
+    private Throwable unwrap(Throwable e) {
+        Throwable t = e;
+        while ((t instanceof CompletionException || t instanceof ExecutionException) && t.getCause() != null) {
+            t = t.getCause();
+        }
+        return t;
     }
 
     private boolean isHttpClientError(Throwable e) {

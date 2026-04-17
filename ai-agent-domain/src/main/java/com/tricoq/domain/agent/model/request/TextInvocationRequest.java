@@ -31,4 +31,10 @@ public class TextInvocationRequest implements InvocationPolicy<String> {
     private Integer maxAttempts;
 
     private Supplier<String> fallbackResult;
+
+    /**
+     * 是否允许“不可重试异常”直接走 fallback。
+     * 默认 false，仅对像 Step4 这类展示层收尾节点显式打开。
+     */
+    private Boolean fallbackOnNonRetryable;
 }
