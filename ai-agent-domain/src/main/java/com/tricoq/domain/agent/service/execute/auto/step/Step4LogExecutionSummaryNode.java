@@ -73,35 +73,33 @@ public class Step4LogExecutionSummaryNode extends AbstractExecuteSupport {
      * 生成最终总结报告
      */
     private void generateFinalReport(ExecuteCommandEntity requestParameter, DefaultExecuteStrategyFactory.ExecuteContext dynamicContext) {
-        try {
-            boolean isCompleted = dynamicContext.isCompleted();
-            log.info("\n--- 生成{}任务的最终答案 ---", isCompleted ? "已完成" : "未完成");
-            AiAgentClientFlowConfigDTO aiAgentClientFlowConfigVO = dynamicContext.getFlowConfigMap()
-                    .get(AiClientTypeEnumVO.RESPONSE_ASSISTANT.getCode());
-            if (aiAgentClientFlowConfigVO == null) {
-                throw new IllegalArgumentException("没有配置 RESPONSE_ASSISTANT client");
-            }
-
-            String summaryPrompt = getSummaryPrompt(aiAgentClientFlowConfigVO, dynamicContext, isCompleted);
-
-            String summaryResult = facade.invokeText(TextInvocationRequest.builder()
-                    .operationName("step4")
-                    .clientId(aiAgentClientFlowConfigVO.getClientId())
-                    .prompt(summaryPrompt)
-                    .sessionId(requestParameter.getSessionId())
-                    .roleSuffix(SUMMARY_MEMORY_SUFFIX)
-                    .retrieveSize(50)
-                    .build());
-
-            assert summaryResult != null;
-            logFinalReport(dynamicContext, summaryResult, requestParameter.getSessionId());
-
-            // 将总结结果保存到动态上下文中
-            dynamicContext.setFinalSummary(summaryResult);
-
-        } catch (Exception e) {
-            log.error("生成最终总结报告时出现异常: {}", e.getMessage(), e);
+        boolean isCompleted = dynamicContext.isCompleted();
+        log.info("\n--- 生成{}任务的最终答案 ---", isCompleted ? "已完成" : "未完成");
+        AiAgentClientFlowConfigDTO aiAgentClientFlowConfigVO = dynamicContext.getFlowConfigMap()
+                .get(AiClientTypeEnumVO.RESPONSE_ASSISTANT.getCode());
+        if (aiAgentClientFlowConfigVO == null) {
+            throw new IllegalArgumentException("没有配置 RESPONSE_ASSISTANT client");
         }
+
+        String summaryPrompt = getSummaryPrompt(aiAgentClientFlowConfigVO, dynamicContext, isCompleted);
+
+        String summaryResult = facade.invokeText(TextInvocationRequest.builder()
+                .operationName("step4")
+                .clientId(aiAgentClientFlowConfigVO.getClientId())
+                .prompt(summaryPrompt)
+                .sessionId(requestParameter.getSessionId())
+                .roleSuffix(SUMMARY_MEMORY_SUFFIX)
+                .retrieveSize(50)
+                .maxAttempts(2)
+                .timeoutMillis(45000L)
+                .fallbackResult(() -> buildSummaryFallback(dynamicContext.isCompleted()))
+                .build());
+
+        logFinalReport(dynamicContext, summaryResult, requestParameter.getSessionId());
+
+        // 将总结结果保存到动态上下文中
+        dynamicContext.setFinalSummary(summaryResult);
+
     }
 
     private String getSummaryPrompt(AiAgentClientFlowConfigDTO flowConfig,
@@ -110,41 +108,41 @@ public class Step4LogExecutionSummaryNode extends AbstractExecuteSupport {
         String fallbackPrompt;
         if (isCompleted) {
             fallbackPrompt = """
-                            基于以下执行过程，请直接回答用户的原始问题，提供最终的答案和结果：
-                            
-                            **用户原始问题:** %s
-                            
-                            **执行历史和过程:**
-                            %s
-                            
-                            **要求:**
-                            1. 直接回答用户的原始问题
-                            2. 基于执行过程中获得的信息和结果
-                            3. 提供具体、实用的最终答案
-                            4. 如果是要求制定计划、列表等，请直接给出完整的内容
-                            5. 避免只描述执行过程，重点是最终答案
-                            6. 以MD语法的表格形式，优化展示结果数据
-                            
-                            请直接给出用户问题的最终答案：
-                            """;
+                    基于以下执行过程，请直接回答用户的原始问题，提供最终的答案和结果：
+                    
+                    **用户原始问题:** %s
+                    
+                    **执行历史和过程:**
+                    %s
+                    
+                    **要求:**
+                    1. 直接回答用户的原始问题
+                    2. 基于执行过程中获得的信息和结果
+                    3. 提供具体、实用的最终答案
+                    4. 如果是要求制定计划、列表等，请直接给出完整的内容
+                    5. 避免只描述执行过程，重点是最终答案
+                    6. 以MD语法的表格形式，优化展示结果数据
+                    
+                    请直接给出用户问题的最终答案：
+                    """;
         } else {
             fallbackPrompt = """
-                            虽然任务未完全执行完成，但请基于已有的执行过程，尽力回答用户的原始问题：
-                            
-                            **用户原始问题:** %s
-                            
-                            **已执行的过程和获得的信息:**
-                            %s
-                            
-                            **要求:**
-                            1. 基于已有信息，尽力回答用户的原始问题
-                            2. 如果信息不足，说明哪些部分无法完成并给出原因
-                            3. 提供已能确定的部分答案
-                            4. 给出完成剩余部分的具体建议
-                            5. 以MD语法的表格形式，优化展示结果数据
-                            
-                            请基于现有信息给出用户问题的答案：
-                            """;
+                    虽然任务未完全执行完成，但请基于已有的执行过程，尽力回答用户的原始问题：
+                    
+                    **用户原始问题:** %s
+                    
+                    **已执行的过程和获得的信息:**
+                    %s
+                    
+                    **要求:**
+                    1. 基于已有信息，尽力回答用户的原始问题
+                    2. 如果信息不足，说明哪些部分无法完成并给出原因
+                    3. 提供已能确定的部分答案
+                    4. 给出完成剩余部分的具体建议
+                    5. 以MD语法的表格形式，优化展示结果数据
+                    
+                    请基于现有信息给出用户问题的答案：
+                    """;
         }
         String prompt = resolveStepPrompt(flowConfig.getStepPrompt(), fallbackPrompt, false,
                 dynamicContext.getOriginalUserInput(),
@@ -216,6 +214,12 @@ public class Step4LogExecutionSummaryNode extends AbstractExecuteSupport {
 
         // 发送完成标识
         sendCompleteResult(dynamicContext, sessionId);
+    }
+
+    private String buildSummaryFallback(boolean isCompleted) {
+        return isCompleted
+                ? "任务已执行完成，详细结果请参考上方分步日志。（LLM 总结生成暂时不可用）"
+                : "任务未完全完成，详细信息请参考上方分步日志。（LLM 总结生成暂时不可用）";
     }
 
     /**

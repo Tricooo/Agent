@@ -67,6 +67,8 @@ public class Step2ExecuteNode extends AbstractExecuteSupport {
                 .responseType(AutoExecuteResultDTO.class)
                 .retrieveSize(120)
                 .validate(AutoExecuteResultDTO::validate)
+                .maxAttempts(1)
+                .timeoutMillis(90000L)
                 .build());
 
         log.info("执行完成: target={}", executeResult.getExecutionTarget());
@@ -76,11 +78,11 @@ public class Step2ExecuteNode extends AbstractExecuteSupport {
 
         // 更新执行历史（文本格式，供 Step1 下一轮分析用）
         dynamicContext.getExecutionHistory().append(String.format("""
-                === 第 %d 步执行记录 ===
-                【分析策略】%s
-                【执行目标】%s
-                【执行结果】%s
-                """,
+                        === 第 %d 步执行记录 ===
+                        【分析策略】%s
+                        【执行目标】%s
+                        【执行结果】%s
+                        """,
                 dynamicContext.getStep(),
                 analyzeResult.getNextStrategy(),
                 executeResult.getExecutionTarget(),
@@ -104,13 +106,13 @@ public class Step2ExecuteNode extends AbstractExecuteSupport {
                                         AutoAnalyzeResultDTO analyzeResult) {
         String fallbackPrompt = """
                 # 精准任务执行
-
+                
                 ## 用户原始目标
                 %s
-
+                
                 ## 本次执行策略（来自任务分析节点）
                 %s
-
+                
                 ## 执行要求
                 请严格按照执行策略完成任务：
                 1. executionTarget：明确本次执行的具体目标
@@ -126,7 +128,7 @@ public class Step2ExecuteNode extends AbstractExecuteSupport {
      * 将结构化执行结果推送到 SSE。
      */
     private void pushExecutionToSse(DefaultExecuteStrategyFactory.ExecuteContext dynamicContext,
-                                     AutoExecuteResultDTO result, String sessionId) {
+                                    AutoExecuteResultDTO result, String sessionId) {
         int step = dynamicContext.getStep();
 
         if (result.getExecutionTarget() != null) {

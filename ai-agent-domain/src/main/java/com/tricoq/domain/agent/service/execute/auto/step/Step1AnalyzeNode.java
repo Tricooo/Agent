@@ -69,6 +69,8 @@ public class Step1AnalyzeNode extends AbstractExecuteSupport {
                 .responseType(AutoAnalyzeResultDTO.class)
                 .retrieveSize(1024)
                 .validate(AutoAnalyzeResultDTO::validate)
+                .maxAttempts(2)
+                .timeoutMillis(30000L)
                 .build()
         );
 

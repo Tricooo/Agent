@@ -3,6 +3,8 @@ package com.tricoq.domain.agent.model.request;
 import lombok.Builder;
 import lombok.Data;
 
+import java.util.function.Supplier;
+
 /**
  * @description:
  * @author：trico qiang
@@ -10,7 +12,7 @@ import lombok.Data;
  */
 @Data
 @Builder
-public class TextInvocationRequest {
+public class TextInvocationRequest implements InvocationPolicy<String> {
 
     private String operationName;
 
@@ -23,4 +25,10 @@ public class TextInvocationRequest {
     private String roleSuffix;
 
     private Integer retrieveSize;
+
+    private Long timeoutMillis;
+
+    private Integer maxAttempts;
+
+    private Supplier<String> fallbackResult;
 }

@@ -68,6 +68,8 @@ public class Step3QualitySupervisorNode extends AbstractExecuteSupport {
                         .responseType(AutoSupervisionResultDTO.class)
                         .retrieveSize(80)
                         .validate(AutoSupervisionResultDTO::validate)
+                        .maxAttempts(2)
+                        .timeoutMillis(30000L)
                         .build()
         );
 
