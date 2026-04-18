@@ -1,19 +1,19 @@
 package com.tricoq.infrastructure.gateway.llm;
 
+import com.tricoq.domain.agent.model.dto.AiClientRuntimeProfile;
 import com.tricoq.domain.agent.model.enums.AiAgentEnumVO;
 import com.tricoq.domain.agent.model.exception.LlmInvocationTimeoutException;
 import com.tricoq.domain.agent.model.request.InvocationPolicy;
 import com.tricoq.domain.agent.model.request.StructuredInvocationRequest;
 import com.tricoq.domain.agent.model.request.TextInvocationRequest;
+import com.tricoq.domain.agent.spi.AiClientRuntimeRegistry;
 import com.tricoq.domain.agent.spi.LlmInvocationFacade;
-import jakarta.annotation.Resource;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.retry.NonTransientAiException;
 import org.springframework.ai.retry.TransientAiException;
-import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -30,14 +30,13 @@ import java.util.function.Supplier;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class SpringAiLlmInvocationGateway implements LlmInvocationFacade {
+public class SpringAiLlmInvocationGateway extends SpringAiSupport implements LlmInvocationFacade {
 
     private static final int DEFAULT_RETRIEVE_SIZE = 100;
 
     private final ExecutorService llmInvocationExecutor;
 
-    @Resource
-    private ApplicationContext applicationContext;
+    private final AiClientRuntimeRegistry runtimeRegistry;
 
     private static final String CHAT_MEMORY_CONVERSATION_ID_KEY = "chat_memory_conversation_id";
     private static final String CHAT_MEMORY_RETRIEVE_SIZE_KEY = "chat_memory_response_size";
@@ -45,18 +44,16 @@ public class SpringAiLlmInvocationGateway implements LlmInvocationFacade {
     @Override
     public <T> T invokeStructured(StructuredInvocationRequest<T> request) {
 
+        String clientId = request.getClientId();
         ChatClient client = Optional
-                .ofNullable((ChatClient) getBean(AiAgentEnumVO.AI_CLIENT.getBeanName(request.getClientId())))
+                .ofNullable((ChatClient) getBean(AiAgentEnumVO.AI_CLIENT.getBeanName(clientId)))
                 .orElseThrow(() -> new IllegalArgumentException("不存在的任务分析 client"));
 
         Supplier<T> action = () -> {
-            T response = client.prompt(request.getPrompt())
-                    .advisors(a -> a
-                            .param(CHAT_MEMORY_CONVERSATION_ID_KEY, buildConversationId(request.getSessionId(),
-                                    request.getRoleSuffix()))
-                            .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, getRetrieveSize(request.getRetrieveSize())))
-                    .call()
-                    .entity(request.getResponseType());
+            ChatClient.ChatClientRequestSpec clientRequestSpec = buildRequestSpec(client, request.getPrompt(),
+                    clientId, request.getSessionId(), request.getRoleSuffix(), request.getRetrieveSize());
+
+            T response = clientRequestSpec.call().entity(request.getResponseType());
 
             if (response == null) {
                 throw new RuntimeException("任务解析结果为空");
@@ -71,18 +68,16 @@ public class SpringAiLlmInvocationGateway implements LlmInvocationFacade {
 
     @Override
     public String invokeText(TextInvocationRequest request) {
+        String clientId = request.getClientId();
         ChatClient client = Optional
-                .ofNullable((ChatClient) getBean(AiAgentEnumVO.AI_CLIENT.getBeanName(request.getClientId())))
+                .ofNullable((ChatClient) getBean(AiAgentEnumVO.AI_CLIENT.getBeanName(clientId)))
                 .orElseThrow(() -> new IllegalArgumentException("不存在的文本调用 client"));
 
         Supplier<String> action = () -> {
-            String response = client.prompt(request.getPrompt())
-                    .advisors(a -> a
-                            .param(CHAT_MEMORY_CONVERSATION_ID_KEY, buildConversationId(request.getSessionId(),
-                                    request.getRoleSuffix()))
-                            .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, getRetrieveSize(request.getRetrieveSize())))
-                    .call()
-                    .content();
+            ChatClient.ChatClientRequestSpec clientRequestSpec = buildRequestSpec(client, request.getPrompt(),
+                    clientId, request.getSessionId(), request.getRoleSuffix(), request.getRetrieveSize());
+
+            String response = clientRequestSpec.call().content();
 
             if (response == null) {
                 throw new RuntimeException("文本调用结果为空");
@@ -170,10 +165,30 @@ public class SpringAiLlmInvocationGateway implements LlmInvocationFacade {
         }
     }
 
+    private ChatClient.ChatClientRequestSpec buildRequestSpec(ChatClient client,
+                                                              String prompt,
+                                                              String clientId,
+                                                              String sessionId,
+                                                              String roleSuffix,
+                                                              Integer retrieveSize) {
+        ChatClient.ChatClientRequestSpec clientRequestSpec = client.prompt(prompt);
+        applyChatMemoryIfNeeded(clientRequestSpec, clientId, sessionId, roleSuffix, retrieveSize);
+        return clientRequestSpec;
+    }
 
-    @SuppressWarnings("unchecked")
-    protected <T> T getBean(String beanName) {
-        return (T) applicationContext.getBean(beanName);
+    private void applyChatMemoryIfNeeded(ChatClient.ChatClientRequestSpec clientRequestSpec,
+                                         String clientId,
+                                         String sessionId,
+                                         String roleSuffix,
+                                         Integer retrieveSize) {
+        AiClientRuntimeProfile profile = runtimeRegistry.getRequired(clientId);
+        if (!profile.isChatMemoryEnabled()) {
+            return;
+        }
+
+        clientRequestSpec.advisors(a -> a
+                .param(CHAT_MEMORY_CONVERSATION_ID_KEY, buildConversationId(sessionId, roleSuffix))
+                .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, getRetrieveSize(retrieveSize)));
     }
 
     protected String buildConversationId(String sessionId, String roleSuffix) {

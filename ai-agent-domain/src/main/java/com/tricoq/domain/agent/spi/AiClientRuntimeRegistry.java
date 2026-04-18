@@ -9,7 +9,7 @@ import com.tricoq.domain.agent.model.dto.AiClientRuntimeProfile;
  */
 public interface AiClientRuntimeRegistry {
 
-    String AI_CLIENT_RUNTIME_PROFILE_BEAN_PREFIX = "ai_client_runtime_profile_";
+    void register(String clientId, AiClientRuntimeProfile profile);
 
     AiClientRuntimeProfile getRequired(String clientId);
 }

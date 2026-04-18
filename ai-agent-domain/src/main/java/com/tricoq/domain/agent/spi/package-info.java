@@ -5,5 +5,6 @@ Service Provider Interface
 SPI = “我要什么”
 它只回答：
 业务层需要什么能力？
+**只表达能力**
  */
 package com.tricoq.domain.agent.spi;

@@ -12,6 +12,7 @@ import com.tricoq.domain.agent.service.armory.node.factory.DefaultArmoryStrategy
 import com.tricoq.domain.agent.spi.AiClientRuntimeRegistry;
 import com.tricoq.types.framework.chain.StrategyHandler;
 import io.modelcontextprotocol.client.McpSyncClient;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.collections4.MapUtils;
@@ -34,7 +35,11 @@ import java.util.stream.Collectors;
  */
 @Component
 @Slf4j
+@RequiredArgsConstructor
 public class AiClientNode extends AbstractArmorySupport {
+
+    private final AiClientRuntimeRegistry runtimeRegistry;
+
     /**
      * 节点自身处理逻辑
      *
@@ -116,8 +121,7 @@ public class AiClientNode extends AbstractArmorySupport {
             registerBean(beanName(client.getClientId()), ChatClient.class, chatClient);
 
             AiClientRuntimeProfile runtimeProfile = profileBuilder.build();
-            registerBean(AiClientRuntimeRegistry.AI_CLIENT_RUNTIME_PROFILE_BEAN_PREFIX + client.getClientId(),
-                    AiClientRuntimeProfile.class, runtimeProfile);
+            runtimeRegistry.register(client.getClientId(), runtimeProfile);
         }
         return router(requestParam, dynamicContext);
     }
