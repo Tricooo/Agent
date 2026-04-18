@@ -18,7 +18,7 @@ public class LlmInvocationExecutorConfig {
         return new ThreadPoolExecutor(8, 16, 1,
                 TimeUnit.MINUTES, new ArrayBlockingQueue<>(50), r -> {
             Thread thread = new Thread(r);
-            thread.setName("llm-invoke-" + thread.threadId());
+            thread.setName("llm-invoke-" + thread.getId());
             return thread;
         }, new ThreadPoolExecutor.AbortPolicy());
     }
