@@ -1,6 +1,7 @@
 package com.tricoq.domain.agent.model.enums;
 
 import com.tricoq.domain.agent.model.dto.AiClientAdvisorDTO;
+import com.tricoq.domain.agent.model.dto.AiClientRuntimeProfile;
 import com.tricoq.domain.agent.service.armory.node.factory.element.RagAnswerAdvisor;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -12,6 +13,7 @@ import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -30,6 +32,15 @@ public enum AiClientAdvisorTypeEnumVO {
                             .build())
                     .build();
         }
+
+        @Override
+        public void enrichRuntimeProfile(AiClientRuntimeProfile.AiClientRuntimeProfileBuilder profileBuilder,
+                                         AiClientAdvisorDTO advisorConfig) {
+            profileBuilder.chatMemoryEnabled(true);
+            if (advisorConfig.getChatMemory() != null) {
+                profileBuilder.chatMemoryMaxMessages(advisorConfig.getChatMemory().getMaxMessages());
+            }
+        }
     },
 
     RAG_ANSWER("RagAnswer", "知识库") {
@@ -43,7 +54,13 @@ public enum AiClientAdvisorTypeEnumVO {
                     .filterExpression(StringUtils.defaultIfEmpty(ragAnswer.getFilterExpression(), StringUtils.EMPTY))
                     .topK(ragAnswer.getTopK())
                     .build();
-            return new RagAnswerAdvisor(vectorStore,searchRequest);
+            return new RagAnswerAdvisor(vectorStore, searchRequest);
+        }
+
+        @Override
+        public void enrichRuntimeProfile(AiClientRuntimeProfile.AiClientRuntimeProfileBuilder profileBuilder,
+                                         AiClientAdvisorDTO advisorConfig) {
+            profileBuilder.ragEnabled(true);
         }
     };
 
@@ -60,6 +77,9 @@ public enum AiClientAdvisorTypeEnumVO {
      * @return 顾问对象
      */
     public abstract Advisor createAdvisor(AiClientAdvisorDTO aiClientAdvisorVO, VectorStore vectorStore);
+
+    public abstract void enrichRuntimeProfile(AiClientRuntimeProfile.AiClientRuntimeProfileBuilder profileBuilder,
+                                              AiClientAdvisorDTO advisorConfig);
 
     static {
         for (AiClientAdvisorTypeEnumVO vo : values()) {

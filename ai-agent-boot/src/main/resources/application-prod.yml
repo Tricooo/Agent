@@ -45,5 +45,5 @@ spring:
     openai:
       http:
         connect-timeout: 5s
-        read-timeout: 30s
-        response-timeout: 30s
+        read-timeout: 25s
+        response-timeout: 25s

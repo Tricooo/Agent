@@ -45,7 +45,7 @@ public class AiClientToolMcpNode extends AbstractArmorySupport {
     @Override
     protected String doApply(ArmoryCommandEntity requestParam, DefaultArmoryStrategyFactory.DynamicContext dynamicContext) {
         log.info("Ai Agent 构建节点，Tool MCP 工具配置{}", JSON.toJSONString(requestParam));
-        List<AiClientToolMcpDTO> mcpNodes = dynamicContext.getValue(AiAgentEnumVO.AI_CLIENT_TOOL_MCP.getDataName());
+        List<AiClientToolMcpDTO> mcpNodes = dynamicContext.getToolMcps();
         if (CollectionUtils.isEmpty(mcpNodes)) {
             log.warn("没有需要被初始化的 ai client tool mcp");
             return router(requestParam, dynamicContext);

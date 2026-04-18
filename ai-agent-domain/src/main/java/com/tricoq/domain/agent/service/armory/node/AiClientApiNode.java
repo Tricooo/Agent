@@ -50,7 +50,7 @@ public class AiClientApiNode extends AbstractArmorySupport {
     @Override
     protected String doApply(ArmoryCommandEntity requestParam, DefaultArmoryStrategyFactory.DynamicContext dynamicContext) {
         log.info("Ai Agent 构建节点，API 接口请求{}", JSON.toJSONString(requestParam));
-        List<AiClientApiDTO> apiVOList = dynamicContext.getValue(AiAgentEnumVO.AI_CLIENT_API.getDataName());
+        List<AiClientApiDTO> apiVOList = dynamicContext.getClientApis();
         if(CollectionUtils.isEmpty(apiVOList)){
             log.warn("没有需要被初始化的 ai client api");
             return router(requestParam, dynamicContext);

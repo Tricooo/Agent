@@ -78,12 +78,12 @@ public class AiClientLoadDataStrategy implements ILoadDataStrategy {
                 aiClientListFuture).orTimeout(5, TimeUnit.SECONDS);
         //这里还是使用之前的线程
         all.thenRun(() -> {
-            dynamicContext.setValue(AiAgentEnumVO.AI_CLIENT_API.getDataName(), aiClientApiListFuture.join());
-            dynamicContext.setValue(AiAgentEnumVO.AI_CLIENT_MODEL.getDataName(), aiClientModelListFuture.join());
-            dynamicContext.setValue(AiAgentEnumVO.AI_CLIENT_SYSTEM_PROMPT.getDataName(), aiClientSystemPromptListFuture.join());
-            dynamicContext.setValue(AiAgentEnumVO.AI_CLIENT_TOOL_MCP.getDataName(), aiClientToolMcpListFuture.join());
-            dynamicContext.setValue(AiAgentEnumVO.AI_CLIENT_ADVISOR.getDataName(), aiClientAdvisorListFuture.join());
-            dynamicContext.setValue(AiAgentEnumVO.AI_CLIENT.getDataName(), aiClientListFuture.join());
+            dynamicContext.setClientApis(aiClientApiListFuture.join());
+            dynamicContext.setClientModels(aiClientModelListFuture.join());
+            dynamicContext.setSystemPromptMap(aiClientSystemPromptListFuture.join());
+            dynamicContext.setToolMcps(aiClientToolMcpListFuture.join());
+            dynamicContext.setAdvisorConfigs(aiClientAdvisorListFuture.join());
+            dynamicContext.setClients(aiClientListFuture.join());
         }).join();
     }
 

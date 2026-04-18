@@ -40,7 +40,7 @@ public class AiClientModelNode extends AbstractArmorySupport {
     @Override
     protected String doApply(ArmoryCommandEntity requestParam, DefaultArmoryStrategyFactory.DynamicContext dynamicContext) {
         log.info("Ai Agent 构建节点，Mode 对话模型{}", JSON.toJSONString(requestParam));
-        List<AiClientModelDTO> modelNodes = dynamicContext.getValue(dataName());
+        List<AiClientModelDTO> modelNodes = dynamicContext.getClientModels();
 
         if (CollectionUtils.isEmpty(modelNodes)) {
             log.warn("没有需要被初始化的 ai client model");

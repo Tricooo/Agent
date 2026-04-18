@@ -234,7 +234,7 @@ public class SpringAiLlmInvocationGateway implements LlmInvocationFacade {
         }
 
         if (cause instanceof IOException) {
-            return true;
+            return false;
         }
 
         // 3. HTTP 4xx：大部分不重试，但 408（请求超时）、429（限流）例外

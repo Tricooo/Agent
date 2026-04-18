@@ -40,7 +40,7 @@ public class AiClientAdvisorNode extends AbstractArmorySupport {
     protected String doApply(ArmoryCommandEntity requestParam, DefaultArmoryStrategyFactory.DynamicContext dynamicContext) {
         log.info("Ai Agent 构建节点，Advisor 顾问角色{}", JSON.toJSONString(requestParam));
 
-        List<AiClientAdvisorDTO> advisors = dynamicContext.getValue(dataName());
+        List<AiClientAdvisorDTO> advisors = dynamicContext.getAdvisorConfigs();
 
         if (CollectionUtils.isEmpty(advisors)) {
             log.warn("没有需要被初始化的 ai client advisor");

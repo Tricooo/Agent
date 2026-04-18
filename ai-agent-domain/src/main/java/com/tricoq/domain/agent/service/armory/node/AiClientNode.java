@@ -1,11 +1,15 @@
 package com.tricoq.domain.agent.service.armory.node;
 
 import com.alibaba.fastjson.JSON;
+import com.tricoq.domain.agent.model.dto.AiClientRuntimeProfile;
+import com.tricoq.domain.agent.model.dto.AiClientAdvisorDTO;
 import com.tricoq.domain.agent.model.entity.ArmoryCommandEntity;
 import com.tricoq.domain.agent.model.enums.AiAgentEnumVO;
+import com.tricoq.domain.agent.model.enums.AiClientAdvisorTypeEnumVO;
 import com.tricoq.domain.agent.model.dto.AiClientSystemPromptDTO;
 import com.tricoq.domain.agent.model.dto.AiClientDTO;
 import com.tricoq.domain.agent.service.armory.node.factory.DefaultArmoryStrategyFactory;
+import com.tricoq.domain.agent.spi.AiClientRuntimeRegistry;
 import com.tricoq.types.framework.chain.StrategyHandler;
 import io.modelcontextprotocol.client.McpSyncClient;
 import lombok.extern.slf4j.Slf4j;
@@ -21,6 +25,7 @@ import org.springframework.util.StringUtils;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -41,17 +46,21 @@ public class AiClientNode extends AbstractArmorySupport {
     protected String doApply(ArmoryCommandEntity requestParam, DefaultArmoryStrategyFactory.DynamicContext dynamicContext) {
         log.info("Ai Agent 构建节点，客户端{}", JSON.toJSONString(requestParam));
 
-        List<AiClientDTO> clients = dynamicContext.getValue(dataName());
+        List<AiClientDTO> clients = dynamicContext.getClients();
         if (CollectionUtils.isEmpty(clients)) {
             return router(requestParam, dynamicContext);
         }
+        Map<String, AiClientAdvisorDTO> advisorConfigMap = dynamicContext.getAdvisorConfigMap();
+        Map<String, AiClientSystemPromptDTO> promptMap = dynamicContext.getSystemPromptMap();
+
         for (AiClientDTO client : clients) {
             ChatModel model = getBean(AiAgentEnumVO.AI_CLIENT_MODEL.getBeanName(client.getModelId()));
             ChatClient.Builder clientBuilder = ChatClient.builder(model);
 
+            AiClientRuntimeProfile.AiClientRuntimeProfileBuilder profileBuilder = AiClientRuntimeProfile.builder();
+            profileBuilder.clientId(client.getClientId());
+
             //系统提示词构建
-            Map<String, AiClientSystemPromptDTO> promptMap = dynamicContext
-                    .getValue(AiAgentEnumVO.AI_CLIENT_SYSTEM_PROMPT.getDataName());
             List<String> promptIds = client.getPromptIdList();
             if (CollectionUtils.isNotEmpty(promptIds) && MapUtils.isNotEmpty(promptMap)) {
                 String prompt = promptIds.stream()
@@ -63,6 +72,7 @@ public class AiClientNode extends AbstractArmorySupport {
 
                 if (StringUtils.hasText(prompt)) {
                     clientBuilder.defaultSystem("AI 智能体" + System.lineSeparator() + prompt);
+                    profileBuilder.systemPromptEnabled(true);
                 }
             }
             //mcp工具构建
@@ -74,6 +84,7 @@ public class AiClientNode extends AbstractArmorySupport {
                         .toList();
                 if (CollectionUtils.isNotEmpty(mcpTools)) {
                     clientBuilder.defaultToolCallbacks(new SyncMcpToolCallbackProvider(mcpTools).getToolCallbacks());
+                    profileBuilder.mcpEnabled(true);
                 }
             }
 
@@ -88,13 +99,35 @@ public class AiClientNode extends AbstractArmorySupport {
                         .toList();
                 if (CollectionUtils.isNotEmpty(advisors)) {
                     clientBuilder.defaultAdvisors(advisors);
+                    List<AiClientAdvisorDTO> advisorConfigs = advisorIdList.stream()
+                            .map(advisorConfigMap::get)
+                            .filter(Objects::nonNull)
+                            .toList();
+                    Set<String> advisorTypes = advisorConfigs.stream()
+                            .map(AiClientAdvisorDTO::getAdvisorType)
+                            .filter(Objects::nonNull)
+                            .collect(Collectors.toSet());
+                    profileBuilder.advisorTypes(advisorTypes);
+                    enrichRuntimeProfile(profileBuilder, advisorConfigs);
                 }
             }
 
             ChatClient chatClient = clientBuilder.build();
             registerBean(beanName(client.getClientId()), ChatClient.class, chatClient);
+
+            AiClientRuntimeProfile runtimeProfile = profileBuilder.build();
+            registerBean(AiClientRuntimeRegistry.AI_CLIENT_RUNTIME_PROFILE_BEAN_PREFIX + client.getClientId(),
+                    AiClientRuntimeProfile.class, runtimeProfile);
         }
         return router(requestParam, dynamicContext);
+    }
+
+    private void enrichRuntimeProfile(AiClientRuntimeProfile.AiClientRuntimeProfileBuilder profileBuilder,
+                                      List<AiClientAdvisorDTO> advisorConfigs) {
+        for (AiClientAdvisorDTO advisorConfig : advisorConfigs) {
+            AiClientAdvisorTypeEnumVO type = AiClientAdvisorTypeEnumVO.getByCode(advisorConfig.getAdvisorType());
+            type.enrichRuntimeProfile(profileBuilder, advisorConfig);
+        }
     }
 
     @Override
