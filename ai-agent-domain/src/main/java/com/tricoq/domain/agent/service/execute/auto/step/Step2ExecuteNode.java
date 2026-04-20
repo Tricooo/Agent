@@ -7,6 +7,7 @@ import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
 import com.tricoq.domain.agent.model.request.StructuredInvocationRequest;
 import com.tricoq.domain.agent.model.dto.AiAgentClientFlowConfigDTO;
 import com.tricoq.domain.agent.model.enums.AiClientTypeEnumVO;
+import com.tricoq.domain.agent.service.execute.auto.step.context.ExecutionHistoryBuffer;
 import com.tricoq.domain.agent.spi.LlmInvocationFacade;
 import com.tricoq.domain.agent.service.execute.auto.step.factory.DefaultExecuteStrategyFactory;
 import com.tricoq.types.framework.chain.StrategyHandler;
@@ -77,16 +78,8 @@ public class Step2ExecuteNode extends AbstractExecuteSupport {
         dynamicContext.setExecuteResultDTO(executeResult);
 
         // 更新执行历史（文本格式，供 Step1 下一轮分析用）
-        dynamicContext.getExecutionHistory().append(String.format("""
-                        === 第 %d 步执行记录 ===
-                        【分析策略】%s
-                        【执行目标】%s
-                        【执行结果】%s
-                        """,
-                dynamicContext.getStep(),
-                analyzeResult.getNextStrategy(),
-                executeResult.getExecutionTarget(),
-                executeResult.getExecutionResult()));
+        ExecutionHistoryBuffer buffer = dynamicContext.getExecutionHistoryBuffer();
+        buffer.recordExecution(dynamicContext.getStep(),analyzeResult.getNextStrategy(),executeResult);
 
         return router(requestParam, dynamicContext);
     }

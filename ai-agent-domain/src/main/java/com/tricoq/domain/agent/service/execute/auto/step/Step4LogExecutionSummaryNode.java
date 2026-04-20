@@ -5,6 +5,7 @@ import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
 import com.tricoq.domain.agent.model.dto.AiAgentClientFlowConfigDTO;
 import com.tricoq.domain.agent.model.enums.AiClientTypeEnumVO;
 import com.tricoq.domain.agent.model.request.TextInvocationRequest;
+import com.tricoq.domain.agent.service.execute.auto.step.context.ExecutionHistoryBuffer;
 import com.tricoq.domain.agent.spi.LlmInvocationFacade;
 import com.tricoq.domain.agent.service.execute.auto.step.factory.DefaultExecuteStrategyFactory;
 import com.tricoq.types.framework.chain.StrategyHandler;
@@ -32,8 +33,10 @@ public class Step4LogExecutionSummaryNode extends AbstractExecuteSupport {
         // 第四阶段：执行总结
         log.info("\n📊 阶段4: 执行总结分析");
 
+        ExecutionHistoryBuffer buffer = dynamicContext.getExecutionHistoryBuffer();
+
         // 记录执行总结
-        logExecutionSummary(dynamicContext.getMaxStep(), dynamicContext.getExecutionHistory(), dynamicContext.isCompleted());
+        logExecutionSummary(dynamicContext.getMaxStep(), buffer.size(), dynamicContext.isCompleted());
 
         // 生成最终总结报告（无论任务是否完成都需要生成）
         generateFinalReport(requestParameter, dynamicContext);
@@ -52,10 +55,10 @@ public class Step4LogExecutionSummaryNode extends AbstractExecuteSupport {
     /**
      * 记录执行总结
      */
-    private void logExecutionSummary(int maxSteps, StringBuilder executionHistory, boolean isCompleted) {
+    private void logExecutionSummary(int maxSteps, int historyStepCount, boolean isCompleted) {
         log.info("\n📊 === 动态多轮执行总结 ====");
 
-        int actualSteps = Math.min(maxSteps, executionHistory.toString().split("=== 第").length - 1);
+        int actualSteps = Math.min(maxSteps, historyStepCount);
         log.info("📈 总执行步数: {} 步", actualSteps);
 
         if (isCompleted) {
@@ -147,7 +150,7 @@ public class Step4LogExecutionSummaryNode extends AbstractExecuteSupport {
         }
         String prompt = resolveStepPrompt(flowConfig.getStepPrompt(), fallbackPrompt, false,
                 dynamicContext.getOriginalUserInput(),
-                dynamicContext.getExecutionHistory().toString());
+                dynamicContext.getExecutionHistoryBuffer().renderForSummary());
         if (isCompleted) {
             return prompt;
         }

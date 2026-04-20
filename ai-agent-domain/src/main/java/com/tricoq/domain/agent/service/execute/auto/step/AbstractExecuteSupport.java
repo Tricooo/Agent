@@ -21,8 +21,6 @@ import java.util.IllegalFormatException;
 public abstract class AbstractExecuteSupport extends
         AbstractMultiThreadStrategyRouter<ExecuteCommandEntity, DefaultExecuteStrategyFactory.ExecuteContext, String> {
 
-    protected static final String CHAT_MEMORY_CONVERSATION_ID_KEY = "chat_memory_conversation_id";
-    protected static final String CHAT_MEMORY_RETRIEVE_SIZE_KEY = "chat_memory_response_size";
     protected static final String ANALYZER_MEMORY_SUFFIX = "-analyzer";
     protected static final String EXECUTOR_MEMORY_SUFFIX = "-executor";
     protected static final String SUPERVISOR_MEMORY_SUFFIX = "-supervisor";

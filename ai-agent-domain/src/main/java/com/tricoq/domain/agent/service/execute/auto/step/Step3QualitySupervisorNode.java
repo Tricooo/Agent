@@ -8,6 +8,7 @@ import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
 import com.tricoq.domain.agent.model.request.StructuredInvocationRequest;
 import com.tricoq.domain.agent.model.dto.AiAgentClientFlowConfigDTO;
 import com.tricoq.domain.agent.model.enums.AiClientTypeEnumVO;
+import com.tricoq.domain.agent.service.execute.auto.step.context.ExecutionHistoryBuffer;
 import com.tricoq.domain.agent.spi.LlmInvocationFacade;
 import com.tricoq.domain.agent.service.execute.auto.step.factory.DefaultExecuteStrategyFactory;
 import com.tricoq.types.framework.chain.StrategyHandler;
@@ -95,16 +96,12 @@ public class Step3QualitySupervisorNode extends AbstractExecuteSupport {
             dynamicContext.setCompleted(true);
         }
 
+        // 补充监督记录到执行历史
+        ExecutionHistoryBuffer buffer = dynamicContext.getExecutionHistoryBuffer();
+        buffer.recordSupervision(dynamicContext.getStep(),supervisionResult);
+
         dynamicContext.setSupervisionResultDTO(supervisionResult);
         dynamicContext.setStep(dynamicContext.getStep() + 1);
-
-        // 补充监督记录到执行历史
-        dynamicContext.getExecutionHistory().append(String.format("""
-                【监督阶段】评分: %d | 结论: %s | 评估: %s
-                """,
-                supervisionResult.getQualityScore(),
-                supervisionResult.getPass(),
-                supervisionResult.getQualityAssessment()));
 
         return router(requestParam, dynamicContext);
     }

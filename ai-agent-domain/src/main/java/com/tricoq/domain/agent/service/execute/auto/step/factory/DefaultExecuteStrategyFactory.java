@@ -6,6 +6,7 @@ import com.tricoq.domain.agent.model.dto.AutoExecuteResultDTO;
 import com.tricoq.domain.agent.model.dto.AutoSupervisionResultDTO;
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
 import com.tricoq.domain.agent.service.execute.auto.step.RootExecuteNode;
+import com.tricoq.domain.agent.service.execute.auto.step.context.ExecutionHistoryBuffer;
 import com.tricoq.domain.agent.shared.ExecuteOutputPort;
 import com.tricoq.types.framework.chain.StrategyHandler;
 import lombok.AllArgsConstructor;
@@ -48,7 +49,7 @@ public class DefaultExecuteStrategyFactory {
         private Integer step = 1;
         private Integer maxStep;
         @Builder.Default
-        private StringBuilder executionHistory = new StringBuilder();
+        private ExecutionHistoryBuffer executionHistoryBuffer= new ExecutionHistoryBuffer();
         /** Step1 结构化分析结果，替代原 analyzeResult String */
         private AutoAnalyzeResultDTO analyzeResultDTO;
         /** Step2 结构化执行结果，替代原 executeResult String */

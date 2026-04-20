@@ -7,6 +7,7 @@ import com.tricoq.domain.agent.model.entity.AutoAgentExecuteResultEntity;
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
 import com.tricoq.domain.agent.model.enums.AiClientTypeEnumVO;
 import com.tricoq.domain.agent.model.request.StructuredInvocationRequest;
+import com.tricoq.domain.agent.service.execute.auto.step.context.ExecutionHistoryBuffer;
 import com.tricoq.domain.agent.service.execute.auto.step.factory.DefaultExecuteStrategyFactory;
 import com.tricoq.domain.agent.spi.LlmInvocationFacade;
 import com.tricoq.types.framework.chain.StrategyHandler;
@@ -55,8 +56,10 @@ public class Step1AnalyzeNode extends AbstractExecuteSupport {
         log.info("\n=== 执行第 {} 步 ===", step);
         log.info("阶段1: 任务状态分析");
 
+        ExecutionHistoryBuffer buffer = dynamicContext.getExecutionHistoryBuffer();
+
         String analysisPrompt = buildAnalysisPrompt(flowConfig, requestParam.getUserInput(), step,
-                dynamicContext.getMaxStep(), dynamicContext.getExecutionHistory().toString(),
+                dynamicContext.getMaxStep(), buffer.renderForAnalyzer(),
                 dynamicContext.getCurrentTask());
 
         AutoAnalyzeResultDTO analyzeResult = facade.invokeStructured(StructuredInvocationRequest

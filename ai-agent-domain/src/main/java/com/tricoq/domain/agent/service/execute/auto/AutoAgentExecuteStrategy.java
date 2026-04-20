@@ -32,7 +32,6 @@ public class AutoAgentExecuteStrategy implements IExecuteStrategy {
                 .originalUserInput(commandEntity.getUserInput())
                 .currentTask(commandEntity.getUserInput())
                 .isCompleted(false)
-                .executionHistory(new StringBuilder())
                 .step(1)
                 .maxStep(commandEntity.getMaxSteps() == null ? 3 : commandEntity.getMaxSteps())
                 .port(port)
