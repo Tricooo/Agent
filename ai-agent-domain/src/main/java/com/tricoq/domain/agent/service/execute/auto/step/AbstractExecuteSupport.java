@@ -3,12 +3,11 @@ package com.tricoq.domain.agent.service.execute.auto.step;
 import com.alibaba.fastjson.JSON;
 import com.tricoq.domain.agent.model.entity.AutoAgentExecuteResultEntity;
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
-import com.tricoq.domain.agent.service.execute.auto.step.factory.DefaultExecuteStrategyFactory;
+import com.tricoq.domain.agent.service.execute.auto.context.AutoExecuteContext;
 import com.tricoq.domain.agent.shared.ExecuteOutputPort;
 import com.tricoq.types.framework.chain.AbstractMultiThreadStrategyRouter;
-import jakarta.annotation.Resource;
+import com.tricoq.types.framework.chain.StrategyHandler;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.ApplicationContext;
 import org.springframework.util.StringUtils;
 
 import java.util.IllegalFormatException;
@@ -19,15 +18,12 @@ import java.util.IllegalFormatException;
  */
 @Slf4j
 public abstract class AbstractExecuteSupport extends
-        AbstractMultiThreadStrategyRouter<ExecuteCommandEntity, DefaultExecuteStrategyFactory.ExecuteContext, String> {
+        AbstractMultiThreadStrategyRouter<ExecuteCommandEntity, AutoExecuteContext, String> {
 
     protected static final String ANALYZER_MEMORY_SUFFIX = "-analyzer";
     protected static final String EXECUTOR_MEMORY_SUFFIX = "-executor";
     protected static final String SUPERVISOR_MEMORY_SUFFIX = "-supervisor";
     protected static final String SUMMARY_MEMORY_SUFFIX = "-summary";
-
-    @Resource
-    private ApplicationContext applicationContext;
 
     /**
      * 异步加载数据
@@ -36,13 +32,8 @@ public abstract class AbstractExecuteSupport extends
      * @param dynamicContext 链路上下文
      */
     @Override
-    protected void multiThread(ExecuteCommandEntity requestParam, DefaultExecuteStrategyFactory.ExecuteContext dynamicContext) {
+    protected void multiThread(ExecuteCommandEntity requestParam, AutoExecuteContext dynamicContext) {
 
-    }
-
-    @SuppressWarnings("unchecked")
-    protected <T> T getBean(String beanName) {
-        return (T) applicationContext.getBean(beanName);
     }
 
     protected String buildConversationId(String sessionId, String roleSuffix) {
@@ -71,7 +62,7 @@ public abstract class AbstractExecuteSupport extends
                 """;
     }
 
-    protected void sendSseResult(DefaultExecuteStrategyFactory.ExecuteContext dynamicContext,
+    protected void sendSseResult(AutoExecuteContext dynamicContext,
                                  AutoAgentExecuteResultEntity resultEntity) {
         ExecuteOutputPort emitter = dynamicContext.getPort();
         if (null != emitter) {
@@ -81,5 +72,11 @@ public abstract class AbstractExecuteSupport extends
                 log.error("发送SSE结果失败：{}", e.getMessage(), e);
             }
         }
+    }
+
+    @Override
+    public StrategyHandler<ExecuteCommandEntity, AutoExecuteContext, String> get(
+            ExecuteCommandEntity requestParam, AutoExecuteContext dynamicContext) {
+        throw new UnsupportedOperationException();
     }
 }

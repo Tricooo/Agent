@@ -1,16 +1,15 @@
 package com.tricoq.domain.agent.service.execute.auto.step;
 
+import com.tricoq.domain.agent.model.dto.AiAgentClientFlowConfigDTO;
 import com.tricoq.domain.agent.model.dto.AutoAnalyzeResultDTO;
 import com.tricoq.domain.agent.model.dto.AutoExecuteResultDTO;
 import com.tricoq.domain.agent.model.entity.AutoAgentExecuteResultEntity;
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
-import com.tricoq.domain.agent.model.request.StructuredInvocationRequest;
-import com.tricoq.domain.agent.model.dto.AiAgentClientFlowConfigDTO;
 import com.tricoq.domain.agent.model.enums.AiClientTypeEnumVO;
+import com.tricoq.domain.agent.model.request.StructuredInvocationRequest;
+import com.tricoq.domain.agent.service.execute.auto.context.AutoExecuteContext;
 import com.tricoq.domain.agent.service.execute.auto.step.context.ExecutionHistoryBuffer;
 import com.tricoq.domain.agent.spi.LlmInvocationFacade;
-import com.tricoq.domain.agent.service.execute.auto.step.factory.DefaultExecuteStrategyFactory;
-import com.tricoq.types.framework.chain.StrategyHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.MapUtils;
@@ -42,7 +41,7 @@ public class Step2ExecuteNode extends AbstractExecuteSupport {
      */
     @Override
     protected String doApply(ExecuteCommandEntity requestParam,
-                             DefaultExecuteStrategyFactory.ExecuteContext dynamicContext) {
+                             AutoExecuteContext dynamicContext) {
         log.info("\n阶段2: 精准任务执行");
 
         AutoAnalyzeResultDTO analyzeResult = Optional.ofNullable(dynamicContext.getAnalyzeResultDTO())
@@ -81,13 +80,7 @@ public class Step2ExecuteNode extends AbstractExecuteSupport {
         ExecutionHistoryBuffer buffer = dynamicContext.getExecutionHistoryBuffer();
         buffer.recordExecution(dynamicContext.getStep(),analyzeResult.getNextStrategy(),executeResult);
 
-        return router(requestParam, dynamicContext);
-    }
-
-    @Override
-    public StrategyHandler<ExecuteCommandEntity, DefaultExecuteStrategyFactory.ExecuteContext, String> get(
-            ExecuteCommandEntity requestParam, DefaultExecuteStrategyFactory.ExecuteContext dynamicContext) {
-        return getBean("step3QualitySupervisorNode");
+        return "step2 execute completed";
     }
 
     /**
@@ -120,7 +113,7 @@ public class Step2ExecuteNode extends AbstractExecuteSupport {
     /**
      * 将结构化执行结果推送到 SSE。
      */
-    private void pushExecutionToSse(DefaultExecuteStrategyFactory.ExecuteContext dynamicContext,
+    private void pushExecutionToSse(AutoExecuteContext dynamicContext,
                                     AutoExecuteResultDTO result, String sessionId) {
         int step = dynamicContext.getStep();
 

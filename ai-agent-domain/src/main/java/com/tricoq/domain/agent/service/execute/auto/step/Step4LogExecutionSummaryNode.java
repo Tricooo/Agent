@@ -5,9 +5,9 @@ import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
 import com.tricoq.domain.agent.model.dto.AiAgentClientFlowConfigDTO;
 import com.tricoq.domain.agent.model.enums.AiClientTypeEnumVO;
 import com.tricoq.domain.agent.model.request.TextInvocationRequest;
+import com.tricoq.domain.agent.service.execute.auto.context.AutoExecuteContext;
 import com.tricoq.domain.agent.service.execute.auto.step.context.ExecutionHistoryBuffer;
 import com.tricoq.domain.agent.spi.LlmInvocationFacade;
-import com.tricoq.domain.agent.service.execute.auto.step.factory.DefaultExecuteStrategyFactory;
 import com.tricoq.types.framework.chain.StrategyHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,7 +27,7 @@ public class Step4LogExecutionSummaryNode extends AbstractExecuteSupport {
     private final LlmInvocationFacade facade;
 
     @Override
-    protected String doApply(ExecuteCommandEntity requestParameter, DefaultExecuteStrategyFactory.ExecuteContext dynamicContext) {
+    protected String doApply(ExecuteCommandEntity requestParameter, AutoExecuteContext dynamicContext) {
         log.info("\n📊 === 执行第 {} 步 ===", dynamicContext.getStep());
 
         // 第四阶段：执行总结
@@ -47,7 +47,7 @@ public class Step4LogExecutionSummaryNode extends AbstractExecuteSupport {
     }
 
     @Override
-    public StrategyHandler<ExecuteCommandEntity, DefaultExecuteStrategyFactory.ExecuteContext, String> get(ExecuteCommandEntity requestParameter, DefaultExecuteStrategyFactory.ExecuteContext dynamicContext) {
+    public StrategyHandler<ExecuteCommandEntity, AutoExecuteContext, String> get(ExecuteCommandEntity requestParameter, AutoExecuteContext dynamicContext) {
         // 总结节点是最后一个节点，返回null表示执行结束
         return getDefaultHandler();
     }
@@ -75,7 +75,7 @@ public class Step4LogExecutionSummaryNode extends AbstractExecuteSupport {
     /**
      * 生成最终总结报告
      */
-    private void generateFinalReport(ExecuteCommandEntity requestParameter, DefaultExecuteStrategyFactory.ExecuteContext dynamicContext) {
+    private void generateFinalReport(ExecuteCommandEntity requestParameter, AutoExecuteContext dynamicContext) {
         boolean isCompleted = dynamicContext.isCompleted();
         log.info("\n--- 生成{}任务的最终答案 ---", isCompleted ? "已完成" : "未完成");
         AiAgentClientFlowConfigDTO aiAgentClientFlowConfigVO = dynamicContext.getFlowConfigMap()
@@ -107,7 +107,7 @@ public class Step4LogExecutionSummaryNode extends AbstractExecuteSupport {
     }
 
     private String getSummaryPrompt(AiAgentClientFlowConfigDTO flowConfig,
-                                    DefaultExecuteStrategyFactory.ExecuteContext dynamicContext,
+                                    AutoExecuteContext dynamicContext,
                                     boolean isCompleted) {
         String fallbackPrompt;
         if (isCompleted) {
@@ -163,7 +163,7 @@ public class Step4LogExecutionSummaryNode extends AbstractExecuteSupport {
     /**
      * 输出最终总结报告
      */
-    private void logFinalReport(DefaultExecuteStrategyFactory.ExecuteContext dynamicContext, String summaryResult, String sessionId) {
+    private void logFinalReport(AutoExecuteContext dynamicContext, String summaryResult, String sessionId) {
         boolean isCompleted = dynamicContext.isCompleted();
         log.info("\n📋 === {}任务最终总结报告 ===", isCompleted ? "已完成" : "未完成");
 
@@ -229,7 +229,7 @@ public class Step4LogExecutionSummaryNode extends AbstractExecuteSupport {
     /**
      * 发送总结结果到流式输出
      */
-    private void sendSummaryResult(DefaultExecuteStrategyFactory.ExecuteContext dynamicContext,
+    private void sendSummaryResult(AutoExecuteContext dynamicContext,
                                    String summaryResult, String sessionId) {
         AutoAgentExecuteResultEntity result = AutoAgentExecuteResultEntity.createSummaryResult(
                 summaryResult, sessionId);
@@ -239,7 +239,7 @@ public class Step4LogExecutionSummaryNode extends AbstractExecuteSupport {
     /**
      * 发送总结阶段细分结果到流式输出
      */
-    private void sendSummarySubResult(DefaultExecuteStrategyFactory.ExecuteContext dynamicContext,
+    private void sendSummarySubResult(AutoExecuteContext dynamicContext,
                                       String subType, String content, String sessionId) {
         AutoAgentExecuteResultEntity result = AutoAgentExecuteResultEntity.createSummarySubResult(
                 subType, content, sessionId);
@@ -249,7 +249,7 @@ public class Step4LogExecutionSummaryNode extends AbstractExecuteSupport {
     /**
      * 发送完成标识到流式输出
      */
-    private void sendCompleteResult(DefaultExecuteStrategyFactory.ExecuteContext dynamicContext, String sessionId) {
+    private void sendCompleteResult(AutoExecuteContext dynamicContext, String sessionId) {
         AutoAgentExecuteResultEntity result = AutoAgentExecuteResultEntity.createCompleteResult(sessionId);
         sendSseResult(dynamicContext, result);
         log.info("✅ 已发送完成标识");

@@ -1,17 +1,16 @@
 package com.tricoq.domain.agent.service.execute.auto.step;
 
+import com.tricoq.domain.agent.model.dto.AiAgentClientFlowConfigDTO;
 import com.tricoq.domain.agent.model.dto.AutoExecuteResultDTO;
 import com.tricoq.domain.agent.model.dto.AutoSupervisionResultDTO;
 import com.tricoq.domain.agent.model.dto.AutoSupervisionResultDTO.QualityStatus;
 import com.tricoq.domain.agent.model.entity.AutoAgentExecuteResultEntity;
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
-import com.tricoq.domain.agent.model.request.StructuredInvocationRequest;
-import com.tricoq.domain.agent.model.dto.AiAgentClientFlowConfigDTO;
 import com.tricoq.domain.agent.model.enums.AiClientTypeEnumVO;
+import com.tricoq.domain.agent.model.request.StructuredInvocationRequest;
+import com.tricoq.domain.agent.service.execute.auto.context.AutoExecuteContext;
 import com.tricoq.domain.agent.service.execute.auto.step.context.ExecutionHistoryBuffer;
 import com.tricoq.domain.agent.spi.LlmInvocationFacade;
-import com.tricoq.domain.agent.service.execute.auto.step.factory.DefaultExecuteStrategyFactory;
-import com.tricoq.types.framework.chain.StrategyHandler;
 import io.micrometer.common.util.StringUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,7 +37,7 @@ public class Step3QualitySupervisorNode extends AbstractExecuteSupport {
 
     @Override
     protected String doApply(ExecuteCommandEntity requestParam,
-                             DefaultExecuteStrategyFactory.ExecuteContext dynamicContext) {
+                             AutoExecuteContext dynamicContext) {
         AutoExecuteResultDTO executeResult = Optional.ofNullable(dynamicContext.getExecuteResultDTO())
                 .orElseThrow(() -> new RuntimeException("任务未执行"));
 
@@ -98,22 +97,12 @@ public class Step3QualitySupervisorNode extends AbstractExecuteSupport {
 
         // 补充监督记录到执行历史
         ExecutionHistoryBuffer buffer = dynamicContext.getExecutionHistoryBuffer();
-        buffer.recordSupervision(dynamicContext.getStep(),supervisionResult);
+        buffer.recordSupervision(dynamicContext.getStep(), supervisionResult);
 
         dynamicContext.setSupervisionResultDTO(supervisionResult);
         dynamicContext.setStep(dynamicContext.getStep() + 1);
 
-        return router(requestParam, dynamicContext);
-    }
-
-    @Override
-    public StrategyHandler<ExecuteCommandEntity, DefaultExecuteStrategyFactory.ExecuteContext, String> get(
-            ExecuteCommandEntity requestParam, DefaultExecuteStrategyFactory.ExecuteContext dynamicContext) {
-        if (dynamicContext.isCompleted() || dynamicContext.getStep() > dynamicContext.getMaxStep()) {
-            return getBean("step4LogExecutionSummaryNode");
-        }
-        // 使用分析节点产出的 nextStrategy 作为下一轮的任务方向（已在 doApply 中写入 currentTask）
-        return getBean("step1AnalyzeNode");
+        return "step3 superview completed";
     }
 
     /**
@@ -123,24 +112,24 @@ public class Step3QualitySupervisorNode extends AbstractExecuteSupport {
                                           String userInput,
                                           AutoExecuteResultDTO executeResult) {
         String executionSummary = String.format("""
-                执行目标: %s
-                执行过程: %s
-                执行结果: %s
-                质量检查: %s
-                """,
+                        执行目标: %s
+                        执行过程: %s
+                        执行结果: %s
+                        质量检查: %s
+                        """,
                 executeResult.getExecutionTarget(),
                 executeResult.getExecutionProcess(),
                 executeResult.getExecutionResult(),
                 executeResult.getQualityCheck());
         String fallbackPrompt = """
                 # 执行质量监督
-
+                
                 ## 用户原始目标
                 %s
-
+                
                 ## 本次执行结果
                 %s
-
+                
                 ## 监督要求
                 请对执行结果进行客观评估：
                 1. qualityAssessment：综合评估执行结果是否满足用户原始目标
@@ -156,8 +145,8 @@ public class Step3QualitySupervisorNode extends AbstractExecuteSupport {
     /**
      * 将结构化监督结果推送到 SSE。
      */
-    private void pushSupervisionToSse(DefaultExecuteStrategyFactory.ExecuteContext dynamicContext,
-                                       AutoSupervisionResultDTO result, String sessionId) {
+    private void pushSupervisionToSse(AutoExecuteContext dynamicContext,
+                                      AutoSupervisionResultDTO result, String sessionId) {
         int step = dynamicContext.getStep();
 
         if (result.getQualityAssessment() != null) {

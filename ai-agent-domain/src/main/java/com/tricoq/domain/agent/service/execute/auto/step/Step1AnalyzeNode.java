@@ -7,10 +7,9 @@ import com.tricoq.domain.agent.model.entity.AutoAgentExecuteResultEntity;
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
 import com.tricoq.domain.agent.model.enums.AiClientTypeEnumVO;
 import com.tricoq.domain.agent.model.request.StructuredInvocationRequest;
+import com.tricoq.domain.agent.service.execute.auto.context.AutoExecuteContext;
 import com.tricoq.domain.agent.service.execute.auto.step.context.ExecutionHistoryBuffer;
-import com.tricoq.domain.agent.service.execute.auto.step.factory.DefaultExecuteStrategyFactory;
 import com.tricoq.domain.agent.spi.LlmInvocationFacade;
-import com.tricoq.types.framework.chain.StrategyHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.MapUtils;
@@ -43,7 +42,7 @@ public class Step1AnalyzeNode extends AbstractExecuteSupport {
      */
     @Override
     protected String doApply(ExecuteCommandEntity requestParam,
-                             DefaultExecuteStrategyFactory.ExecuteContext dynamicContext) {
+                             AutoExecuteContext dynamicContext) {
         Map<String, AiAgentClientFlowConfigDTO> flowConfigMap = dynamicContext.getFlowConfigMap();
         if (MapUtils.isEmpty(flowConfigMap)) {
             throw new RuntimeException("flowConfig is invalid");
@@ -89,17 +88,7 @@ public class Step1AnalyzeNode extends AbstractExecuteSupport {
             dynamicContext.setCompleted(true);
             log.info("任务分析显示已完成");
         }
-        return router(requestParam, dynamicContext);
-    }
-
-    @Override
-    public StrategyHandler<ExecuteCommandEntity, DefaultExecuteStrategyFactory.ExecuteContext, String> get(
-            ExecuteCommandEntity requestParam,
-            DefaultExecuteStrategyFactory.ExecuteContext dynamicContext) {
-        if (dynamicContext.isCompleted()) {
-            return getBean("step4LogExecutionSummaryNode");
-        }
-        return getBean("step2ExecuteNode");
+        return "step1 analyze completed";
     }
 
     /**
@@ -143,7 +132,7 @@ public class Step1AnalyzeNode extends AbstractExecuteSupport {
      * 将结构化分析结果推送到 SSE。
      * 保持与原有前端协议兼容的 subType 字段。
      */
-    private void pushAnalysisToSse(DefaultExecuteStrategyFactory.ExecuteContext dynamicContext,
+    private void pushAnalysisToSse(AutoExecuteContext dynamicContext,
                                    AutoAnalyzeResultDTO result, String sessionId) {
         int step = dynamicContext.getStep();
 
