@@ -8,6 +8,7 @@ import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
 import com.tricoq.domain.agent.model.enums.AiClientTypeEnumVO;
 import com.tricoq.domain.agent.model.request.StructuredInvocationRequest;
 import com.tricoq.domain.agent.service.execute.auto.context.AutoExecuteContext;
+import com.tricoq.domain.agent.service.execute.auto.context.AutoTerminationReason;
 import com.tricoq.domain.agent.service.execute.auto.step.context.ExecutionHistoryBuffer;
 import com.tricoq.domain.agent.spi.LlmInvocationFacade;
 import lombok.RequiredArgsConstructor;
@@ -85,7 +86,7 @@ public class Step1AnalyzeNode extends AbstractExecuteSupport {
 
         //只保留单个指标驱动控制流
         if (analyzeResult.getTaskStatus() == TaskStatus.COMPLETED) {
-            dynamicContext.setCompleted(true);
+            dynamicContext.markCompleted(AutoTerminationReason.COMPLETED_BY_ANALYZE);
             log.info("任务分析显示已完成");
         }
         return "step1 analyze completed";

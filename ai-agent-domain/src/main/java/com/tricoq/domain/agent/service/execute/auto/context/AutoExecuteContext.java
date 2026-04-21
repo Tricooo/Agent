@@ -10,6 +10,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NonNull;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -24,6 +25,7 @@ import java.util.Map;
 @Data
 @Builder
 @AllArgsConstructor
+@Slf4j
 public class AutoExecuteContext {
 
     @NonNull
@@ -66,4 +68,25 @@ public class AutoExecuteContext {
     private String finalSummary;
 
     private ExecuteOutputPort port;
+
+    private AutoTerminationReason terminationReason;
+
+    //通过上下文方法维持约束，防止两个字段状态不统一
+    public void markCompleted(AutoTerminationReason reason) {
+        if (reason == null || reason.equals(AutoTerminationReason.STOPPED_BY_MAX_STEP)) {
+            throw new IllegalArgumentException();
+        }
+        if (this.isCompleted) {
+            log.warn("completed字段被重复覆盖,step:{}", this.step);
+        }
+        this.isCompleted = true;
+        this.terminationReason = reason;
+    }
+
+    public void markStopped(AutoTerminationReason reason) {
+        if (reason == null || (!reason.equals(AutoTerminationReason.STOPPED_BY_MAX_STEP))) {
+            throw new IllegalArgumentException();
+        }
+        this.terminationReason = reason;
+    }
 }

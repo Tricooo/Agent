@@ -6,6 +6,7 @@ import com.tricoq.domain.agent.model.dto.AiAgentClientFlowConfigDTO;
 import com.tricoq.domain.agent.model.enums.AiClientTypeEnumVO;
 import com.tricoq.domain.agent.model.request.TextInvocationRequest;
 import com.tricoq.domain.agent.service.execute.auto.context.AutoExecuteContext;
+import com.tricoq.domain.agent.service.execute.auto.context.AutoTerminationReason;
 import com.tricoq.domain.agent.service.execute.auto.step.context.ExecutionHistoryBuffer;
 import com.tricoq.domain.agent.spi.LlmInvocationFacade;
 import com.tricoq.types.framework.chain.StrategyHandler;
@@ -36,7 +37,8 @@ public class Step4LogExecutionSummaryNode extends AbstractExecuteSupport {
         ExecutionHistoryBuffer buffer = dynamicContext.getExecutionHistoryBuffer();
 
         // 记录执行总结
-        logExecutionSummary(dynamicContext.getMaxStep(), buffer.size(), dynamicContext.isCompleted());
+        logExecutionSummary(dynamicContext.getMaxStep(), buffer.size(), dynamicContext.isCompleted(),
+                dynamicContext.getTerminationReason());
 
         // 生成最终总结报告（无论任务是否完成都需要生成）
         generateFinalReport(requestParameter, dynamicContext);
@@ -47,7 +49,8 @@ public class Step4LogExecutionSummaryNode extends AbstractExecuteSupport {
     }
 
     @Override
-    public StrategyHandler<ExecuteCommandEntity, AutoExecuteContext, String> get(ExecuteCommandEntity requestParameter, AutoExecuteContext dynamicContext) {
+    public StrategyHandler<ExecuteCommandEntity, AutoExecuteContext, String> get(ExecuteCommandEntity requestParameter,
+                                                                                 AutoExecuteContext dynamicContext) {
         // 总结节点是最后一个节点，返回null表示执行结束
         return getDefaultHandler();
     }
@@ -55,17 +58,14 @@ public class Step4LogExecutionSummaryNode extends AbstractExecuteSupport {
     /**
      * 记录执行总结
      */
-    private void logExecutionSummary(int maxSteps, int historyStepCount, boolean isCompleted) {
+    private void logExecutionSummary(int maxSteps, int historyStepCount, boolean isCompleted, AutoTerminationReason reason) {
         log.info("\n📊 === 动态多轮执行总结 ====");
 
         int actualSteps = Math.min(maxSteps, historyStepCount);
         log.info("📈 总执行步数: {} 步", actualSteps);
 
-        if (isCompleted) {
-            log.info("✅ 任务完成状态: 已完成");
-        } else {
-            log.info("⏸️ 任务完成状态: 未完成（达到最大步数限制）");
-        }
+        log.info("任务完成状态: {}", isCompleted ? "已完成" : "未完成");
+        log.info("终止原因: {}", reason == null ? "UNKNOWN" : reason);
 
         // 计算执行效率
         double efficiency = isCompleted ? 100.0 : (double) actualSteps / maxSteps * 100;
@@ -119,6 +119,9 @@ public class Step4LogExecutionSummaryNode extends AbstractExecuteSupport {
                     **执行历史和过程:**
                     %s
                     
+                    **完成原因:**
+                    %s
+                    
                     **要求:**
                     1. 直接回答用户的原始问题
                     2. 基于执行过程中获得的信息和结果
@@ -138,6 +141,9 @@ public class Step4LogExecutionSummaryNode extends AbstractExecuteSupport {
                     **已执行的过程和获得的信息:**
                     %s
                     
+                    **未完成原因:**
+                    %s
+                    
                     **要求:**
                     1. 基于已有信息，尽力回答用户的原始问题
                     2. 如果信息不足，说明哪些部分无法完成并给出原因
@@ -150,7 +156,9 @@ public class Step4LogExecutionSummaryNode extends AbstractExecuteSupport {
         }
         String prompt = resolveStepPrompt(flowConfig.getStepPrompt(), fallbackPrompt, false,
                 dynamicContext.getOriginalUserInput(),
-                dynamicContext.getExecutionHistoryBuffer().renderForSummary());
+                dynamicContext.getExecutionHistoryBuffer().renderForSummary(),
+                dynamicContext.getTerminationReason()
+        );
         if (isCompleted) {
             return prompt;
         }

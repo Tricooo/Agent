@@ -4,6 +4,7 @@ import com.tricoq.domain.agent.adapter.repository.IAgentRepository;
 import com.tricoq.domain.agent.model.dto.AiAgentClientFlowConfigDTO;
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
 import com.tricoq.domain.agent.service.execute.auto.context.AutoExecuteContext;
+import com.tricoq.domain.agent.service.execute.auto.context.AutoTerminationReason;
 import com.tricoq.domain.agent.service.execute.auto.step.Step1AnalyzeNode;
 import com.tricoq.domain.agent.service.execute.auto.step.Step2ExecuteNode;
 import com.tricoq.domain.agent.service.execute.auto.step.Step3QualitySupervisorNode;
@@ -40,24 +41,34 @@ public class AutoLoopController {
 
         loadFlowConfig(requestParam, dynamicContext);
 
-        while (!shouldTerminateAfterSupervise(dynamicContext)) {
+        while (!shouldTerminateByStepPolicy(dynamicContext)) {
             step1AnalyzeNode.apply(requestParam, dynamicContext);
             if (shouldTerminateAfterAnalyze(dynamicContext)) {
                 break;
             }
             step2ExecuteNode.apply(requestParam, dynamicContext);
             step3QualitySupervisorNode.apply(requestParam, dynamicContext);
+            if (shouldTerminateAfterSupervise(dynamicContext)) {
+                break;
+            }
         }
         step4LogExecutionSummaryNode.apply(requestParam, dynamicContext);
     }
 
     private boolean shouldTerminateAfterAnalyze(AutoExecuteContext dynamicContext) {
-        return dynamicContext.isCompleted();
+        return AutoTerminationReason.COMPLETED_BY_ANALYZE.equals(dynamicContext.getTerminationReason());
     }
 
     private boolean shouldTerminateAfterSupervise(AutoExecuteContext dynamicContext) {
-        return dynamicContext.isCompleted()
-                || dynamicContext.getStep() > dynamicContext.getMaxStep();
+        return AutoTerminationReason.COMPLETED_BY_SUPERVISION.equals(dynamicContext.getTerminationReason());
+    }
+
+    private boolean shouldTerminateByStepPolicy(AutoExecuteContext dynamicContext) {
+        if (dynamicContext.getStep() > dynamicContext.getMaxStep()) {
+            dynamicContext.markStopped(AutoTerminationReason.STOPPED_BY_MAX_STEP);
+            return true;
+        }
+        return false;
     }
 
     private void loadFlowConfig(ExecuteCommandEntity requestParam,

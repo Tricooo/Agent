@@ -9,6 +9,7 @@ import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
 import com.tricoq.domain.agent.model.enums.AiClientTypeEnumVO;
 import com.tricoq.domain.agent.model.request.StructuredInvocationRequest;
 import com.tricoq.domain.agent.service.execute.auto.context.AutoExecuteContext;
+import com.tricoq.domain.agent.service.execute.auto.context.AutoTerminationReason;
 import com.tricoq.domain.agent.service.execute.auto.step.context.ExecutionHistoryBuffer;
 import com.tricoq.domain.agent.spi.LlmInvocationFacade;
 import io.micrometer.common.util.StringUtils;
@@ -92,7 +93,7 @@ public class Step3QualitySupervisorNode extends AbstractExecuteSupport {
             dynamicContext.setCurrentTask(nextTask);
         } else {
             log.info("质量检查通过");
-            dynamicContext.setCompleted(true);
+            dynamicContext.markCompleted(AutoTerminationReason.COMPLETED_BY_SUPERVISION);
         }
 
         // 补充监督记录到执行历史
