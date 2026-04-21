@@ -87,6 +87,10 @@ public class AutoExecuteContext {
         if (reason == null || (!reason.equals(AutoTerminationReason.STOPPED_BY_MAX_STEP))) {
             throw new IllegalArgumentException();
         }
+        if (this.isCompleted) {
+            log.error("执行异常,状态:{},原因:{},步数:{},最大步数:{}", this.isCompleted, reason, step, maxStep);
+            throw new RuntimeException("执行异常:任务完成标识冲突");
+        }
         this.terminationReason = reason;
     }
 }

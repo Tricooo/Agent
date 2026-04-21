@@ -1,5 +1,6 @@
 package com.tricoq.domain.agent.service.execute.auto;
 
+import com.tricoq.domain.agent.model.dto.LoopResultDTO;
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
 import com.tricoq.domain.agent.service.IExecuteStrategy;
 import com.tricoq.domain.agent.service.execute.auto.context.AutoExecuteContext;
@@ -31,7 +32,7 @@ public class AutoAgentExecuteStrategy implements IExecuteStrategy {
                 .maxStep(commandEntity.getMaxSteps() == null ? 3 : commandEntity.getMaxSteps())
                 .port(port)
                 .build();
-        autoLoopController.run(commandEntity, context);
-        log.info("执行完毕");
+        LoopResultDTO result = autoLoopController.run(commandEntity, context);
+        log.info("执行完毕,结果:{}", result.toString());
     }
 }

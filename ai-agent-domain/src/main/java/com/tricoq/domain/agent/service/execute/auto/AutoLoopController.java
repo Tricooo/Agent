@@ -2,6 +2,7 @@ package com.tricoq.domain.agent.service.execute.auto;
 
 import com.tricoq.domain.agent.adapter.repository.IAgentRepository;
 import com.tricoq.domain.agent.model.dto.AiAgentClientFlowConfigDTO;
+import com.tricoq.domain.agent.model.dto.LoopResultDTO;
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
 import com.tricoq.domain.agent.service.execute.auto.context.AutoExecuteContext;
 import com.tricoq.domain.agent.service.execute.auto.context.AutoTerminationReason;
@@ -33,7 +34,7 @@ public class AutoLoopController {
     private final Step4LogExecutionSummaryNode step4LogExecutionSummaryNode;
 
 
-    public void run(ExecuteCommandEntity requestParam, AutoExecuteContext dynamicContext) {
+    public LoopResultDTO run(ExecuteCommandEntity requestParam, AutoExecuteContext dynamicContext) {
         log.info("=== 动态多轮执行测试开始 ====");
         log.info("用户输入: {}", requestParam.getUserInput());
         log.info("最大执行步数: {}", requestParam.getMaxSteps());
@@ -53,6 +54,10 @@ public class AutoLoopController {
             }
         }
         step4LogExecutionSummaryNode.apply(requestParam, dynamicContext);
+        return LoopResultDTO.builder().completed(dynamicContext.isCompleted())
+                .terminationReason(dynamicContext.getTerminationReason())
+                .actualSteps(dynamicContext.getExecutionHistoryBuffer().size())
+                .build();
     }
 
     private boolean shouldTerminateAfterAnalyze(AutoExecuteContext dynamicContext) {
