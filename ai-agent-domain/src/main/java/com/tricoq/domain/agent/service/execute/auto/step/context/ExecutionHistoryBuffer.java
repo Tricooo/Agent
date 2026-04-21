@@ -39,7 +39,9 @@ public class ExecutionHistoryBuffer {
         ExecutionHistoryEntry entry = ExecutionHistoryEntry.builder().step(step)
                 .strategy(strategy)
                 .executionTarget(executeResult.getExecutionTarget())
+                .executionProcess(executeResult.getExecutionProcess())
                 .executionResult(executeResult.getExecutionResult())
+                .qualityCheck(executeResult.getQualityCheck())
                 .build();
         entries.add(entry);
     }
@@ -98,6 +100,7 @@ public class ExecutionHistoryBuffer {
         int overEntry = Math.max(0, source.size() - RECENT_FULL_COUNT);
         StringBuilder sb = new StringBuilder();
         if (overEntry > 0) {
+            //老历史保留基本骨架
             sb.append(EARLY_SKELETON_HEADER).append('\n');
             for (int i = 0; i < overEntry; i++) {
                 ExecutionHistoryEntry entry = source.get(i);
@@ -105,6 +108,7 @@ public class ExecutionHistoryBuffer {
             }
             sb.append('\n');
         }
+        //近N轮保持详情（如果还超限按照字段分层截断）
         sb.append(RECENT_DETAIL_HEADER).append('\n');
         for (int i = overEntry; i < source.size(); i++) {
             ExecutionHistoryEntry entry = source.get(i);
@@ -193,13 +197,26 @@ public class ExecutionHistoryBuffer {
     @AllArgsConstructor
     @Builder
     public static final class ExecutionHistoryEntry {
-        private final int step;
-        private final String strategy;
-        private final String executionTarget;
-        private final String executionResult;
+        //🔴不可压缩 🟢优先省略 🟡安全压缩（head+tail）
 
+
+        private final int step;
+        //🔴执行策略，为执行节点提供具体的行动方向
+        private final String strategy;
+        //🔴本次执行的具体目标
+        private final String executionTarget;
+        //🟡详细的执行过程描述，包括使用的方法和步骤
+        private final String executionProcess;
+        //🟡执行结果，包含具体的输出内容和数据
+        private final String executionResult;
+        //🟢执行结果的初步质量自检，指出潜在的问题或不足
+        private final String qualityCheck;
+
+        //🔴质量评分，1-10 分，10 分为满分
         private Integer supervisionScore;
+        //🔴质量检查结论：PASS 表示通过，FAIL 表示需要重新执行，OPTIMIZE 表示建议优化
         private String supervisionPass;
+        //🟢对执行结果的综合质量评估描述
         private String supervisionAssessment;
 
         public boolean hasSupervision() {
