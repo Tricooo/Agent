@@ -2,10 +2,14 @@ package com.tricoq.domain.agent.service.execute.auto.step.context;
 
 import com.tricoq.domain.agent.model.dto.AutoExecuteResultDTO;
 import com.tricoq.domain.agent.model.dto.AutoSupervisionResultDTO;
+import com.tricoq.domain.agent.service.execute.auto.render.DetailRenderLevel;
+import com.tricoq.domain.agent.service.execute.auto.render.RenderPolicy;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 
 import java.util.ArrayList;
@@ -29,7 +33,7 @@ public class ExecutionHistoryBuffer {
     private static final String EMPTY_SUMMARY_PLACEHOLDER = "[无执行历史]";
     private static final String EARLY_SKELETON_HEADER = "## 早期步骤轨迹（明细已压缩）";
     private static final String RECENT_DETAIL_HEADER = "## 最近若干轮执行明细";
-
+    //不变量，作为raw fact
     private final List<ExecutionHistoryEntry> entries = new ArrayList<>();
 
     //----写入----
@@ -81,62 +85,226 @@ public class ExecutionHistoryBuffer {
         return renderAnalyzerWithBudget(entries);
     }
 
+    //职责：负责循环
     private String renderAnalyzerWithBudget(List<ExecutionHistoryEntry> source) {
-        String handled = handleHistory(source);
-        //size判断是为了避免只有一条记录但是超限被删除
-        while (handled.length() > ANALYZER_MAX_CHARS && source.size() > 1) {
-            source = source.subList(1, source.size());
-            handled = handleHistory(source);
+        RenderPolicy analyzerPolicy = RenderPolicy.ANALYZER_POLICY;
+        AnalyzerRenderDraft draft = buildAnalyzerRenderDraft(source, analyzerPolicy);
+        String rendered = composeAnalyzer(draft);
+        while (rendered.length() > analyzerPolicy.getMaxChars()) {
+            if (!degradeOneStep(draft, analyzerPolicy)) {
+                log.warn("无法继续降级");
+                break;
+            }
+            rendered = composeAnalyzer(draft);
         }
+
         //当前是best-effort budget 而不是 hard budget
-        if (handled.length() > ANALYZER_MAX_CHARS) {
-            log.warn("executionHistory 在 analyzer 场景按 entry 边界裁剪后仍超预算, entries={}, length={}, limit={}",
-                    source.size(), handled.length(), ANALYZER_MAX_CHARS);
+        if (rendered.length() > analyzerPolicy.getMaxChars()) {
+            log.warn("仍然超预算,analyze draft 已经降到当前允许的最小程度,长度：{},预算长度：{}", rendered.length(),
+                    analyzerPolicy.getMaxChars());
         }
-        return handled;
+
+        return rendered;
     }
 
-    private String handleHistory(List<ExecutionHistoryEntry> source) {
-        int overEntry = Math.max(0, source.size() - RECENT_FULL_COUNT);
+    //职责：改变draft (detail状态流转)
+    private boolean degradeOneStep(AnalyzerRenderDraft draft, RenderPolicy policy) {
+        int skeletonLimit = policy.getSkeletonLimit();
+        List<ExecutionHistoryEntry> skeletonEntries = draft.getSkeletonEntries();
+        if (skeletonLimit < skeletonEntries.size()) {
+            skeletonEntries.removeFirst();
+            return true;
+        }
+        //历史纪录裁剪到限制，开始处理detail的可省略字段
+        List<DetailRenderState> detailStates = draft.getDetailStates();
+        //第一轮次 先依次对detail的可省略字段进行省略
+        for (DetailRenderState detailState : detailStates) {
+            if (detailState.level == DetailRenderLevel.FULL) {
+                detailState.setLevel(DetailRenderLevel.OMIT_OPTIONAL);
+                return true;
+            }
+        }
+        //然后下面的轮次，对最老的detail纪录进行依次降级
+        for (DetailRenderState detailState : detailStates) {
+            if (detailState.level == DetailRenderLevel.OMIT_OPTIONAL) {
+                detailState.setLevel(DetailRenderLevel.COMPRESS_LONG_FIELDS);
+                return true;
+            }
+            if (detailState.level == DetailRenderLevel.COMPRESS_LONG_FIELDS) {
+                detailState.setLevel(DetailRenderLevel.COMPACT_DETAIL);
+                return true;
+            }
+            if (detailState.level == DetailRenderLevel.COMPACT_DETAIL) {
+                detailState.setLevel(DetailRenderLevel.DROP);
+                return true;
+            }
+        }
+
+
+        return false;
+    }
+
+    //职责：构建draft
+    private AnalyzerRenderDraft buildAnalyzerRenderDraft(List<ExecutionHistoryEntry> source, RenderPolicy policy) {
+        int recentDetailCount = policy.getRecentDetailCount();
+        int overLimited = Math.max(0, source.size() - recentDetailCount);
+
+        List<ExecutionHistoryEntry> detailEntries = source.subList(overLimited, source.size());
+        List<DetailRenderState> states = detailEntries.stream().map(DetailRenderState::new).toList();
+        AnalyzerRenderDraft draft = new AnalyzerRenderDraft();
+        draft.addDetailStates(states);
+
+        if (overLimited != 0) {
+            List<ExecutionHistoryEntry> historyEntries = source.subList(0, overLimited);
+            draft.addSkeletonEntries(historyEntries);
+        }
+        return draft;
+    }
+
+    //职责：负责渲染draft，只读draft
+    private String composeAnalyzer(AnalyzerRenderDraft draft) {
+        List<ExecutionHistoryEntry> skeletonEntries = draft.getSkeletonEntries();
         StringBuilder sb = new StringBuilder();
-        if (overEntry > 0) {
+        if (!skeletonEntries.isEmpty()) {
             //老历史保留基本骨架
             sb.append(EARLY_SKELETON_HEADER).append('\n');
-            for (int i = 0; i < overEntry; i++) {
-                ExecutionHistoryEntry entry = source.get(i);
+            for (ExecutionHistoryEntry entry : skeletonEntries) {
                 sb.append(formatSkeletonLine(entry)).append('\n');
             }
             sb.append('\n');
         }
+
+        List<DetailRenderState> detailStates = draft.getDetailStates();
         //近N轮保持详情（如果还超限按照字段分层截断）
+        if (CollectionUtils.isEmpty(detailStates)) {
+            return sb.toString();
+        }
         sb.append(RECENT_DETAIL_HEADER).append('\n');
-        for (int i = overEntry; i < source.size(); i++) {
-            ExecutionHistoryEntry entry = source.get(i);
-            sb.append(formatFullEntry(entry)).append('\n');
+        for (DetailRenderState state : detailStates) {
+            sb.append(formatDetailEntry(state)).append('\n');
         }
         return sb.toString();
     }
 
+    private String formatDetailEntry(DetailRenderState state) {
+        DetailRenderLevel level = state.getLevel();
+        return switch (level) {
+            case DROP -> "";
+            case COMPACT_DETAIL -> formatCompactDetailEntry(state.getSourceEntry());
+            case COMPRESS_LONG_FIELDS -> formatCompressEntry(state.getSourceEntry());
+            case OMIT_OPTIONAL -> formatOmitEntry(state.getSourceEntry());
+            case FULL -> formatFullEntry(state.getSourceEntry());
+        };
+    }
+
+    /**
+     * 对可安全省略字段做安全压缩 head+tail 不截断
+     */
+    private String formatCompressEntry(ExecutionHistoryEntry e) {
+        return formatCompactEntry(
+                e,
+                safetyCompress(e.getExecutionProcess()),
+                safetyCompress(e.getExecutionResult()),
+                false,
+                false
+        );
+    }
+
+    private String safetyCompress(String origin) {
+        if (StringUtils.isBlank(origin)) {
+            return "";
+        }
+        String[] phases = origin.split("\\R");
+        if (phases.length <= 2) {
+            return origin;
+        }
+
+        return phases[0]
+                + "\n【中间部分内容已省略】\n"
+                + phases[phases.length - 1];
+    }
+
+    private String formatCompactDetailEntry(ExecutionHistoryEntry e) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(String.format("""
+                    === 第 %d 步执行记录（详情已极简化） ===
+                    【分析策略】%s
+                    【执行目标】%s
+                    """,
+                e.getStep(),
+                nullToEmpty(e.getStrategy()),
+                nullToEmpty(e.getExecutionTarget())));
+
+        if (e.hasSupervision()) {
+            sb.append(String.format("【监督阶段】评分: %d | 结论: %s",
+                    e.getSupervisionScore(),
+                    e.getSupervisionPass()));
+        }
+        return sb.toString();
+    }
+
+
+    private String formatOmitEntry(ExecutionHistoryEntry e) {
+        return formatCompactEntry(
+                e,
+                e.getExecutionProcess(),
+                e.getExecutionResult(),
+                false,
+                false
+        );
+    }
+
     private String formatFullEntry(ExecutionHistoryEntry e) {
+        return formatCompactEntry(
+                e,
+                e.getExecutionProcess(),
+                e.getExecutionResult(),
+                true,
+                true
+        );
+    }
+
+    private String formatCompactEntry(
+            ExecutionHistoryEntry e,
+            String executionProcess,
+            String executionResult,
+            boolean includeQualityCheck,
+            boolean includeSupervisionAssessment
+    ) {
         StringBuilder sb = new StringBuilder();
         sb.append(String.format("""
                         === 第 %d 步执行记录 ===
                         【分析策略】%s
                         【执行目标】%s
+                        【执行过程】%s
                         【执行结果】%s
                         """,
-                e.step,
-                nullToEmpty(e.strategy),
-                nullToEmpty(e.executionTarget),
-                nullToEmpty(e.executionResult)));
-        if (e.hasSupervision()) {
-            sb.append(String.format("【监督阶段】评分: %d | 结论: %s | 评估: %s%n",
-                    e.supervisionScore,
-                    e.supervisionPass,
-                    nullToEmpty(e.supervisionAssessment)));
+                e.getStep(),
+                nullToEmpty(e.getStrategy()),
+                nullToEmpty(e.getExecutionTarget()),
+                nullToEmpty(executionProcess),
+                nullToEmpty(executionResult)));
+
+        if (includeQualityCheck) {
+            sb.append(String.format("【初步自检】%s%n", nullToEmpty(e.getQualityCheck())));
         }
+
+        if (e.hasSupervision()) {
+            if (includeSupervisionAssessment) {
+                sb.append(String.format("【监督阶段】评分: %d | 结论: %s | 评估: %s%n",
+                        e.getSupervisionScore(),
+                        e.getSupervisionPass(),
+                        nullToEmpty(e.getSupervisionAssessment())));
+            } else {
+                sb.append(String.format("【监督阶段】评分: %d | 结论: %s",
+                        e.getSupervisionScore(),
+                        e.getSupervisionPass()));
+            }
+        }
+
         return sb.toString();
     }
+
 
     private static String nullToEmpty(String s) {
         return s == null ? "" : s;
@@ -193,7 +361,34 @@ public class ExecutionHistoryBuffer {
     }
 
 
+    @Getter
+    private static final class AnalyzerRenderDraft {
+        private final List<ExecutionHistoryEntry> skeletonEntries = new ArrayList<>();
+        private final List<DetailRenderState> detailStates = new ArrayList<>();
+
+        public void addSkeletonEntries(List<ExecutionHistoryEntry> histories) {
+            this.skeletonEntries.addAll(histories);
+        }
+
+        public void addDetailStates(List<DetailRenderState> details) {
+            this.detailStates.addAll(details);
+        }
+    }
+
+
     @Data
+    private static final class DetailRenderState {
+        //指向raw fact-不可更改
+        private final ExecutionHistoryEntry sourceEntry;
+        private DetailRenderLevel level = DetailRenderLevel.FULL;
+
+        public DetailRenderState(ExecutionHistoryEntry raw) {
+            this.sourceEntry = Objects.requireNonNull(raw, "raw execution history entry 不能为空");
+        }
+    }
+
+
+    @Getter
     @AllArgsConstructor
     @Builder
     public static final class ExecutionHistoryEntry {
