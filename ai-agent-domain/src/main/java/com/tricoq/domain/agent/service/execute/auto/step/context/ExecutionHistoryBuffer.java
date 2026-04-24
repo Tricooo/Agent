@@ -89,13 +89,14 @@ public class ExecutionHistoryBuffer {
     private String renderAnalyzerWithBudget(List<ExecutionHistoryEntry> source) {
         RenderPolicy analyzerPolicy = RenderPolicy.ANALYZER_POLICY;
         AnalyzerRenderDraft draft = buildAnalyzerRenderDraft(source, analyzerPolicy);
-        String rendered = composeAnalyzer(draft);
+        int totalSkeleton = draft.getSkeletonEntries().size();
+        String rendered = composeAnalyzer(draft, analyzerPolicy, totalSkeleton);
         while (rendered.length() > analyzerPolicy.getMaxChars()) {
             if (!degradeOneStep(draft, analyzerPolicy)) {
                 log.warn("无法继续降级");
                 break;
             }
-            rendered = composeAnalyzer(draft);
+            rendered = composeAnalyzer(draft, analyzerPolicy, totalSkeleton);
         }
 
         //当前是best-effort budget 而不是 hard budget
@@ -139,8 +140,6 @@ public class ExecutionHistoryBuffer {
                 return true;
             }
         }
-
-
         return false;
     }
 
@@ -162,9 +161,15 @@ public class ExecutionHistoryBuffer {
     }
 
     //职责：负责渲染draft，只读draft
-    private String composeAnalyzer(AnalyzerRenderDraft draft) {
+    private String composeAnalyzer(AnalyzerRenderDraft draft, RenderPolicy policy, int totalSkeleton) {
         List<ExecutionHistoryEntry> skeletonEntries = draft.getSkeletonEntries();
         StringBuilder sb = new StringBuilder();
+
+        int omitSkeleton = totalSkeleton - skeletonEntries.size();
+        if (omitSkeleton > 0) {
+            sb.append("[更早 ").append(omitSkeleton).append(" 步已省略]").append('\n');
+        }
+
         if (!skeletonEntries.isEmpty()) {
             //老历史保留基本骨架
             sb.append(EARLY_SKELETON_HEADER).append('\n');
@@ -181,17 +186,17 @@ public class ExecutionHistoryBuffer {
         }
         sb.append(RECENT_DETAIL_HEADER).append('\n');
         for (DetailRenderState state : detailStates) {
-            sb.append(formatDetailEntry(state)).append('\n');
+            sb.append(formatDetailEntry(state, policy)).append('\n');
         }
         return sb.toString();
     }
 
-    private String formatDetailEntry(DetailRenderState state) {
+    private String formatDetailEntry(DetailRenderState state, RenderPolicy policy) {
         DetailRenderLevel level = state.getLevel();
         return switch (level) {
             case DROP -> "";
             case COMPACT_DETAIL -> formatCompactDetailEntry(state.getSourceEntry());
-            case COMPRESS_LONG_FIELDS -> formatCompressEntry(state.getSourceEntry());
+            case COMPRESS_LONG_FIELDS -> formatCompressEntry(state.getSourceEntry(), policy);
             case OMIT_OPTIONAL -> formatOmitEntry(state.getSourceEntry());
             case FULL -> formatFullEntry(state.getSourceEntry());
         };
@@ -200,37 +205,45 @@ public class ExecutionHistoryBuffer {
     /**
      * 对可安全省略字段做安全压缩 head+tail 不截断
      */
-    private String formatCompressEntry(ExecutionHistoryEntry e) {
+    private String formatCompressEntry(ExecutionHistoryEntry e, RenderPolicy policy) {
         return formatCompactEntry(
                 e,
-                safetyCompress(e.getExecutionProcess()),
-                safetyCompress(e.getExecutionResult()),
-                false,
-                false
+                safetyCompress(e.getExecutionProcess(), policy.getExecutionProcessBudget()),
+                safetyCompress(e.getExecutionResult(), policy.getExecutionResultBudget()),
+                !policy.isOmitQualityCheckFirst(),
+                !policy.isOmitSupervisionAssessmentFirst()
         );
     }
 
-    private String safetyCompress(String origin) {
-        if (StringUtils.isBlank(origin)) {
+    private String safetyCompress(String origin, int limit) {
+        if (StringUtils.isBlank(origin) || limit <= 0) {
             return "";
         }
-        String[] phases = origin.split("\\R");
-        if (phases.length <= 2) {
+
+        // 先判断整体预算，没超就不要压
+        if (origin.length() <= limit) {
             return origin;
         }
 
-        return phases[0]
-                + "\n【中间部分内容已省略】\n"
-                + phases[phases.length - 1];
+        String[] phases = origin.split("\\R");
+        if (phases.length <= 2) {
+            return "【该字段内容过长，已省略；请以上下文中的策略、目标、监督结论为准】";
+        }
+
+        String compressed = phases[0] + "\n【中间部分内容已省略】\n" + phases[phases.length - 1];
+        if (compressed.length() > limit) {
+            return "【该字段首尾段仍超出预算，已省略；请以上下文中的策略、目标、监督结论为准】";
+        }
+        return compressed;
     }
 
     private String formatCompactDetailEntry(ExecutionHistoryEntry e) {
         StringBuilder sb = new StringBuilder();
         sb.append(String.format("""
-                    === 第 %d 步执行记录（详情已极简化） ===
-                    【分析策略】%s
-                    【执行目标】%s
-                    """,
+                        === 第 %d 步执行记录（详情已极简化） ===
+                        【分析策略】%s
+                        【执行目标】%s
+                        """,
                 e.getStep(),
                 nullToEmpty(e.getStrategy()),
                 nullToEmpty(e.getExecutionTarget())));
