@@ -35,5 +35,12 @@ build/
 ### VS Code ###
 .vscode/
 
+### AI assistant local workspace ###
+.agents/
+.claude/
+.serena/
+AGENTS.md
+CLAUDE.md
+
 ### Mac OS ###
 .DS_Store

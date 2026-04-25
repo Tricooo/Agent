@@ -9,7 +9,6 @@ import com.tricoq.domain.agent.service.execute.auto.context.AutoExecuteContext;
 import com.tricoq.domain.agent.service.execute.auto.context.AutoTerminationReason;
 import com.tricoq.domain.agent.service.execute.auto.step.context.ExecutionHistoryBuffer;
 import com.tricoq.domain.agent.spi.LlmInvocationFacade;
-import com.tricoq.types.framework.chain.StrategyHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -46,13 +45,6 @@ public class Step4LogExecutionSummaryNode extends AbstractExecuteSupport {
         log.info("\n🏁 === 动态多轮执行结束 ====");
 
         return "ai agent execution summary completed!";
-    }
-
-    @Override
-    public StrategyHandler<ExecuteCommandEntity, AutoExecuteContext, String> get(ExecuteCommandEntity requestParameter,
-                                                                                 AutoExecuteContext dynamicContext) {
-        // 总结节点是最后一个节点，返回null表示执行结束
-        return getDefaultHandler();
     }
 
     /**

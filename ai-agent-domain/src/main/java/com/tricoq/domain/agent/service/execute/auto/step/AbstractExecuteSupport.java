@@ -5,8 +5,6 @@ import com.tricoq.domain.agent.model.entity.AutoAgentExecuteResultEntity;
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
 import com.tricoq.domain.agent.service.execute.auto.context.AutoExecuteContext;
 import com.tricoq.domain.agent.shared.ExecuteOutputPort;
-import com.tricoq.types.framework.chain.AbstractMultiThreadStrategyRouter;
-import com.tricoq.types.framework.chain.StrategyHandler;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.util.StringUtils;
 
@@ -17,24 +15,18 @@ import java.util.IllegalFormatException;
  * @date 11/3/25
  */
 @Slf4j
-public abstract class AbstractExecuteSupport extends
-        AbstractMultiThreadStrategyRouter<ExecuteCommandEntity, AutoExecuteContext, String> {
+public abstract class AbstractExecuteSupport {
 
     protected static final String ANALYZER_MEMORY_SUFFIX = "-analyzer";
     protected static final String EXECUTOR_MEMORY_SUFFIX = "-executor";
     protected static final String SUPERVISOR_MEMORY_SUFFIX = "-supervisor";
     protected static final String SUMMARY_MEMORY_SUFFIX = "-summary";
 
-    /**
-     * 异步加载数据
-     *
-     * @param requestParam   请求参数
-     * @param dynamicContext 链路上下文
-     */
-    @Override
-    protected void multiThread(ExecuteCommandEntity requestParam, AutoExecuteContext dynamicContext) {
-
+    public String apply(ExecuteCommandEntity requestParam, AutoExecuteContext dynamicContext) {
+        return doApply(requestParam, dynamicContext);
     }
+
+    protected abstract String doApply(ExecuteCommandEntity requestParam, AutoExecuteContext dynamicContext);
 
     protected String buildConversationId(String sessionId, String roleSuffix) {
         return sessionId + roleSuffix;
@@ -74,9 +66,4 @@ public abstract class AbstractExecuteSupport extends
         }
     }
 
-    @Override
-    public StrategyHandler<ExecuteCommandEntity, AutoExecuteContext, String> get(
-            ExecuteCommandEntity requestParam, AutoExecuteContext dynamicContext) {
-        throw new UnsupportedOperationException();
-    }
 }

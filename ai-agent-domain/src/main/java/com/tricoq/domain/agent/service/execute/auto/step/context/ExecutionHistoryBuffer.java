@@ -6,7 +6,6 @@ import com.tricoq.domain.agent.service.execute.auto.render.DetailRenderLevel;
 import com.tricoq.domain.agent.service.execute.auto.render.RenderPolicy;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Data;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
@@ -25,14 +24,16 @@ import java.util.Objects;
 @Slf4j
 public class ExecutionHistoryBuffer {
 
-    // ---- 预算常量 (V1 硬编码, 不做配置化) ----
-    private static final int RECENT_FULL_COUNT = 3;
-    private static final int ANALYZER_MAX_CHARS = 5000;
+    // ---- 渲染占位文本 ----
     private static final int SUMMARY_MAX_CHARS = 20000;
     private static final String EMPTY_ANALYZER_PLACEHOLDER = "[首次执行，无历史记录]";
     private static final String EMPTY_SUMMARY_PLACEHOLDER = "[无执行历史]";
     private static final String EARLY_SKELETON_HEADER = "## 早期步骤轨迹（明细已压缩）";
     private static final String RECENT_DETAIL_HEADER = "## 最近若干轮执行明细";
+    private static final String FIELD_TOO_LONG_PLACEHOLDER =
+            "【该字段内容过长，已省略；请以上下文中的策略、目标、监督结论为准】";
+    private static final String FIELD_HEAD_TAIL_TOO_LONG_PLACEHOLDER =
+            "【该字段首尾段仍超出预算，已省略；请以上下文中的策略、目标、监督结论为准】";
     //不变量，作为raw fact
     private final List<ExecutionHistoryEntry> entries = new ArrayList<>();
 
@@ -203,7 +204,8 @@ public class ExecutionHistoryBuffer {
     }
 
     /**
-     * 对可安全省略字段做安全压缩 head+tail 不截断
+     * 对可安全压缩字段做段落级压缩。
+     * 不做字符级半句截断；如果没有可靠段落边界或首尾段仍超预算，则返回明确省略提示。
      */
     private String formatCompressEntry(ExecutionHistoryEntry e, RenderPolicy policy) {
         return formatCompactEntry(
@@ -227,12 +229,12 @@ public class ExecutionHistoryBuffer {
 
         String[] phases = origin.split("\\R");
         if (phases.length <= 2) {
-            return "【该字段内容过长，已省略；请以上下文中的策略、目标、监督结论为准】";
+            return FIELD_TOO_LONG_PLACEHOLDER;
         }
 
         String compressed = phases[0] + "\n【中间部分内容已省略】\n" + phases[phases.length - 1];
         if (compressed.length() > limit) {
-            return "【该字段首尾段仍超出预算，已省略；请以上下文中的策略、目标、监督结论为准】";
+            return FIELD_HEAD_TAIL_TOO_LONG_PLACEHOLDER;
         }
         return compressed;
     }
@@ -389,7 +391,7 @@ public class ExecutionHistoryBuffer {
     }
 
 
-    @Data
+    @Getter
     private static final class DetailRenderState {
         //指向raw fact-不可更改
         private final ExecutionHistoryEntry sourceEntry;
@@ -397,6 +399,10 @@ public class ExecutionHistoryBuffer {
 
         public DetailRenderState(ExecutionHistoryEntry raw) {
             this.sourceEntry = Objects.requireNonNull(raw, "raw execution history entry 不能为空");
+        }
+
+        public void setLevel(DetailRenderLevel level) {
+            this.level = Objects.requireNonNull(level, "detail render level 不能为空");
         }
     }
 
