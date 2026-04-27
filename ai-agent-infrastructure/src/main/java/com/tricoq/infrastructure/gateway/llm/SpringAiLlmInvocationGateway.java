@@ -2,6 +2,8 @@ package com.tricoq.infrastructure.gateway.llm;
 
 import com.tricoq.domain.agent.model.dto.AiClientRuntimeProfile;
 import com.tricoq.domain.agent.model.enums.AiAgentEnumVO;
+import com.tricoq.domain.agent.model.enums.LlmInvocationFailureType;
+import com.tricoq.domain.agent.model.exception.LlmInvocationException;
 import com.tricoq.domain.agent.model.exception.LlmInvocationTimeoutException;
 import com.tricoq.domain.agent.model.request.InvocationPolicy;
 import com.tricoq.domain.agent.model.request.StructuredInvocationRequest;
@@ -45,24 +47,55 @@ public class SpringAiLlmInvocationGateway extends SpringAiSupport implements Llm
     public <T> T invokeStructured(StructuredInvocationRequest<T> request) {
 
         String clientId = request.getClientId();
+        String opName = resolveOperationName(request.getOperationName(), "invokeStructured");
         ChatClient client = Optional
                 .ofNullable((ChatClient) getBean(AiAgentEnumVO.AI_CLIENT.getBeanName(clientId)))
                 .orElseThrow(() -> new IllegalArgumentException("不存在的任务分析 client"));
-
+        //lambda 执行在invokeWithPolicy方法里，异常也能被invokeWithPolicy中捕获
         Supplier<T> action = () -> {
             ChatClient.ChatClientRequestSpec clientRequestSpec = buildRequestSpec(client, request.getPrompt(),
                     clientId, request.getSessionId(), request.getRoleSuffix(), request.getRetrieveSize());
+            T response;
+            try {
+                response = clientRequestSpec.call().entity(request.getResponseType());
+            } catch (Exception e) {
+                LlmInvocationFailureType type = classify(e);
 
-            T response = clientRequestSpec.call().entity(request.getResponseType());
+                if (type == LlmInvocationFailureType.TRANSIENT_PROVIDER_ERROR
+                        || type == LlmInvocationFailureType.NON_TRANSIENT_PROVIDER_ERROR
+                        || type == LlmInvocationFailureType.TIMEOUT) {
+                    throw new LlmInvocationException(type, opName, "LLM provider 调用失败", e);
+                }
 
-            if (response == null) {
-                throw new RuntimeException("任务解析结果为空");
+                throw new LlmInvocationException(
+                        LlmInvocationFailureType.STRUCTURED_PARSE_FAILED,
+                        opName,
+                        "结构化输出解析失败",
+                        e
+                );
             }
 
-            Optional.ofNullable(request.getValidate()).ifPresent(v -> v.accept(response));
+            if (response == null) {
+                throw new LlmInvocationException(
+                        LlmInvocationFailureType.EMPTY_RESPONSE,
+                        opName,
+                        "结构化调用结果为空",
+                        null
+                );
+            }
+
+            try {
+                Optional.ofNullable(request.getValidate()).ifPresent(v -> v.accept(response));
+            } catch (Exception e) {
+                throw new LlmInvocationException(
+                        LlmInvocationFailureType.DTO_VALIDATION_FAILED,
+                        opName,
+                        "结构化输出 DTO 校验失败",
+                        e
+                );
+            }
             return response;
         };
-        String opName = resolveOperationName(request.getOperationName(), "invokeStructured");
         return invokeWithPolicy(action, request, opName);
     }
 
@@ -103,7 +136,9 @@ public class SpringAiLlmInvocationGateway extends SpringAiSupport implements Llm
                 last = e;
                 log.warn("[{}] 第 {} 次失败: {}", operationName, attempt, e.getMessage());
 
-                if (!shouldRetry(e)) {
+                LlmInvocationFailureType failureType = classify(e);
+
+                if (!shouldRetry(failureType)) {
                     Throwable cause = unwrap(e);
                     if (shouldFallbackOnNonRetryable(policy) && policy.getFallbackResult() != null) {
                         log.warn("[{}] 非重试异常（{}），直接使用 fallback", operationName,
@@ -131,6 +166,39 @@ public class SpringAiLlmInvocationGateway extends SpringAiSupport implements Llm
 
         throw new RuntimeException(
                 String.format("[%s] 重试 %d 次后仍失败", operationName, maxAttempts), last);
+    }
+
+    private LlmInvocationFailureType classify(Throwable error) {
+        Throwable cause = unwrap(error);
+
+        if (cause instanceof LlmInvocationTimeoutException) {
+            return LlmInvocationFailureType.TIMEOUT;
+        }
+        if (cause instanceof TransientAiException) {
+            return LlmInvocationFailureType.TRANSIENT_PROVIDER_ERROR;
+        }
+
+        if (cause instanceof NonTransientAiException) {
+            return LlmInvocationFailureType.NON_TRANSIENT_PROVIDER_ERROR;
+        }
+
+        if (cause instanceof LlmInvocationException e) {
+            return e.getFailureType();
+        }
+
+        if (isHttpClientError(cause)) {
+            int status = extractHttpStatus(cause);
+            return status == 408 || status == 429
+                    ? LlmInvocationFailureType.TRANSIENT_PROVIDER_ERROR
+                    : LlmInvocationFailureType.NON_TRANSIENT_PROVIDER_ERROR;
+        }
+
+        if (isHttpServerError(cause)) {
+            return LlmInvocationFailureType.TRANSIENT_PROVIDER_ERROR;
+        }
+
+
+        return LlmInvocationFailureType.UNKNOWN;
     }
 
     private <T> T callWithTimeout(Supplier<T> action, Long timeoutMillis, String operationName) {
@@ -208,59 +276,20 @@ public class SpringAiLlmInvocationGateway extends SpringAiSupport implements Llm
      * 原则：优先尊重 Spring AI 的瞬态/非瞬态语义；
      * 再补业务白名单；未知异常默认不重试。
      */
-    private boolean shouldRetry(Throwable e) {
-        if (e == null) {
-            return false;
-        }
-        // 1. 解包：策略壳内部的包装异常 / CompletionException 等，要看真正的 cause
-        Throwable cause = unwrap(e);
-        if (cause == null) {
-            return false;
-        }
+    private boolean shouldRetry(LlmInvocationFailureType failureType) {
+        // 解包：策略壳内部的包装异常 / CompletionException 等，要看真正的 cause
 
-        if (cause instanceof NonTransientAiException) {
-            return false;
-        }
-        if (cause instanceof TransientAiException) {
-            return true;
-        }
-        if (cause instanceof LlmInvocationTimeoutException) {
-            return false;
-        }
-
-        // 2. 明确不重试的：编程错误 / 参数错 / 线程中断
-        if (cause instanceof IllegalArgumentException) {
-            return false;
-        }
-        if (cause instanceof NullPointerException) {
-            return false;
-        }
-        if (cause instanceof InterruptedException) {
-            Thread.currentThread().interrupt();
-            return false;
-        }
-
-        // 5. timeout 默认不自动重试；部分网络 IO 仍允许重试
-        if (cause instanceof SocketTimeoutException) {
-            return false;
-        }
-        if (cause instanceof TimeoutException) {
-            return false;
-        }
-
-        if (cause instanceof IOException) {
-            return false;
-        }
-
-        // 3. HTTP 4xx：大部分不重试，但 408（请求超时）、429（限流）例外
-        if (isHttpClientError(cause)) {
-            int status = extractHttpStatus(cause);
-            return status == 408 || status == 429;
-        }
-
-        // 4. HTTP 5xx：基本都重试（服务端故障，可能很快恢复）
-        if (isHttpServerError(cause)) {
-            return true;
+        if (failureType != null) {
+            return switch (failureType) {
+                case UNKNOWN -> false;
+                case TIMEOUT -> false;
+                case EMPTY_RESPONSE -> false;
+                case SEMANTIC_CONFLICT -> false;
+                case DTO_VALIDATION_FAILED -> false;
+                case STRUCTURED_PARSE_FAILED -> true;
+                case TRANSIENT_PROVIDER_ERROR -> true;
+                case NON_TRANSIENT_PROVIDER_ERROR -> false;
+            };
         }
 
         return false;
