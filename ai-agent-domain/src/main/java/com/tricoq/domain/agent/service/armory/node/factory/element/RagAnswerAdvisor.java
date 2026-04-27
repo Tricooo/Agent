@@ -30,6 +30,12 @@ import java.util.stream.Collectors;
  * RAG 顾问
  * 提供上传文档/个人知识库检索的能力
  *
+ * rag基本链路
+ * Retrieval：找到了哪些 chunk
+ * Context Assembly：怎么把 chunk 放进 prompt
+ * Generation：模型怎么基于 chunk 回答
+ * Attribution：回答引用了哪些 chunk
+ *
  * @author trico qiang
  * @date 10/28/25
  */
@@ -44,7 +50,9 @@ public class RagAnswerAdvisor implements BaseAdvisor {
         this.searchRequest = searchRequest;
         this.userTextAdvisor = """
                 
-                Context information is below, surrounded by ---------------------
+                Context information is below,Each context chunk is prefixed with a citation number like [1], [2].
+                When using context information, prefer mentioning the citation number.
+                surrounded by ---------------------
                 
                 ---------------------
                 {question_answer_context}
@@ -72,34 +80,56 @@ public class RagAnswerAdvisor implements BaseAdvisor {
         String userText = chatClientRequest.prompt().getUserMessage().getText();
         String advisedUserText = userText + System.lineSeparator() + userTextAdvisor;
 
-        String query = userText;
-
-        SearchRequest request = SearchRequest.from(searchRequest).query(query)
+        SearchRequest request = SearchRequest.from(searchRequest).query(userText)
                 .filterExpression(doGetFilterExpression(context)).build();
         List<Document> documents = vectorStore.similaritySearch(request);
         if (CollectionUtils.isEmpty(documents)) {
-            //未找到引用的文本
-            return chatClientRequest;
+            //空召回不可静默，是RAG链路重要状态
+            HashMap<String, Object> emptyRetrievalContext = new HashMap<>(unmodifiedContext);
+            emptyRetrievalContext.put("qa_retrieved_documents", List.of());
+            emptyRetrievalContext.put("qa_retrieval_empty", true);
+            emptyRetrievalContext.put("question_answer_context", "");
+
+            return ChatClientRequest.builder()
+                    .prompt(chatClientRequest.prompt())
+                    .context(emptyRetrievalContext)
+                    .build();
         }
 
         //documentContext 很长时要做裁剪/摘要（Top-K、去重、截断），否则可能超长或稀释关键信息
-        String documentContext = documents.stream().map(Document::getText)
-                .collect(Collectors.joining(System.lineSeparator()));
+        //编号是建立模型引用的基础，模型可以确定编号，系统也能找到对应的引用---用于解决可溯源
+        StringBuilder documentContextBuilder = new StringBuilder();
+        for (int i = 0; i < documents.size(); i++) {
+            Document document = documents.get(i);
+            documentContextBuilder
+                    .append("[")
+                    .append(i + 1)
+                    .append("]")
+                    .append(System.lineSeparator())
+                    .append(document.getText())
+                    .append(System.lineSeparator())
+                    .append(System.lineSeparator());
+        }
+        String documentContext = documentContextBuilder.toString();
         Map<String, Object> advisedUserParams = new HashMap<>(unmodifiedContext);
         //给LLM看
         advisedUserParams.put("question_answer_context", documentContext);
         //给人看 便于看到引用的文本
         advisedUserParams.put("qa_retrieved_documents", documents);
+        advisedUserParams.put("qa_retrieved_document_count", documents.size());
+        advisedUserParams.put("qa_retrieval_empty", false);
 
         PromptTemplate promptTemplate = new PromptTemplate(advisedUserText);
         String rendered = promptTemplate.render(Map.of("question_answer_context", documentContext));
 
-        List<Message> instructions = chatClientRequest.prompt().getInstructions();
+        //整个发给LLM的提示词序列，包括SystemMessage UserMessage AssistantMessage
+        List<Message> instructions = new ArrayList<>(chatClientRequest.prompt().getInstructions());
         instructions.set(instructions.size() - 1, new UserMessage(rendered));
 
         return ChatClientRequest.builder()
                 .prompt(Prompt.builder()
                         .messages(instructions)
+                        .chatOptions(chatClientRequest.prompt().getOptions())
                         .build())
                 .context(advisedUserParams)
                 .build();

@@ -13,7 +13,6 @@ import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 /**
