@@ -5,6 +5,7 @@ import com.tricoq.domain.agent.model.dto.AiAgentClientFlowConfigDTO;
 import com.tricoq.domain.agent.model.dto.LoopResultDTO;
 import com.tricoq.domain.agent.model.entity.ExecuteCommandEntity;
 import com.tricoq.domain.agent.service.execute.auto.context.AutoExecuteContext;
+import com.tricoq.domain.agent.service.execute.auto.context.AutoLoopState;
 import com.tricoq.domain.agent.service.execute.auto.context.AutoTerminationReason;
 import com.tricoq.domain.agent.service.execute.auto.step.Step1AnalyzeNode;
 import com.tricoq.domain.agent.service.execute.auto.step.Step2ExecuteNode;
@@ -42,22 +43,49 @@ public class AutoLoopController {
 
         loadFlowConfig(requestParam, dynamicContext);
 
-        while (!shouldTerminateByStepPolicy(dynamicContext)) {
-            step1AnalyzeNode.apply(requestParam, dynamicContext);
-            if (shouldTerminateAfterAnalyze(dynamicContext)) {
-                break;
-            }
-            step2ExecuteNode.apply(requestParam, dynamicContext);
-            step3QualitySupervisorNode.apply(requestParam, dynamicContext);
-            if (shouldTerminateAfterSupervise(dynamicContext)) {
-                break;
+        AutoLoopState state = AutoLoopState.ANALYZE;
+        //轻量状态机，将隐式流程显式化,容易直观的看出来控制流设计
+        while (state != AutoLoopState.TERMINATED) {
+            switch (state) {
+                case ANALYZE -> {
+                    if (shouldTerminateByStepPolicy(dynamicContext)) {
+                        state = AutoLoopState.SUMMARY;
+                        break;
+                    }
+
+                    step1AnalyzeNode.apply(requestParam, dynamicContext);
+                    state = nextAfterAnalyze(dynamicContext);
+                }
+                case EXECUTE -> {
+                    step2ExecuteNode.apply(requestParam, dynamicContext);
+                    state = AutoLoopState.SUPERVISE;
+                }
+                case SUPERVISE -> {
+                    step3QualitySupervisorNode.apply(requestParam, dynamicContext);
+                    state = nextAfterSupervise(dynamicContext);
+                }
+                case SUMMARY -> {
+                    step4LogExecutionSummaryNode.apply(requestParam, dynamicContext);
+                    state = AutoLoopState.TERMINATED;
+                }
             }
         }
-        step4LogExecutionSummaryNode.apply(requestParam, dynamicContext);
         return LoopResultDTO.builder().completed(dynamicContext.isCompleted())
                 .terminationReason(dynamicContext.getTerminationReason())
                 .actualSteps(dynamicContext.getExecutionHistoryBuffer().size())
                 .build();
+    }
+
+    private AutoLoopState nextAfterAnalyze(AutoExecuteContext dynamicContext) {
+        return shouldTerminateAfterAnalyze(dynamicContext)
+                ? AutoLoopState.SUMMARY
+                : AutoLoopState.EXECUTE;
+    }
+
+    private AutoLoopState nextAfterSupervise(AutoExecuteContext dynamicContext) {
+        return shouldTerminateAfterSupervise(dynamicContext)
+                ? AutoLoopState.SUMMARY
+                : AutoLoopState.ANALYZE;
     }
 
     private boolean shouldTerminateAfterAnalyze(AutoExecuteContext dynamicContext) {
