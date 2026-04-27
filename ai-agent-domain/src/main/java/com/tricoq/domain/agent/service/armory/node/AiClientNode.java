@@ -1,8 +1,9 @@
 package com.tricoq.domain.agent.service.armory.node;
 
 import com.alibaba.fastjson.JSON;
-import com.tricoq.domain.agent.model.dto.AiClientRuntimeProfile;
 import com.tricoq.domain.agent.model.dto.AiClientAdvisorDTO;
+import com.tricoq.domain.agent.model.dto.AiClientModelDTO;
+import com.tricoq.domain.agent.model.dto.AiClientRuntimeProfile;
 import com.tricoq.domain.agent.model.entity.ArmoryCommandEntity;
 import com.tricoq.domain.agent.model.enums.AiAgentEnumVO;
 import com.tricoq.domain.agent.model.enums.AiClientAdvisorTypeEnumVO;
@@ -23,6 +24,8 @@ import org.springframework.ai.mcp.SyncMcpToolCallbackProvider;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -37,6 +40,10 @@ import java.util.stream.Collectors;
 @Slf4j
 @RequiredArgsConstructor
 public class AiClientNode extends AbstractArmorySupport {
+
+    private static final Comparator<AiClientAdvisorDTO> ADVISOR_CONFIG_ORDER =
+            Comparator.comparing(AiClientAdvisorDTO::getOrderNum, Comparator.nullsLast(Integer::compareTo))
+                    .thenComparing(AiClientAdvisorDTO::getAdvisorId, Comparator.nullsLast(String::compareTo));
 
     private final AiClientRuntimeRegistry runtimeRegistry;
 
@@ -57,6 +64,11 @@ public class AiClientNode extends AbstractArmorySupport {
         }
         Map<String, AiClientAdvisorDTO> advisorConfigMap = dynamicContext.getAdvisorConfigMap();
         Map<String, AiClientSystemPromptDTO> promptMap = dynamicContext.getSystemPromptMap();
+        Map<String, AiClientModelDTO> modelConfigMap = dynamicContext.getClientModels().stream()
+                .filter(modelConfig -> StringUtils.hasText(modelConfig.getModelId()))
+                .collect(Collectors.toMap(AiClientModelDTO::getModelId,
+                        modelConfig -> modelConfig,
+                        (existing, ignored) -> existing));
 
         for (AiClientDTO client : clients) {
             ChatModel model = getBean(AiAgentEnumVO.AI_CLIENT_MODEL.getBeanName(client.getModelId()));
@@ -82,6 +94,7 @@ public class AiClientNode extends AbstractArmorySupport {
             }
             //mcp工具构建
             List<String> toolMcpIds = client.getMcpIdList();
+            boolean clientMcpEnabled = false;
             if (CollectionUtils.isNotEmpty(toolMcpIds)) {
                 List<McpSyncClient> mcpTools = toolMcpIds.stream()
                         .map(id -> (McpSyncClient) getBean(AiAgentEnumVO.AI_CLIENT_TOOL_MCP.getBeanName(id)))
@@ -89,31 +102,29 @@ public class AiClientNode extends AbstractArmorySupport {
                         .toList();
                 if (CollectionUtils.isNotEmpty(mcpTools)) {
                     clientBuilder.defaultToolCallbacks(new SyncMcpToolCallbackProvider(mcpTools).getToolCallbacks());
-                    profileBuilder.mcpEnabled(true);
+                    clientMcpEnabled = true;
                 }
+            }
+            if (clientMcpEnabled || hasModelLevelMcp(client, modelConfigMap)) {
+                profileBuilder.mcpEnabled(true);
             }
 
             //构建顾问
             List<String> advisorIdList = client.getAdvisorIdList();
-            //Optional.of--确信值不为null，否则会抛出异常 不过Optional适合处理可能为空的单个值（局部的简单处理的值也不要用）,以后应该注意
-            //用于方法返回值比较常见
             if (CollectionUtils.isNotEmpty(advisorIdList)) {
-                List<Advisor> advisors = advisorIdList.stream()
-                        .map(id -> (Advisor) getBean(AiAgentEnumVO.AI_CLIENT_ADVISOR.getBeanName(id)))
+                List<AiClientAdvisorDTO> sortedAdvisorConfigs = resolveSortedAdvisorConfigs(advisorIdList, advisorConfigMap);
+                List<Advisor> advisors = sortedAdvisorConfigs.stream()
+                        .map(config -> (Advisor) getBean(AiAgentEnumVO.AI_CLIENT_ADVISOR.getBeanName(config.getAdvisorId())))
                         .filter(Objects::nonNull)
                         .toList();
                 if (CollectionUtils.isNotEmpty(advisors)) {
                     clientBuilder.defaultAdvisors(advisors);
-                    List<AiClientAdvisorDTO> advisorConfigs = advisorIdList.stream()
-                            .map(advisorConfigMap::get)
-                            .filter(Objects::nonNull)
-                            .toList();
-                    Set<String> advisorTypes = advisorConfigs.stream()
+                    Set<String> advisorTypes = sortedAdvisorConfigs.stream()
                             .map(AiClientAdvisorDTO::getAdvisorType)
                             .filter(Objects::nonNull)
-                            .collect(Collectors.toSet());
+                            .collect(Collectors.toCollection(LinkedHashSet::new));
                     profileBuilder.advisorTypes(advisorTypes);
-                    enrichRuntimeProfile(profileBuilder, advisorConfigs);
+                    enrichRuntimeProfile(profileBuilder, sortedAdvisorConfigs);
                 }
             }
 
@@ -124,6 +135,27 @@ public class AiClientNode extends AbstractArmorySupport {
             runtimeRegistry.register(client.getClientId(), runtimeProfile);
         }
         return router(requestParam, dynamicContext);
+    }
+
+    private List<AiClientAdvisorDTO> resolveSortedAdvisorConfigs(List<String> advisorIdList,
+                                                                 Map<String, AiClientAdvisorDTO> advisorConfigMap) {
+        if (CollectionUtils.isEmpty(advisorIdList) || MapUtils.isEmpty(advisorConfigMap)) {
+            return List.of();
+        }
+
+        return advisorIdList.stream()
+                .map(advisorConfigMap::get)
+                .filter(Objects::nonNull)
+                .sorted(ADVISOR_CONFIG_ORDER)
+                .toList();
+    }
+
+    private boolean hasModelLevelMcp(AiClientDTO client, Map<String, AiClientModelDTO> modelConfigMap) {
+        if (client == null || MapUtils.isEmpty(modelConfigMap)) {
+            return false;
+        }
+        AiClientModelDTO modelConfig = modelConfigMap.get(client.getModelId());
+        return modelConfig != null && CollectionUtils.isNotEmpty(modelConfig.getToolMcpIds());
     }
 
     private void enrichRuntimeProfile(AiClientRuntimeProfile.AiClientRuntimeProfileBuilder profileBuilder,
