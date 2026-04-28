@@ -51,7 +51,8 @@ public enum AiClientAdvisorTypeEnumVO {
             }
             SearchRequest searchRequest = SearchRequest.builder()
                     .filterExpression(StringUtils.defaultIfEmpty(ragAnswer.getFilterExpression(), StringUtils.EMPTY))
-                    .topK(ragAnswer.getTopK())
+                    .topK(safeTopK(ragAnswer.getTopK()))
+                    .similarityThreshold(safeSimilarityThreshold(ragAnswer.getSimilarityThreshold()))
                     .build();
             return new RagAnswerAdvisor(vectorStore, searchRequest);
         }
@@ -101,5 +102,16 @@ public enum AiClientAdvisorTypeEnumVO {
             throw new RuntimeException("err! advisorType " + code + " not exist!");
         }
         return vo;
+    }
+
+    private static double safeSimilarityThreshold(double threshold) {
+        if (threshold < 0 || threshold > 1) {
+            return SearchRequest.SIMILARITY_THRESHOLD_ACCEPT_ALL;
+        }
+        return threshold;
+    }
+
+    private static int safeTopK(int topK) {
+        return topK > 0 ? topK : SearchRequest.DEFAULT_TOP_K;
     }
 }

@@ -82,6 +82,8 @@ public class AiClientAdvisorDTO {
     @NoArgsConstructor
     public static class RagAnswer {
         private int topK = 4;
+        //score判断的阈值
+        private double similarityThreshold = 0.0;
         private String filterExpression;
     }
 

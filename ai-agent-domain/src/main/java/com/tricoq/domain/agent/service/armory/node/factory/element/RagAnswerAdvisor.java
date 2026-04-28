@@ -1,5 +1,6 @@
 package com.tricoq.domain.agent.service.armory.node.factory.element;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
@@ -38,6 +39,7 @@ import java.util.Map;
  * @author trico qiang
  * @date 10/28/25
  */
+@Slf4j
 public class RagAnswerAdvisor implements BaseAdvisor {
 
     private final VectorStore vectorStore;
@@ -101,6 +103,7 @@ public class RagAnswerAdvisor implements BaseAdvisor {
             emptyRetrievalContext.put("qa_context_dropped_count", 0);
             emptyRetrievalContext.put("qa_context_truncated", false);
 
+            log.info("RAG检索为空: query={}, filterExpression={}", userText, request.getFilterExpression());
 
             return ChatClientRequest.builder()
                     .prompt(chatClientRequest.prompt())
@@ -129,6 +132,14 @@ public class RagAnswerAdvisor implements BaseAdvisor {
 
         PromptTemplate promptTemplate = new PromptTemplate(advisedUserText);
         String rendered = promptTemplate.render(Map.of("question_answer_context", documentContext));
+
+        log.info("RAG检索结果: query={}, retrieved={}, selected={}, dropped={}, truncated={}, empty={}",
+                userText,
+                documents.size(),
+                renderedContext.selectedCount(),
+                renderedContext.droppedCount(),
+                renderedContext.truncated(),
+                false);
 
         //整个发给LLM的提示词序列，包括SystemMessage UserMessage AssistantMessage
         List<Message> instructions = new ArrayList<>(chatClientRequest.prompt().getInstructions());
@@ -201,6 +212,12 @@ public class RagAnswerAdvisor implements BaseAdvisor {
         int selectedCount = 0;
         for (int i = 0; i < documents.size(); i++) {
             Document document = documents.get(i);
+            //score ≈ 1 - distance 用于判断召回结果是否足够可信 distance位于metadata中
+            log.info("RAG召回文档: index={}, score={}, metadata={}, preview={}",
+                    i + 1,
+                    document.getScore(),
+                    document.getMetadata(),
+                    StringUtils.abbreviate(document.getText(), 200));
             String renderedDocument = "["
                     + (i + 1)
                     + "]"
