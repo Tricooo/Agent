@@ -1,5 +1,6 @@
 package com.tricoq.domain.agent.service.armory.node.factory.element;
 
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.api.AdvisorChain;
@@ -17,19 +18,17 @@ import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.filter.Filter;
 import org.springframework.ai.vectorstore.filter.FilterExpressionTextParser;
 import org.springframework.util.CollectionUtils;
-import org.springframework.util.StringUtils;
 import reactor.core.publisher.Flux;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 /**
  * RAG 顾问
  * 提供上传文档/个人知识库检索的能力
- *
+ * <p>
  * rag基本链路
  * Retrieval：找到了哪些 chunk
  * Context Assembly：怎么把 chunk 放进 prompt
@@ -45,14 +44,19 @@ public class RagAnswerAdvisor implements BaseAdvisor {
     private final SearchRequest searchRequest;
     private final String userTextAdvisor;
 
+    private static final int DEFAULT_MAX_CONTEXT_CHARS = 6000;
+    private static final String CHUNK_TRUNCATED_NOTICE = "\n...[chunk truncated]...\n";
+    private static final int MIN_CHUNK_HEAD_CHARS = 1000;
+
+
     public RagAnswerAdvisor(VectorStore vectorStore, SearchRequest searchRequest) {
         this.vectorStore = vectorStore;
         this.searchRequest = searchRequest;
         this.userTextAdvisor = """
                 
-                Context information is below,Each context chunk is prefixed with a citation number like [1], [2].
+                Context information is below, surrounded by ---------------------
+                Each context chunk is prefixed with a citation number like [1], [2].
                 When using context information, prefer mentioning the citation number.
-                surrounded by ---------------------
                 
                 ---------------------
                 {question_answer_context}
@@ -62,6 +66,7 @@ public class RagAnswerAdvisor implements BaseAdvisor {
                 reply to the user comment. If the answer is not in the context, inform
                 the user that you can't answer the question.
                 """;
+
     }
 
     /**
@@ -89,6 +94,13 @@ public class RagAnswerAdvisor implements BaseAdvisor {
             emptyRetrievalContext.put("qa_retrieved_documents", List.of());
             emptyRetrievalContext.put("qa_retrieval_empty", true);
             emptyRetrievalContext.put("question_answer_context", "");
+            emptyRetrievalContext.put("qa_retrieved_document_count", 0);
+            emptyRetrievalContext.put("qa_context_max_chars", DEFAULT_MAX_CONTEXT_CHARS);
+            emptyRetrievalContext.put("qa_context_actual_chars", 0);
+            emptyRetrievalContext.put("qa_context_selected_count", 0);
+            emptyRetrievalContext.put("qa_context_dropped_count", 0);
+            emptyRetrievalContext.put("qa_context_truncated", false);
+
 
             return ChatClientRequest.builder()
                     .prompt(chatClientRequest.prompt())
@@ -98,22 +110,18 @@ public class RagAnswerAdvisor implements BaseAdvisor {
 
         //documentContext 很长时要做裁剪/摘要（Top-K、去重、截断），否则可能超长或稀释关键信息
         //编号是建立模型引用的基础，模型可以确定编号，系统也能找到对应的引用---用于解决可溯源
-        StringBuilder documentContextBuilder = new StringBuilder();
-        for (int i = 0; i < documents.size(); i++) {
-            Document document = documents.get(i);
-            documentContextBuilder
-                    .append("[")
-                    .append(i + 1)
-                    .append("]")
-                    .append(System.lineSeparator())
-                    .append(document.getText())
-                    .append(System.lineSeparator())
-                    .append(System.lineSeparator());
-        }
-        String documentContext = documentContextBuilder.toString();
+        RenderedDocumentContext renderedContext = renderDocumentContext(documents, DEFAULT_MAX_CONTEXT_CHARS);
+        String documentContext = renderedContext.context();
         Map<String, Object> advisedUserParams = new HashMap<>(unmodifiedContext);
         //给LLM看
         advisedUserParams.put("question_answer_context", documentContext);
+        advisedUserParams.put("qa_context_max_chars", DEFAULT_MAX_CONTEXT_CHARS);
+        advisedUserParams.put("qa_context_actual_chars", documentContext.length());
+        advisedUserParams.put("qa_context_selected_count", renderedContext.selectedCount());
+        advisedUserParams.put("qa_context_dropped_count", renderedContext.droppedCount());
+        advisedUserParams.put("qa_context_truncated", renderedContext.truncated());
+
+
         //给人看 便于看到引用的文本
         advisedUserParams.put("qa_retrieved_documents", documents);
         advisedUserParams.put("qa_retrieved_document_count", documents.size());
@@ -145,7 +153,16 @@ public class RagAnswerAdvisor implements BaseAdvisor {
             return chatClientResponse;
         }
         ChatResponse response = ChatResponse.builder().from(chatResponse)
-                .metadata("qa_retrieved_documents", chatClientResponse.context().get("qa_retrieved_documents")).build();
+                .metadata("qa_retrieved_documents", chatClientResponse.context().get("qa_retrieved_documents"))
+                .metadata("qa_retrieved_document_count", chatClientResponse.context().get("qa_retrieved_document_count"))
+                .metadata("qa_retrieval_empty", chatClientResponse.context().get("qa_retrieval_empty"))
+                .metadata("qa_context_max_chars", chatClientResponse.context().get("qa_context_max_chars"))
+                .metadata("qa_context_actual_chars", chatClientResponse.context().get("qa_context_actual_chars"))
+                .metadata("qa_context_selected_count", chatClientResponse.context().get("qa_context_selected_count"))
+                .metadata("qa_context_dropped_count", chatClientResponse.context().get("qa_context_dropped_count"))
+                .metadata("qa_context_truncated", chatClientResponse.context().get("qa_context_truncated"))
+                .build();
+
         return ChatClientResponse.builder()
                 .chatResponse(response)
                 .context(chatClientResponse.context())
@@ -170,9 +187,73 @@ public class RagAnswerAdvisor implements BaseAdvisor {
 
     private Filter.Expression doGetFilterExpression(Map<String, Object> context) {
         return (context.containsKey("qa_filter_expression") &&
-                StringUtils.hasText(context.get("qa_filter_expression").toString()))
+                StringUtils.isNotBlank(context.get("qa_filter_expression").toString()))
                 ? (new FilterExpressionTextParser().parse(context.get("qa_filter_expression").toString()))
                 : searchRequest.getFilterExpression();
 
     }
+
+
+    // V1 先使用字符预算，后续可替换为 token 预算或语义边界裁剪
+    private RenderedDocumentContext renderDocumentContext(List<Document> documents, int maxContextChars) {
+        StringBuilder builder = new StringBuilder();
+        boolean truncated = false;
+        int selectedCount = 0;
+        for (int i = 0; i < documents.size(); i++) {
+            Document document = documents.get(i);
+            String renderedDocument = "["
+                    + (i + 1)
+                    + "]"
+                    + System.lineSeparator()
+                    + document.getText()
+                    + System.lineSeparator()
+                    + System.lineSeparator();
+
+            int remainingChars = maxContextChars - builder.length();
+            String safeRenderedDocument = truncateChunkIfNeeded(renderedDocument, remainingChars);
+            if (StringUtils.isBlank(safeRenderedDocument)) {
+                break;
+            }
+            selectedCount++;
+            builder.append(safeRenderedDocument);
+            if (safeRenderedDocument.length() < renderedDocument.length()) {
+                //被截断就不用进行下一轮了
+                truncated = true;
+                break;
+            }
+        }
+        return new RenderedDocumentContext(
+                builder.toString(),
+                selectedCount,
+                documents.size() - selectedCount,
+                truncated
+        );
+
+
+    }
+
+    private String truncateChunkIfNeeded(String renderedDocument, int remainingChars) {
+        if (renderedDocument.length() <= remainingChars) {
+            return renderedDocument;
+        }
+
+        if (remainingChars <= CHUNK_TRUNCATED_NOTICE.length()) {
+            return "";
+        }
+
+        int available = remainingChars - CHUNK_TRUNCATED_NOTICE.length();
+        int headChars = Math.min(MIN_CHUNK_HEAD_CHARS, available);
+
+        return renderedDocument.substring(0, headChars)
+                + CHUNK_TRUNCATED_NOTICE;
+    }
+
+    private record RenderedDocumentContext(
+            String context,
+            int selectedCount,
+            int droppedCount,
+            boolean truncated
+    ) {
+    }
+
 }

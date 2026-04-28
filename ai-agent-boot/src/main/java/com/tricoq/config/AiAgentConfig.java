@@ -30,6 +30,9 @@ public class AiAgentConfig {
      * content TEXT NOT NULL,
      * metadata JSONB,
      * embedding VECTOR(1536)
+     *
+     * <p>当前 PgVector 表维度固定为 1536。使用 gemini-embedding-2 时需要显式配置
+     * spring.ai.openai.embedding.options.dimensions=1536，避免模型默认 3072 维与表结构不一致。
      * );
      * <p>
      * SELECT * FROM vector_store_openai
@@ -37,6 +40,8 @@ public class AiAgentConfig {
     @Bean("vectorStore")
     public PgVectorStore pgVectorStore(@Value("${spring.ai.openai.base-url}") String baseUrl,
                                        @Value("${spring.ai.openai.api-key}") String apiKey,
+                                       @Value("${spring.ai.openai.embedding.options.model:gemini-embedding-2}") String embeddingModelName,
+                                       @Value("${spring.ai.openai.embedding.options.dimensions:1536}") Integer embeddingDimensions,
                                        @Qualifier("pgVectorJdbcTemplate") JdbcTemplate jdbcTemplate) {
 
         OpenAiApi openAiApi = OpenAiApi.builder()
@@ -46,7 +51,10 @@ public class AiAgentConfig {
 
 
         OpenAiEmbeddingModel embeddingModel = new OpenAiEmbeddingModel(openAiApi, MetadataMode.NONE,
-                OpenAiEmbeddingOptions.builder().model("gemini-embedding-001").build());
+                OpenAiEmbeddingOptions.builder()
+                        .model(embeddingModelName)
+                        .dimensions(embeddingDimensions)
+                        .build());
         return PgVectorStore.builder(jdbcTemplate, embeddingModel)
                 .vectorTableName("vector_store_openai")
                 .build();

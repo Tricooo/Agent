@@ -10,16 +10,14 @@ import com.tricoq.domain.agent.model.request.StructuredInvocationRequest;
 import com.tricoq.domain.agent.model.request.TextInvocationRequest;
 import com.tricoq.domain.agent.spi.AiClientRuntimeRegistry;
 import com.tricoq.domain.agent.spi.LlmInvocationFacade;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.retry.NonTransientAiException;
 import org.springframework.ai.retry.TransientAiException;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
-import java.io.IOException;
-import java.net.SocketTimeoutException;
 import java.util.Optional;
 import java.util.concurrent.*;
 import java.util.function.Supplier;
@@ -30,7 +28,6 @@ import java.util.function.Supplier;
  * @date: 4/16/26
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class SpringAiLlmInvocationGateway extends SpringAiSupport implements LlmInvocationFacade {
 
@@ -39,6 +36,12 @@ public class SpringAiLlmInvocationGateway extends SpringAiSupport implements Llm
     private final ExecutorService llmInvocationExecutor;
 
     private final AiClientRuntimeRegistry runtimeRegistry;
+
+    public SpringAiLlmInvocationGateway(@Qualifier("llmInvocationExecutor") ExecutorService llmInvocationExecutor,
+                                        AiClientRuntimeRegistry runtimeRegistry) {
+        this.llmInvocationExecutor = llmInvocationExecutor;
+        this.runtimeRegistry = runtimeRegistry;
+    }
 
     private static final String CHAT_MEMORY_CONVERSATION_ID_KEY = "chat_memory_conversation_id";
     private static final String CHAT_MEMORY_RETRIEVE_SIZE_KEY = "chat_memory_response_size";

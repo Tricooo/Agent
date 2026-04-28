@@ -11,8 +11,8 @@ import com.tricoq.domain.agent.model.dto.AiClientToolMcpDTO;
 import com.tricoq.domain.agent.model.dto.AiClientDTO;
 import com.tricoq.domain.agent.service.armory.business.data.ILoadDataStrategy;
 import com.tricoq.domain.agent.service.armory.node.factory.DefaultArmoryStrategyFactory;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -28,13 +28,18 @@ import java.util.concurrent.TimeUnit;
  * @date 10/23/25
  */
 @Component
-@RequiredArgsConstructor
 @Slf4j
 public class AiClientLoadDataStrategy implements ILoadDataStrategy {
 
     private final IClientRepository clientRepository;
 
     private final ThreadPoolExecutor threadPoolExecutor;
+
+    public AiClientLoadDataStrategy(IClientRepository clientRepository,
+                                    @Qualifier("threadPoolExecutor") ThreadPoolExecutor threadPoolExecutor) {
+        this.clientRepository = clientRepository;
+        this.threadPoolExecutor = threadPoolExecutor;
+    }
 
     @Override
     public void loadData(ArmoryCommandEntity entity, DefaultArmoryStrategyFactory.DynamicContext dynamicContext) {

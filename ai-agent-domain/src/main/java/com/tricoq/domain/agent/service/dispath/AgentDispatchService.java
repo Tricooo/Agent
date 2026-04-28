@@ -7,8 +7,8 @@ import com.tricoq.domain.agent.service.IAgentDispatchService;
 import com.tricoq.domain.agent.service.IExecuteStrategy;
 import com.tricoq.domain.agent.shared.ExecuteOutputPort;
 import com.tricoq.types.exception.BizException;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 import java.util.Map;
@@ -21,7 +21,6 @@ import java.util.concurrent.ThreadPoolExecutor;
  * @date 11/13/25
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class AgentDispatchService implements IAgentDispatchService {
 
@@ -30,6 +29,14 @@ public class AgentDispatchService implements IAgentDispatchService {
     private final Map<String, IExecuteStrategy> executeStrategies;
 
     private final ThreadPoolExecutor executor;
+
+    public AgentDispatchService(IAgentRepository agentRepository,
+                                Map<String, IExecuteStrategy> executeStrategies,
+                                @Qualifier("threadPoolExecutor") ThreadPoolExecutor executor) {
+        this.agentRepository = agentRepository;
+        this.executeStrategies = executeStrategies;
+        this.executor = executor;
+    }
 
     @Override
     public void dispatch(ExecuteCommandEntity commandEntity, ExecuteOutputPort port) {

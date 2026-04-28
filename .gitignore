@@ -44,3 +44,10 @@ CLAUDE.md
 
 ### Mac OS ###
 .DS_Store
+
+### Local secrets / environment ###
+.env
+.env.*
+!.env.example
+application-local.yml
+application-*.local.yml
