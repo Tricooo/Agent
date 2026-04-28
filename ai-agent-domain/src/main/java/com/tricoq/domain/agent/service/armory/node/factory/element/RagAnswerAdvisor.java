@@ -49,6 +49,7 @@ public class RagAnswerAdvisor implements BaseAdvisor {
     private static final int DEFAULT_MAX_CONTEXT_CHARS = 6000;
     private static final String CHUNK_TRUNCATED_NOTICE = "\n...[chunk truncated]...\n";
     private static final int MIN_CHUNK_HEAD_CHARS = 1000;
+    private static final String EMPTY_RETRIEVAL_CONTEXT = "未检索到满足当前知识库过滤条件和相似度阈值的知识片段。请明确告知用户：当前知识库没有可用上下文，不能基于知识库回答该问题。";
 
 
     public RagAnswerAdvisor(VectorStore vectorStore, SearchRequest searchRequest) {
@@ -91,22 +92,34 @@ public class RagAnswerAdvisor implements BaseAdvisor {
                 .filterExpression(doGetFilterExpression(context)).build();
         List<Document> documents = vectorStore.similaritySearch(request);
         if (CollectionUtils.isEmpty(documents)) {
-            //空召回不可静默，是RAG链路重要状态
+            // 空召回不可静默，是 RAG 链路重要状态；同时不能退化成普通聊天，仍要把“无可用上下文”的边界写进 prompt。
+            String emptyContext = EMPTY_RETRIEVAL_CONTEXT;
             HashMap<String, Object> emptyRetrievalContext = new HashMap<>(unmodifiedContext);
             emptyRetrievalContext.put("qa_retrieved_documents", List.of());
             emptyRetrievalContext.put("qa_retrieval_empty", true);
-            emptyRetrievalContext.put("question_answer_context", "");
+            emptyRetrievalContext.put("question_answer_context", emptyContext);
             emptyRetrievalContext.put("qa_retrieved_document_count", 0);
             emptyRetrievalContext.put("qa_context_max_chars", DEFAULT_MAX_CONTEXT_CHARS);
-            emptyRetrievalContext.put("qa_context_actual_chars", 0);
+            emptyRetrievalContext.put("qa_context_actual_chars", emptyContext.length());
             emptyRetrievalContext.put("qa_context_selected_count", 0);
             emptyRetrievalContext.put("qa_context_dropped_count", 0);
             emptyRetrievalContext.put("qa_context_truncated", false);
+            emptyRetrievalContext.put("qa_similarity_threshold", request.getSimilarityThreshold());
 
-            log.info("RAG检索为空: query={}, filterExpression={}", userText, request.getFilterExpression());
+            PromptTemplate promptTemplate = new PromptTemplate(advisedUserText);
+            String rendered = promptTemplate.render(Map.of("question_answer_context", emptyContext));
+
+            log.info("RAG检索为空: query={}, filterExpression={}, similarityThreshold={}",
+                    userText, request.getFilterExpression(), request.getSimilarityThreshold());
+
+            List<Message> instructions = new ArrayList<>(chatClientRequest.prompt().getInstructions());
+            instructions.set(instructions.size() - 1, new UserMessage(rendered));
 
             return ChatClientRequest.builder()
-                    .prompt(chatClientRequest.prompt())
+                    .prompt(Prompt.builder()
+                            .messages(instructions)
+                            .chatOptions(chatClientRequest.prompt().getOptions())
+                            .build())
                     .context(emptyRetrievalContext)
                     .build();
         }
@@ -115,6 +128,8 @@ public class RagAnswerAdvisor implements BaseAdvisor {
         //编号是建立模型引用的基础，模型可以确定编号，系统也能找到对应的引用---用于解决可溯源
         RenderedDocumentContext renderedContext = renderDocumentContext(documents, DEFAULT_MAX_CONTEXT_CHARS);
         String documentContext = renderedContext.context();
+        Double minScore = minScore(documents);
+        Double maxScore = maxScore(documents);
         Map<String, Object> advisedUserParams = new HashMap<>(unmodifiedContext);
         //给LLM看
         advisedUserParams.put("question_answer_context", documentContext);
@@ -123,6 +138,9 @@ public class RagAnswerAdvisor implements BaseAdvisor {
         advisedUserParams.put("qa_context_selected_count", renderedContext.selectedCount());
         advisedUserParams.put("qa_context_dropped_count", renderedContext.droppedCount());
         advisedUserParams.put("qa_context_truncated", renderedContext.truncated());
+        advisedUserParams.put("qa_similarity_threshold", request.getSimilarityThreshold());
+        advisedUserParams.put("qa_min_retrieved_score", minScore);
+        advisedUserParams.put("qa_max_retrieved_score", maxScore);
 
 
         //给人看 便于看到引用的文本
@@ -133,13 +151,16 @@ public class RagAnswerAdvisor implements BaseAdvisor {
         PromptTemplate promptTemplate = new PromptTemplate(advisedUserText);
         String rendered = promptTemplate.render(Map.of("question_answer_context", documentContext));
 
-        log.info("RAG检索结果: query={}, retrieved={}, selected={}, dropped={}, truncated={}, empty={}",
+        log.info("RAG检索结果: query={}, retrieved={}, selected={}, dropped={}, truncated={}, empty={}, similarityThreshold={}, minScore={}, maxScore={}",
                 userText,
                 documents.size(),
                 renderedContext.selectedCount(),
                 renderedContext.droppedCount(),
                 renderedContext.truncated(),
-                false);
+                false,
+                request.getSimilarityThreshold(),
+                minScore,
+                maxScore);
 
         //整个发给LLM的提示词序列，包括SystemMessage UserMessage AssistantMessage
         List<Message> instructions = new ArrayList<>(chatClientRequest.prompt().getInstructions());
@@ -159,24 +180,29 @@ public class RagAnswerAdvisor implements BaseAdvisor {
      */
     @Override
     public ChatClientResponse after(ChatClientResponse chatClientResponse, AdvisorChain advisorChain) {
-        ChatResponse chatResponse = chatClientResponse.chatResponse();
-        if (null == chatResponse) {
+        if (chatClientResponse == null || chatClientResponse.chatResponse() == null) {
             return chatClientResponse;
         }
-        ChatResponse response = ChatResponse.builder().from(chatResponse)
-                .metadata("qa_retrieved_documents", chatClientResponse.context().get("qa_retrieved_documents"))
-                .metadata("qa_retrieved_document_count", chatClientResponse.context().get("qa_retrieved_document_count"))
-                .metadata("qa_retrieval_empty", chatClientResponse.context().get("qa_retrieval_empty"))
-                .metadata("qa_context_max_chars", chatClientResponse.context().get("qa_context_max_chars"))
-                .metadata("qa_context_actual_chars", chatClientResponse.context().get("qa_context_actual_chars"))
-                .metadata("qa_context_selected_count", chatClientResponse.context().get("qa_context_selected_count"))
-                .metadata("qa_context_dropped_count", chatClientResponse.context().get("qa_context_dropped_count"))
-                .metadata("qa_context_truncated", chatClientResponse.context().get("qa_context_truncated"))
-                .build();
+        Map<String, Object> responseContext = chatClientResponse.context() == null
+                ? Map.of()
+                : chatClientResponse.context();
+
+        ChatResponse.Builder responseBuilder = ChatResponse.builder().from(chatClientResponse.chatResponse());
+        addMetadataIfPresent(responseBuilder, responseContext, "qa_retrieved_documents");
+        addMetadataIfPresent(responseBuilder, responseContext, "qa_retrieved_document_count");
+        addMetadataIfPresent(responseBuilder, responseContext, "qa_retrieval_empty");
+        addMetadataIfPresent(responseBuilder, responseContext, "qa_context_max_chars");
+        addMetadataIfPresent(responseBuilder, responseContext, "qa_context_actual_chars");
+        addMetadataIfPresent(responseBuilder, responseContext, "qa_context_selected_count");
+        addMetadataIfPresent(responseBuilder, responseContext, "qa_context_dropped_count");
+        addMetadataIfPresent(responseBuilder, responseContext, "qa_context_truncated");
+        addMetadataIfPresent(responseBuilder, responseContext, "qa_similarity_threshold");
+        addMetadataIfPresent(responseBuilder, responseContext, "qa_min_retrieved_score");
+        addMetadataIfPresent(responseBuilder, responseContext, "qa_max_retrieved_score");
 
         return ChatClientResponse.builder()
-                .chatResponse(response)
-                .context(chatClientResponse.context())
+                .chatResponse(responseBuilder.build())
+                .context(responseContext)
                 .build();
     }
 
@@ -263,6 +289,37 @@ public class RagAnswerAdvisor implements BaseAdvisor {
 
         return renderedDocument.substring(0, headChars)
                 + CHUNK_TRUNCATED_NOTICE;
+    }
+
+    private void addMetadataIfPresent(ChatResponse.Builder responseBuilder, Map<String, Object> context, String key) {
+        Object value = context.get(key);
+        if (value != null) {
+            responseBuilder.metadata(key, value);
+        }
+    }
+
+    private Double minScore(List<Document> documents) {
+        Double minScore = null;
+        for (Document document : documents) {
+            Double score = document.getScore();
+            if (score == null) {
+                continue;
+            }
+            minScore = minScore == null ? score : Math.min(minScore, score);
+        }
+        return minScore;
+    }
+
+    private Double maxScore(List<Document> documents) {
+        Double maxScore = null;
+        for (Document document : documents) {
+            Double score = document.getScore();
+            if (score == null) {
+                continue;
+            }
+            maxScore = maxScore == null ? score : Math.max(maxScore, score);
+        }
+        return maxScore;
     }
 
     private record RenderedDocumentContext(
