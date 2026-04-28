@@ -158,6 +158,9 @@ public class ClientRepositoryImpl extends MpAggregateRepository<AiClientAggregat
         Set<String> mcpIdSet = Stream.of(clientMcpIdSet, modelMcpIdSet)
                 .flatMap(Set::stream)
                 .collect(Collectors.toSet());
+        if (mcpIdSet.isEmpty()) {
+            return List.of();
+        }
         List<AiClientToolMcp> mcps = toolMcpDaoSupport.queryByMcpIdsEnabled(mcpIdSet);
         return toAiClientToolMcpDTOs(mcps);
     }

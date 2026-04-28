@@ -12,7 +12,9 @@ import org.springframework.ai.vectorstore.pgvector.PgVectorStore;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * 知识库服务
@@ -38,26 +40,35 @@ public class RagService implements IRagService {
      * @param tag
      * @param files
      */
+    //todo 这里需要设计保证原子性
     @Override
     public void storeRagFile(String name, String tag, List<MultipartFile> files) {
+        String ragId = UUID.randomUUID().toString().replace("-", "");
+
+        List<Document> allDocuments = new ArrayList<>();
+
         for (MultipartFile file : files) {
-            //把上传的文件解析成可读取的文档内容
             TikaDocumentReader documentReader = new TikaDocumentReader(file.getResource());
-            //把长文档切成多个较小文本块，方便后面做向量化和检索
-            List<Document> documentList = tokenTextSplitter.apply(documentReader.get());
+            List<Document> documents = tokenTextSplitter.apply(documentReader.get());
 
-            //给每个文本块打上知识库标签，后面检索时可以按标签过滤
-            documentList.forEach(doc -> doc.getMetadata().put("knowledge", tag));
+            documents.forEach(doc -> {
+                doc.getMetadata().put("knowledge", tag);
+                doc.getMetadata().put("rag_id", ragId);
+                doc.getMetadata().put("file_name", file.getOriginalFilename());
+            });
 
-            // 存储知识库文件
-            vectorStore.accept(documentList);
-
-            // 存储到数据库
-            AiRagOrderDTO aiRagOrderVO = new AiRagOrderDTO();
-            aiRagOrderVO.setRagName(name);
-            aiRagOrderVO.setKnowledgeTag(tag);
-            ragRepository.insert(aiRagOrderVO);
+            allDocuments.addAll(documents);
         }
+
+        vectorStore.accept(allDocuments);
+
+        AiRagOrderDTO aiRagOrderVO = new AiRagOrderDTO();
+        aiRagOrderVO.setRagId(ragId);
+        aiRagOrderVO.setRagName(name);
+        aiRagOrderVO.setKnowledgeTag(tag);
+        aiRagOrderVO.setStatus(1);
+        ragRepository.insert(aiRagOrderVO);
+
     }
 
 }

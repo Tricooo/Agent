@@ -83,7 +83,7 @@ services:
         condition: service_healthy
 
   vector_db:
-    image: pgvector/pgvector:v0.5.0
+    image: pgvector/pgvector:pg16
     container_name: vector_db
     restart: always
     environment:
@@ -100,7 +100,7 @@ services:
     ports:
       - '5432:5432'
     healthcheck:
-      test: "pg_isready -U postgres -d vector_store"
+      test: "pg_isready -U postgres -d springai"
       interval: 2s
       timeout: 20s
       retries: 10
