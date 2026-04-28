@@ -18,7 +18,7 @@ spring:
     mysql:
       username: root
       password: 123456
-      url: jdbc:mysql://127.0.0.1:13306/ai-agent-station?useUnicode=true&characterEncoding=utf8&autoReconnect=true&zeroDateTimeBehavior=convertToNull&serverTimezone=Asia/Shanghai&useSSL=true
+      url: jdbc:mysql://127.0.0.1:13306/ai-agent-station-study?useUnicode=true&characterEncoding=utf8&autoReconnect=true&zeroDateTimeBehavior=convertToNull&serverTimezone=Asia/Shanghai&useSSL=true
       driver-class-name: com.mysql.cj.jdbc.Driver
       type: com.zaxxer.hikari.HikariDataSource
       hikari:
@@ -43,26 +43,32 @@ spring:
         connection-timeout: 30000
   ai:
     openai:
-      base-url: https://generativelanguage.googleapis.com/v1beta/openai
-      api-key: AIzaSyBUmEoiDlom1595xI684MH_cZFcra6jD4E
+      # OpenAI-compatible endpoint. 本地通过环境变量注入，避免真实 key 进入仓库。
+      # 当前这组配置同时会被默认 ChatModel 和 AiAgentConfig 中的 EmbeddingModel 使用，
+      # 因此不要把只支持 chat 的供应商（如 DeepSeek chat）直接填到这里，除非你确认不会跑 embedding。
+      base-url: ${OPENAI_BASE_URL:https://generativelanguage.googleapis.com/v1beta/openai}
+      api-key: ${OPENAI_API_KEY:}
       http:
         connect-timeout: 5s
         read-timeout: 25s
         response-timeout: 25s
       chat:
         options:
-          model: gemini-flash-latest
+          model: ${OPENAI_CHAT_MODEL:gemini-flash-latest}
         completions-path: /chat/completions
       embedding:
         options:
-          model: text-embedding-004
+          model: ${OPENAI_EMBEDDING_MODEL:gemini-embedding-2}
+          # PgVector 表结构当前是 VECTOR(1536)。gemini-embedding-2 默认 3072 维，这里显式收敛到 1536。
+          dimensions: ${OPENAI_EMBEDDING_DIMENSIONS:1536}
     mcp:
       client:
-        stdio:
-          servers-configuration: classpath:/config/mcp-servers-config.json
+        enabled: false
+    #        stdio:
+#          servers-configuration: classpath:/config/mcp-servers-config.json
     agent:
       auto-config:
-        enabled: true
+        enabled: false
 
 mybatis-plus:
   configuration:
