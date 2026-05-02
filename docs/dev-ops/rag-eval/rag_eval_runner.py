@@ -75,7 +75,11 @@ def summarize_events(events: list[dict[str, Any]]) -> tuple[str, bool, list[dict
         event_type = event.get("type")
         if event_type == "summary":
             summary_parts.append(str(event.get("content", "")))
-        if event_type == "complete" or event.get("completed") is True:
+        # 只认终端 type=complete 帧。AutoAgentExecuteResultEntity.createSummaryResult
+        # 出于 task 语义也会把 completed=true 写进 summary 事件，但那不等于 SSE
+        # 流收尾。如果只看 completed=true 旁路，port.complete() 失败 / 连接中断
+        # 这种纯收尾问题会被掩盖。Codex P2 review 指出。
+        if event_type == "complete":
             completed = True
         if event_type == "retrieval":
             retrievals.append({
@@ -191,6 +195,8 @@ def write_markdown(path: Path, results: list[dict[str, Any]], api_url: str, agen
     lines.append("## Summary")
     lines.append("")
     lines.append("> `literal_hit` 仅做字面子串匹配，是 smoke signal。`score_mode=manual` 的 case（拒答 / 改写 / 概念题）不做字面匹配，统一看 `manual_pass`；`score_mode=literal` 的 case（参数 / 公式 / 清单）才参考 `literal_hit`。")
+    lines.append(">")
+    lines.append("> `retrieved` / `score` / `empty` 三列的 `—` 表示**没拿到成功的 ChatResponse metadata**，不等价于\"无检索\"。当前实现把 retrieval SSE 帧放在 `.call().chatResponse()` 返回之后才发，所以 LLM 调用失败时（即使 RAG 检索本身成功）三列都会是 `—`。要区分\"检索失败\"和\"生成失败\"，对照 `error` 列 / details 区 / backend log。")
     lines.append("")
     lines.append("| id | type | completed | duration_ms | should_answer | retrieved | score | empty | literal_hit | missed_points | answer_preview | manual_pass |")
     lines.append("|---|---|---:|---:|---:|---:|---|---:|---:|---|---|---|")
