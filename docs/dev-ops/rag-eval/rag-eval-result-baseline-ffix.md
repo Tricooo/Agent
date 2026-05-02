@@ -1,6 +1,6 @@
 # RAG Eval Result
 
-- generated_at: `2026-05-02 03:45:59`
+- generated_at: `2026-05-02 04:14:56`
 - api_url: `http://localhost:8099/api/v1/agent/auto_agent`
 - agent_id: `rag_demo`
 
@@ -10,16 +10,16 @@
 
 | id | type | completed | duration_ms | should_answer | retrieved | score | empty | literal_hit | missed_points | answer_preview | manual_pass |
 |---|---|---:|---:|---:|---:|---|---:|---:|---|---|---|
-| RAG-01 | answerable | true | 16334 | true | 3 | 0.6001 .. 0.7641 | false | manual | — | 根据提供的上下文，`grafana/list_datasources` 工具的作用是： **核心功能** 列出并获取 Grafana 实例中已配置的所有数据源的信息。如 [1] 中所述，其功能描述为“获取Grafana中配置的所有数据源”和... |  |
-| RAG-02 | answerable | true | 21741 | true | 3 | 0.6656 .. 0.7146 | false | 4/4 |  | 根据提供的文档信息，`grafana/query_prometheus` 支持以下参数： - **`query`**（必需）：要执行的 PromQL 查询语句。 - **`start`**（可选）：查询的开始时间。 - **`end`**（... |  |
-| RAG-03 | answerable_formula | true | 11343 | true | 3 | 0.6479 .. 0.6908 | false | 3/3 |  | 根据知识库中的信息，CPU 使用率的 PromQL 查询示例如下： - **整体 CPU 使用率**： ```promql 100 - (avg(irate(node_cpu_seconds_total{mode="idle"}[5m]))... |  |
-| RAG-04 | answerable_deep_section | true | 14370 | true | 3 | 0.6305 .. 0.6481 | false | 2/3 | 7*24*3600 | 根据上下文 [1] 中“趋势预测”部分，预测磁盘 7 天增长趋势可使用内置的 `predict_linear` 函数。示例 PromQL 如下： ```promql predict_linear(node_filesystem_avail_... |  |
-| RAG-05 | answerable_long_context | false | 30323 | true | — | — | — | 0/5 | CPU, 内存, 磁盘, 网络, 综合评估 |  |  |
-| RAG-06 | unanswerable | true | 6605 | false | 0 | — | true | manual | — | 根据知识库的检索结果，当前没有找到与您问题相关的上下文信息，因此我无法基于知识库为您解答 MySQL InnoDB MVCC undo log 版本链的实现细节。如果您有其他非知识库类问题，我可以尝试提供通用帮助。 |  |
-| RAG-07 | weak_related | true | 7639 | false | 3 | 0.6185 .. 0.6645 | false | manual | — | 根据当前的知识库内容，主要涵盖了Grafana MCP工具的使用方法、Prometheus查询示例和监控分析流程，并未包含关于Grafana dashboard变量模板配置的具体说明。因此，我无法针对“Grafana dashboard 变... |  |
-| RAG-08 | weak_related | true | 4504 | false | 0 | — | true | manual | — | 根据当前知识库的检索结果，未找到与 Alertmanager silence 创建相关的任何可用知识片段。因此，我无法基于知识库为您提供答案。建议您查阅 Alertmanager 官方文档或相关资源以获取帮助。 |  |
-| RAG-09 | paraphrase | true | 9349 | true | 3 | 0.6406 .. 0.8130 | false | manual | — | 要确认监控数据来源，您应该调用 **`grafana/list_datasources`** 工具。 该工具会列出 Grafana 中所有已配置的数据源，返回信息包括数据源 ID、名称、类型（如 `prometheus`）、URL 以及是否... |  |
-| RAG-10 | paraphrase | true | 19406 | true | 3 | 0.6379 .. 0.6703 | false | 5/5 |  | 根据知识库的内容，查询内存压力的核心思路是通过计算当前内存使用率来评估内存压力状况。 具体的分析查询思路包含在基础查询和深度分析两个维度中： 1. **内存使用率查询**（用于评估当前压力状况） 参考引用 [1] 和 [2]，使用以下 Pr... |  |
+| RAG-01 | answerable | true | 11320 | true | 3 | 0.6001 .. 0.7641 | false | manual | — | 根据知识库，`grafana/list_datasources` 工具的主要作用是**列出所有可用的数据源** [1]。 具体来说，它的功能包括： * 获取Grafana中配置的所有数据源 [1] * 返回数据源的基本信息，如ID、名称、类... |  |
+| RAG-02 | answerable | true | 13343 | true | 3 | 0.6656 .. 0.7146 | false | 4/4 |  | 根据 Grafana MCP 工具文档，`grafana/query_prometheus` 支持以下四个参数： - **`query`** *(必填)*：PromQL 查询语句，例如 `up` 或 CPU 使用率表达式。 - **`sta... |  |
+| RAG-03 | answerable_formula | true | 15791 | true | 3 | 0.6479 .. 0.6908 | false | 3/3 |  | 根据知识库 [1] 和 [2] 的内容，CPU 使用率的 PromQL 示例如下： **1. 整体 CPU 使用率** 计算 `[5m]`（5分钟）范围内的整体 CPU 使用率： ```promql 100 - (avg(irate(nod... |  |
+| RAG-04 | answerable_deep_section | false | 28240 | true | — | — | — | 0/3 | predict_linear, node_filesystem_avail_bytes, 7*24*3600 |  |  |
+| RAG-05 | answerable_long_context | true | 8192 | true | 2 | 0.6499 .. 0.6907 | false | 5/5 |  | 根据提供的上下文，系统健康报告模板主要包含以下几个部分（详见[1]）： - **监控数据概览**：涵盖监控时间范围、数据源、分析时间等基本信息。 - **CPU 使用情况**：包括平均使用率、峰值使用率、状态评估和趋势分析。 - **内存使... |  |
+| RAG-06 | unanswerable | true | 4910 | false | 0 | — | true | manual | — | 根据当前提供的知识库内容，未检索到满足过滤条件和相似度阈值的相关片段，因此无法基于知识库回答关于 MySQL InnoDB MVCC undo log 版本链实现的问题。建议您查阅官方文档或相关技术资料获取详细信息。 |  |
+| RAG-07 | weak_related | true | 10213 | false | 3 | 0.6185 .. 0.6645 | false | manual | — | 根据提供的知识库内容，主要介绍了通过 Grafana MCP 工具进行自动化监控分析（如列出数据源、执行 Prometheus 查询、报告生成等），**并未包含关于 Grafana Dashboard 变量模板配置的具体方法**。知识库中的... |  |
+| RAG-08 | weak_related | true | 10488 | false | 0 | — | true | manual | — | 根据当前提供的知识库上下文，未检索到与“Alertmanager 的 silence 创建方法”相关的可用片段。因此，我无法基于现有知识库回答您的问题。 建议您查阅 Alertmanager 官方文档，或重新提供更具体的知识库内容以便我能为... |  |
+| RAG-09 | paraphrase | true | 12330 | true | 3 | 0.6406 .. 0.8130 | false | manual | — | 要确认监控数据的来源，应该调用 **`grafana/list_datasources`** 工具。 根据指南中的说明，这个工具的功能就是获取 Grafana 中所有配置的数据源信息（如 Prometheus 的 ID、名称、URL 等），... |  |
+| RAG-10 | paraphrase | true | 14274 | true | 3 | 0.6379 .. 0.6703 | false | 5/5 |  | 根据知识库内容，查询内存压力的思路主要分为以下几步： 1. **执行查询语句**：使用 PromQL 查询 `(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes... |  |
 
 ## Details
 
@@ -29,7 +29,7 @@
 - should_answer: `true`
 - expected_source_section: grafana/list_datasources
 - completed: `true`
-- duration_ms: `16334`
+- duration_ms: `11320`
 - score_mode: `manual`
 - expected_points:
   - 列出所有可用的数据源
@@ -48,18 +48,14 @@ retrieval:
 answer:
 
 ```text
-根据提供的上下文，`grafana/list_datasources` 工具的作用是：
+根据知识库，`grafana/list_datasources` 工具的主要作用是**列出所有可用的数据源** [1]。
 
-**核心功能**
-列出并获取 Grafana 实例中已配置的所有数据源的信息。如 [1] 中所述，其功能描述为“获取Grafana中配置的所有数据源”和“返回数据源的基本信息（ID、名称、类型、URL等）”。
+具体来说，它的功能包括：
+*   获取Grafana中配置的所有数据源 [1]
+*   返回数据源的基本信息，如ID、名称、类型、URL等 [1]
+*   用于确认特定数据源（如Prometheus）的可用性 [1]
 
-**主要使用场景**
-如 [1] 中所述，它主要用于：
-1.  **系统分析前的数据源检查**：在进行监控分析之前，确认环境中有哪些数据源可用。
-2.  **确认监控数据的来源**：特别是用于确认 Prometheus 数据源是否存在且配置正确。
-3.  **多数据源环境的管理**：帮助管理和了解复杂环境中的多个数据源。
-
-同时，根据 [2] 和 [3] 中的故障排查流程，它也是验证数据源可用性的第一步操作。
+常见使用场景是系统分析前的数据源检查以及多数据源环境的管理 [1]。在自动化监控分析流程中，它通常也是第一步，用于验证数据源是否可用 [2]。
 ```
 
 ### RAG-02 - answerable
@@ -68,7 +64,7 @@ answer:
 - should_answer: `true`
 - expected_source_section: grafana/query_prometheus 参数说明
 - completed: `true`
-- duration_ms: `21741`
+- duration_ms: `13343`
 - score_mode: `literal`
 - expected_points:
   - [x] query
@@ -88,14 +84,22 @@ retrieval:
 answer:
 
 ```text
-根据提供的文档信息，`grafana/query_prometheus` 支持以下参数：
+根据 Grafana MCP 工具文档，`grafana/query_prometheus` 支持以下四个参数：
 
-- **`query`**（必需）：要执行的 PromQL 查询语句。
-- **`start`**（可选）：查询的开始时间。
-- **`end`**（可选）：查询的结束时间。
-- **`step`**（可选）：查询的步长。
+- **`query`** *(必填)*：PromQL 查询语句，例如 `up` 或 CPU 使用率表达式。
+- **`start`** *(可选)*：查询开始时间，支持相对时间（如 `now-1h`）或绝对时间，不指定时使用默认时间范围。
+- **`end`** *(可选)*：查询结束时间，格式同 `start`，不指定时使用默认时间范围。
+- **`step`** *(可选)*：查询步长（采样分辨率），用于控制返回数据点的间隔，适用于范围查询，不指定时由系统自动计算。
 
-其中 `query` 是必填参数，其余三个用于限定时间范围和采样粒度。
+典型调用示例：
+```json
+{
+  "query": "100 - (avg(irate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
+  "start": "now-1h",
+  "end": "now",
+  "step": "15s"
+}
+```
 ```
 
 ### RAG-03 - answerable_formula
@@ -104,7 +108,7 @@ answer:
 - should_answer: `true`
 - expected_source_section: CPU使用率查询
 - completed: `true`
-- duration_ms: `11343`
+- duration_ms: `15791`
 - score_mode: `literal`
 - expected_points:
   - [x] node_cpu_seconds_total
@@ -123,24 +127,27 @@ retrieval:
 answer:
 
 ```text
-根据知识库中的信息，CPU 使用率的 PromQL 查询示例如下：
+根据知识库 [1] 和 [2] 的内容，CPU 使用率的 PromQL 示例如下：
 
--   **整体 CPU 使用率**：
-    ```promql
-    100 - (avg(irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
-    ```
-    这个查询计算的是所有实例的平均 CPU 使用率【1】。
+**1. 整体 CPU 使用率**
+计算 `[5m]`（5分钟）范围内的整体 CPU 使用率：
+```promql
+100 - (avg(irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
+```
 
--   **按实例分组的 CPU 使用率**：
-    ```promql
-    100 - (avg by (instance)(irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
-    ```
-    这个查询会分别展示每个实例的 CPU 使用率【1】。
+**2. 按实例分组的 CPU 使用率**
+按 `instance` 标签分组显示各实例的 CPU 使用率：
+```promql
+100 - (avg by (instance)(irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
+```
 
-此外，在自动化分析流程中，也有一个查询过去 1 小时 CPU 使用率的变体【2】：
+**3. 长时间范围的 CPU 分析**
+在自动化分析流程中，查询过去 1 小时（`[1h]`）的 CPU 使用率 [2]：
 ```promql
 100 - (avg(irate(node_cpu_seconds_total{mode="idle"}[1h])) * 100)
 ```
+
+你可以根据需要调整时间范围（如 `[5m]`、`[1h]` 等）来监控不同窗口期的 CPU 负载。
 ```
 
 ### RAG-04 - answerable_deep_section
@@ -148,38 +155,19 @@ answer:
 - question: 磁盘 7 天增长趋势预测用哪个 PromQL？
 - should_answer: `true`
 - expected_source_section: 趋势预测
-- completed: `true`
-- duration_ms: `14370`
+- completed: `false`
+- duration_ms: `28240`
 - score_mode: `literal`
+- error: `RestClientException: Error while extracting response for type [org.springframework.ai.openai.api.OpenAiApi$ChatCompletion] and content type [application/json]`
 - expected_points:
-  - [x] predict_linear
-  - [x] node_filesystem_avail_bytes
+  - [ ] predict_linear
+  - [ ] node_filesystem_avail_bytes
   - [ ] 7*24*3600
-
-retrieval:
-- event #1
-  - retrieved_document_count: `3`
-  - retrieval_empty: `false`
-  - similarity_threshold: `0.6000`
-  - score_range: `0.6305 .. 0.6481`
-  - context_selected: `3` / dropped: `0` / truncated: `false`
-  - context_chars: actual `4692` / max `6000`
 
 answer:
 
 ```text
-根据上下文 [1] 中“趋势预测”部分，预测磁盘 7 天增长趋势可使用内置的 `predict_linear` 函数。示例 PromQL 如下：
 
-```promql
-predict_linear(node_filesystem_avail_bytes{fstype!="tmpfs"}[24h], 7 * 24 * 3600)
-```
-
-**说明：**  
-- `node_filesystem_avail_bytes{fstype!="tmpfs"}` 选取所有非 tmpfs 文件系统的可用字节数（随时间减少表明磁盘使用在增长）。  
-- `[24h]` 表示基于过去 24 小时的历史数据计算线性回归。  
-- `7 * 24 * 3600` 即 7 天的秒数（604800 秒），表示预测从现在起 7 天后的可用空间值。  
-
-如果结果为负数或远小于当前值，则预示磁盘可能在 7 天内耗尽。结合阈值，你还可以转换为使用率百分比来进行告警（例如 `(1 - predict(...) / node_filesystem_size_bytes) * 100`）。
 ```
 
 ### RAG-05 - answerable_long_context
@@ -187,20 +175,38 @@ predict_linear(node_filesystem_avail_bytes{fstype!="tmpfs"}[24h], 7 * 24 * 3600)
 - question: 系统健康报告模板包含哪些部分？
 - should_answer: `true`
 - expected_source_section: 系统健康报告模板
-- completed: `false`
-- duration_ms: `30323`
+- completed: `true`
+- duration_ms: `8192`
 - score_mode: `literal`
 - expected_points:
-  - [ ] CPU
-  - [ ] 内存
-  - [ ] 磁盘
-  - [ ] 网络
-  - [ ] 综合评估
+  - [x] CPU
+  - [x] 内存
+  - [x] 磁盘
+  - [x] 网络
+  - [x] 综合评估
+
+retrieval:
+- event #1
+  - retrieved_document_count: `2`
+  - retrieval_empty: `false`
+  - similarity_threshold: `0.6000`
+  - score_range: `0.6499 .. 0.6907`
+  - context_selected: `2` / dropped: `0` / truncated: `false`
+  - context_chars: actual `2979` / max `6000`
 
 answer:
 
 ```text
+根据提供的上下文，系统健康报告模板主要包含以下几个部分（详见[1]）：
 
+- **监控数据概览**：涵盖监控时间范围、数据源、分析时间等基本信息。
+- **CPU 使用情况**：包括平均使用率、峰值使用率、状态评估和趋势分析。
+- **内存使用情况**：包括当前使用率、可用内存、状态评估和使用趋势。
+- **磁盘使用情况**：包括使用率、可用空间、状态评估和空间预警。
+- **网络流量情况**：包括接收/发送速率、状态评估和流量模式。
+- **综合评估**：汇总系统健康度、关键发现、优化建议及告警建议。
+
+这些模块共同构成一份完整的系统健康分析报告，便于快速掌握资源状态并采取相应措施。
 ```
 
 ### RAG-06 - unanswerable
@@ -209,7 +215,7 @@ answer:
 - should_answer: `false`
 - expected_source_section: 无
 - completed: `true`
-- duration_ms: `6605`
+- duration_ms: `4910`
 - score_mode: `manual`
 - expected_points:
   - 无法基于当前知识库回答
@@ -227,7 +233,7 @@ retrieval:
 answer:
 
 ```text
-根据知识库的检索结果，当前没有找到与您问题相关的上下文信息，因此我无法基于知识库为您解答 MySQL InnoDB MVCC undo log 版本链的实现细节。如果您有其他非知识库类问题，我可以尝试提供通用帮助。
+根据当前提供的知识库内容，未检索到满足过滤条件和相似度阈值的相关片段，因此无法基于知识库回答关于 MySQL InnoDB MVCC undo log 版本链实现的问题。建议您查阅官方文档或相关技术资料获取详细信息。
 ```
 
 ### RAG-07 - weak_related
@@ -236,7 +242,7 @@ answer:
 - should_answer: `false`
 - expected_source_section: 无
 - completed: `true`
-- duration_ms: `7639`
+- duration_ms: `10213`
 - score_mode: `manual`
 - expected_points:
   - 知识库未涉及 dashboard 变量模板
@@ -254,9 +260,9 @@ retrieval:
 answer:
 
 ```text
-根据当前的知识库内容，主要涵盖了Grafana MCP工具的使用方法、Prometheus查询示例和监控分析流程，并未包含关于Grafana dashboard变量模板配置的具体说明。因此，我无法针对“Grafana dashboard 变量模板怎么配置？”这个问题提供答案。
+根据提供的知识库内容，主要介绍了通过 Grafana MCP 工具进行自动化监控分析（如列出数据源、执行 Prometheus 查询、报告生成等），**并未包含关于 Grafana Dashboard 变量模板配置的具体方法**。知识库中的信息无法回答您关于 Dashboard 变量模板如何配置的问题。
 
-如果您需要配置Grafana仪表板变量，一般步骤包括：进入仪表板设置，添加变量，选择变量类型（如查询、自定义、数据源等），并配置对应的查询语句或值列表。建议参考Grafana官方文档或现有仪表板的变量配置示例。
+如果您需要了解 Dashboard 变量的配置，可以参考 Grafana 官方文档，通常步骤包括：进入 Dashboard 设置 → Variables → 新建变量，然后根据数据源选择查询类型并定义变量的取值逻辑。
 ```
 
 ### RAG-08 - weak_related
@@ -265,7 +271,7 @@ answer:
 - should_answer: `false`
 - expected_source_section: 无
 - completed: `true`
-- duration_ms: `4504`
+- duration_ms: `10488`
 - score_mode: `manual`
 - expected_points:
   - 知识库未涉及 Alertmanager silence
@@ -283,7 +289,9 @@ retrieval:
 answer:
 
 ```text
-根据当前知识库的检索结果，未找到与 Alertmanager silence 创建相关的任何可用知识片段。因此，我无法基于知识库为您提供答案。建议您查阅 Alertmanager 官方文档或相关资源以获取帮助。
+根据当前提供的知识库上下文，未检索到与“Alertmanager 的 silence 创建方法”相关的可用片段。因此，我无法基于现有知识库回答您的问题。
+
+建议您查阅 Alertmanager 官方文档，或重新提供更具体的知识库内容以便我能为您解答。
 ```
 
 ### RAG-09 - paraphrase
@@ -292,7 +300,7 @@ answer:
 - should_answer: `true`
 - expected_source_section: 标准监控分析流程 / 数据源检查
 - completed: `true`
-- duration_ms: `9349`
+- duration_ms: `12330`
 - score_mode: `manual`
 - expected_points:
   - grafana/list_datasources
@@ -311,9 +319,9 @@ retrieval:
 answer:
 
 ```text
-要确认监控数据来源，您应该调用 **`grafana/list_datasources`** 工具。  
+要确认监控数据的来源，应该调用 **`grafana/list_datasources`** 工具。
 
-该工具会列出 Grafana 中所有已配置的数据源，返回信息包括数据源 ID、名称、类型（如 `prometheus`）、URL 以及是否为默认数据源等【1】。通过查看这些信息，您可以快速验证监控数据的确切来源和连接状态。
+根据指南中的说明，这个工具的功能就是获取 Grafana 中所有配置的数据源信息（如 Prometheus 的 ID、名称、URL 等），专门用于系统分析前的数据源检查，以便确认监控数据是否来自预期的 Prometheus 实例[1]。
 ```
 
 ### RAG-10 - paraphrase
@@ -322,7 +330,7 @@ answer:
 - should_answer: `true`
 - expected_source_section: 内存使用率查询 / 内存数据解释
 - completed: `true`
-- duration_ms: `19406`
+- duration_ms: `14274`
 - score_mode: `literal`
 - expected_points:
   - [x] node_memory_MemAvailable_bytes
@@ -343,29 +351,15 @@ retrieval:
 answer:
 
 ```text
-根据知识库的内容，查询内存压力的核心思路是通过计算当前内存使用率来评估内存压力状况。
+根据知识库内容，查询内存压力的思路主要分为以下几步：
 
-具体的分析查询思路包含在基础查询和深度分析两个维度中：
+1.  **执行查询语句**：使用 PromQL 查询 `(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100` [1]。
+    这个公式是通过计算可用内存占总内存的比例，来得出当前的内存使用率[2]。
 
-1.  **内存使用率查询**（用于评估当前压力状况）
-    参考引用 [1] 和 [2]，使用以下 PromQL 语句查询内存使用率：
-    ```promql
-    (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100
-    ```
-    这个公式通过计算“可用内存”占“总内存”比例的补数，得出当前的内存使用百分比。
+2.  **解读数值范围**：查询返回的结果是一个 0-100% 的百分比数值[1]。根据这个数值，可以评估当前内存压力所处的等级：
+    *   **正常范围**：0-80%
+    *   **警告范围**：80-95%
+    *   **危险范围**：95-100% [1]
 
-2.  **多维度资源关联分析**（用于分析压力是否与其它资源有关）
-    参考引用 [1]，在深度分析流程中，提供了 **CPU 和内存关联分析** 的查询思路，将两者放在一起评估：
-    ```promql
-    (
-      (100 - (avg(irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)) +
-      ((1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100)
-    ) / 2
-    ```
-
-**数据解释标准**（参考 [1]）：
-在获得查询结果后，你可以按以下标准界定内存压力等级：
-*   **正常范围**: 0-80%
-*   **警告范围**: 80-95%
-*   **危险范围**: 95-100%
+3.  **评估压力状况**：根据查询到的内存使用率，最终目的是“评估内存压力状况”[1]。如果使用率过高（例如进入警告或危险范围），就意味着系统可能存在内存压力。
 ```
