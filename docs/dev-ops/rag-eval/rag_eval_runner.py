@@ -66,10 +66,11 @@ def post_sse(api_url: str, payload: dict[str, Any], timeout: int) -> tuple[list[
     return events, status, error
 
 
-def summarize_events(events: list[dict[str, Any]]) -> tuple[str, bool, list[dict[str, Any]]]:
+def summarize_events(events: list[dict[str, Any]]) -> tuple[str, bool, list[dict[str, Any]], str | None]:
     summary_parts: list[str] = []
     completed = False
     retrievals: list[dict[str, Any]] = []
+    sse_error: str | None = None
     for event in events:
         event_type = event.get("type")
         if event_type == "summary":
@@ -82,7 +83,11 @@ def summarize_events(events: list[dict[str, Any]]) -> tuple[str, bool, list[dict
                 "timestamp": event.get("timestamp"),
                 "data": event.get("data") or {},
             })
-    return "\n".join(part for part in summary_parts if part).strip(), completed, retrievals
+        if event_type == "error":
+            err_cls = event.get("errorClass") or "Error"
+            msg = event.get("message") or ""
+            sse_error = f"{err_cls}: {msg}"
+    return "\n".join(part for part in summary_parts if part).strip(), completed, retrievals, sse_error
 
 
 def keyword_check(answer: str, expected_points: list[str]) -> tuple[int, list[str]]:
@@ -102,7 +107,11 @@ def run_case(api_url: str, agent_id: str, session_prefix: str, max_step: int, ti
     started = time.monotonic()
     events, status, error = post_sse(api_url, payload, timeout)
     duration_ms = int((time.monotonic() - started) * 1000)
-    answer, completed, retrievals = summarize_events(events)
+    answer, completed, retrievals, sse_error = summarize_events(events)
+    # HTTP 异常优先；HTTP 正常但 SSE 流里有 type=error 帧时（backend 主动发出的错误事件），
+    # 用 SSE 错误作为 error，便于 markdown 报告 details 直接定位 LLM/链路失败原因。
+    if not error and sse_error:
+        error = sse_error
     expected_points = list(case.get("expected_points", []))
     matched_count, missed_points = keyword_check(answer, expected_points)
 

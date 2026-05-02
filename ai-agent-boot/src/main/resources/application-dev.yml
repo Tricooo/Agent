@@ -49,9 +49,11 @@ spring:
       base-url: ${OPENAI_BASE_URL:https://generativelanguage.googleapis.com/v1beta/openai}
       api-key: ${OPENAI_API_KEY:}
       http:
-        connect-timeout: 5s
-        read-timeout: 25s
-        response-timeout: 25s
+        # RAG eval long_context case (e.g. RAG-05 长 list 生成) 需要 ≥30s 余量，
+        # 25s 在 DeepSeek 等慢链路上会触发 SocketTimeoutException + RetryTemplate 重试 + SSE 异常处理副作用。
+        connect-timeout: 10s
+        read-timeout: 120s
+        response-timeout: 120s
       chat:
         options:
           model: ${OPENAI_CHAT_MODEL:gemini-flash-latest}
