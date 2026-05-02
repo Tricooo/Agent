@@ -51,3 +51,11 @@ CLAUDE.md
 !.env.example
 application-local.yml
 application-*.local.yml
+
+### Runtime data / logs (local) ###
+/data/
+/ai-agent-boot/data/
+
+### Python cache ###
+__pycache__/
+*.pyc
