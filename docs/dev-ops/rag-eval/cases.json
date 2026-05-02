@@ -1,0 +1,134 @@
+[
+  {
+    "id": "RAG-01",
+    "case_type": "answerable",
+    "score_mode": "manual",
+    "question": "根据知识库，grafana/list_datasources 工具的作用是什么？请尽量基于上下文回答。",
+    "should_answer": true,
+    "expected_source_section": "grafana/list_datasources",
+    "expected_points": [
+      "列出所有可用的数据源",
+      "返回数据源的基本信息",
+      "确认 Prometheus 数据源的可用性"
+    ]
+  },
+  {
+    "id": "RAG-02",
+    "case_type": "answerable",
+    "score_mode": "literal",
+    "question": "`grafana/query_prometheus` 支持哪些参数？",
+    "should_answer": true,
+    "expected_source_section": "grafana/query_prometheus 参数说明",
+    "expected_points": [
+      "query",
+      "start",
+      "end",
+      "step"
+    ]
+  },
+  {
+    "id": "RAG-03",
+    "case_type": "answerable_formula",
+    "score_mode": "literal",
+    "question": "知识库里 CPU 使用率的 PromQL 示例是什么？",
+    "should_answer": true,
+    "expected_source_section": "CPU使用率查询",
+    "expected_points": [
+      "node_cpu_seconds_total",
+      "mode=\"idle\"",
+      "irate"
+    ]
+  },
+  {
+    "id": "RAG-04",
+    "case_type": "answerable_deep_section",
+    "score_mode": "literal",
+    "question": "磁盘 7 天增长趋势预测用哪个 PromQL？",
+    "should_answer": true,
+    "expected_source_section": "趋势预测",
+    "expected_points": [
+      "predict_linear",
+      "node_filesystem_avail_bytes",
+      "7*24*3600"
+    ]
+  },
+  {
+    "id": "RAG-05",
+    "case_type": "answerable_long_context",
+    "score_mode": "literal",
+    "question": "系统健康报告模板包含哪些部分？",
+    "should_answer": true,
+    "expected_source_section": "系统健康报告模板",
+    "expected_points": [
+      "CPU",
+      "内存",
+      "磁盘",
+      "网络",
+      "综合评估"
+    ]
+  },
+  {
+    "id": "RAG-06",
+    "case_type": "unanswerable",
+    "score_mode": "manual",
+    "question": "根据知识库，MySQL InnoDB 的 MVCC undo log 版本链是怎么实现的？",
+    "should_answer": false,
+    "expected_source_section": "无",
+    "expected_points": [
+      "无法基于当前知识库回答",
+      "当前知识库没有相关上下文"
+    ]
+  },
+  {
+    "id": "RAG-07",
+    "case_type": "weak_related",
+    "score_mode": "manual",
+    "question": "根据知识库，Grafana dashboard 变量模板怎么配置？",
+    "should_answer": false,
+    "expected_source_section": "无",
+    "expected_points": [
+      "知识库未涉及 dashboard 变量模板",
+      "无法基于当前知识库回答"
+    ]
+  },
+  {
+    "id": "RAG-08",
+    "case_type": "weak_related",
+    "score_mode": "manual",
+    "question": "根据知识库，Alertmanager 的 silence 应该怎么创建？",
+    "should_answer": false,
+    "expected_source_section": "无",
+    "expected_points": [
+      "知识库未涉及 Alertmanager silence",
+      "无法基于当前知识库回答"
+    ]
+  },
+  {
+    "id": "RAG-09",
+    "case_type": "paraphrase",
+    "score_mode": "manual",
+    "question": "我想先确认监控数据来源，应该调用哪个 Grafana MCP 工具？",
+    "should_answer": true,
+    "expected_source_section": "标准监控分析流程 / 数据源检查",
+    "expected_points": [
+      "grafana/list_datasources",
+      "确认监控数据来源",
+      "数据源检查"
+    ]
+  },
+  {
+    "id": "RAG-10",
+    "case_type": "paraphrase",
+    "score_mode": "literal",
+    "question": "如果我要查内存压力，知识库给出的查询思路是什么？",
+    "should_answer": true,
+    "expected_source_section": "内存使用率查询 / 内存数据解释",
+    "expected_points": [
+      "node_memory_MemAvailable_bytes",
+      "node_memory_MemTotal_bytes",
+      "正常范围",
+      "警告范围",
+      "危险范围"
+    ]
+  }
+]
