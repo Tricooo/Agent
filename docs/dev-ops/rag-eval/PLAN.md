@@ -25,7 +25,11 @@
 - F-fix 链路下 threshold=0.60 baseline：`rag-eval-result-ffix.md`（May 1 03:21，三列俱全）
 - F-fix 链路下 threshold=0.55 三角：`rag-eval-result-t055-triangle-ffix.md`（May 2 03:02，RAG-04 / 06 / 07 三列俱全，预热后跑通）
 - threshold=0.65 沿用 `rag-eval-result.md`（Apr 28，旧 schema 无三列，但答案可证 RAG-04 误杀）
-- 旧 schema 残留（不可比，不再补跑）：`rag-eval-result-t060-triangle.md` / `rag-eval-result-t065-triangle.md` / `rag-eval-result-test-triangle.md`
+- 旧 schema 残留（不可比，不再补跑）：`rag-eval-result-t060-triangle.md` / `rag-eval-result-t065-triangle.md`（`rag-eval-result-test-triangle.md` 在 commit `a9fbf7e` 中已删除）
+- **A+B fix（commit `a9fbf7e`）已上线**：DeepSeek `read-timeout 25s→120s`（A） + `AgentExecutionFacade.error()` 发 SSE `type=error` 帧而非 `emitter.completeWithError(t)`（B），runner 解析 error 帧到 markdown details。
+  - A 验证：`rag-eval-result-rag05-ffix.md`（May 2，RAG-05 单跑 duration=26702ms completed=true，之前固定 30s timeout）
+  - B 验证：`rag-eval-result-baseline-ffix.md`（May 2 04:14，10 条全跑）的 RAG-04 行触发偶发 `RestClientException`，markdown details 直接显示 `error: RestClientException: ...`，不再 silent connection reset
+- **F-fix 链路完整 baseline**：`rag-eval-result-baseline-ffix.md`（May 2 04:14，threshold=0.60，10 条全跑，9/10 happy + 1 偶发）。这是后续 chunking / hybrid / rerank 的对照基线。
 
 ### 2.2 关键认知（必读，否则会重复踩坑）
 
@@ -59,15 +63,31 @@
 - `.env.example` 早已有 `!.env.example` 例外规则（`.gitignore:51`），保持入库
 - `application-local.yml` / `application-*.local.yml` 早已忽略
 
-### 仍待用户拍板：commit 范围
+### D3（已决议 May 2）：A+B 修复 RAG-05 30s 失败 + SSE 异常透传
 
-建议拆三段：
+`a9fbf7e` 同时修同一个 RAG-05 失败的两条路径：
 
-1. **业务 commit**：`FixedAgentExecuteStrategy.java`（M）+ `AutoAgentRetrievalSseEntity.java`（A）+ `cases.json`（A）+ `rag_eval_runner.py`（A）+ `.env.example`（A）
-2. **文档 commit**：`PLAN.md` + `rag-eval-result-{ffix,bsymmetric,t055-triangle-ffix,t060-triangle,t065-triangle,test-triangle,}.md`
-3. **gitignore commit**：`.gitignore` 增量
+- **A**: `application-dev.yml` `spring.ai.openai.http` —— `read-timeout 25s→120s` / `response-timeout 25s→120s` / `connect-timeout 5s→10s`。RAG eval long_context case 在 DeepSeek 25s read-timeout + RetryTemplate 重试 5s = 30s 触发 `SocketTimeoutException`。120s 给慢链路余量。`AiClientApiNode.buildRestClientBuilder()` 已支持 `@Value` 注入，纯 yml 调整不动 Java。
+- **B**: `AgentExecutionFacade.ssePort.error()` 不再调 `emitter.completeWithError(t)`（Spring MVC 默认 ExceptionHandler 把 `LinkedHashMap` 写 JSON 错误响应，但 Content-Type 已锁成 `text/event-stream`，触发 `HttpMessageNotWritableException`，客户端只看到 connection reset）。改为往 SSE 流发 `data: {"type":"error","errorClass":"...","message":"..."}\n\n` 帧，`emitter.complete()` 由 `AgentDispatchService.finally` 统一收尾避免重复 complete。
+- **配套**: `rag_eval_runner.py.summarize_events` 解析 `type=error` 帧，HTTP 没异常但 SSE 流里有 error 事件时把 `errorClass: message` 写进 markdown 报告 details `error:` 行。
 
-不 push。等 Codex review 业务 commit 后再决定。
+直接验证：
+
+- A: RAG-05 单跑 duration=26702ms completed=true（fix 前固定 30s timeout）
+- B: 全量 baseline 重跑时 RAG-04 偶发 `RestClientException: Error while extracting response for type [...] and content type [application/json]`（duration=28.2s，< 120s 不是 read-timeout，是 OpenAI 响应解析失败），markdown details 直接显示 errorClass/message。
+
+### Commit 范围（已落地，未 push）
+
+```
+3093eb6 docs: 修正 baseline-ffix.md 为 a9fbf7e fix 后真实重跑数据
+5a92e60 docs: RAG-05 单跑验证证据归档（A read-timeout 修复直接证据）
+a9fbf7e fix: SSE 异常透传 + DeepSeek read-timeout 25s→120s
+f78cde1 chore: gitignore 增量 - 本地日志目录 + Python 缓存
+fc49eb4 docs: RAG eval 接力计划 + 历史评测产物归档
+6da727e feature: RAG eval - F-fix 链路 SSE 下发 type=retrieval 事件
+```
+
+注：`a9fbf7e` 意外混入两个 docs 文件（baseline-ffix new + test-triangle delete，AM/D 状态 staging 残留所致）；`3093eb6` 修正了 a9fbf7e commit message 与 baseline-ffix 内容版本不匹配的问题（不 amend，按 CLAUDE.md "Always create NEW commits"）。等 Codex review 后再决定 push。
 
 ## 4. 延期话题（用户上一会话明确说"后续讨论"，不要主动开工）
 
