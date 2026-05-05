@@ -71,6 +71,20 @@ spring:
     agent:
       auto-config:
         enabled: false
+    rag:
+      # TokenTextSplitter 5 参数化（Step 3.1 改造）
+      # 默认值与 Spring AI 1.0.3 TokenTextSplitter 完全一致 → 改 0 行为
+      # 调参后必须 TRUNCATE vector_store_openai + 重传文档（Step 3.4）
+      chunker:
+        chunk-size: 800
+        min-chunk-size-chars: 350
+        min-chunk-length-to-embed: 5
+        max-num-chunks: 10000
+        # keepSeparator=false 时把所有 System.lineSeparator()
+        # 替换为空格——也就是说整个文档被压成一行，所有段落边界丢失。对 RAG 来说极其有害：embedding
+        # 模型靠段落结构理解'这是一个完整概念段'，丢了换行就只能靠 token 数硬切。所以默认 true 是对的。我们这次改造保留 true，未来如果文档源是
+        # markdown 表格之类不依赖换行的结构化数据，再考虑改 false。
+        keep-separator: true
 
 mybatis-plus:
   configuration:

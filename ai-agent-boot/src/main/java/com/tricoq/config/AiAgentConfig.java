@@ -61,8 +61,19 @@ public class AiAgentConfig {
     }
 
     @Bean
-    public TokenTextSplitter tokenTextSplitter() {
-        return new TokenTextSplitter();
+    public TokenTextSplitter tokenTextSplitter(
+            @Value("${spring.ai.rag.chunker.chunk-size:800}") int chunkSize,
+            @Value("${spring.ai.rag.chunker.min-chunk-size-chars:350}") int minChunkSizeChars,
+            @Value("${spring.ai.rag.chunker.min-chunk-length-to-embed:5}") int minChunkLengthToEmbed,
+            @Value("${spring.ai.rag.chunker.max-num-chunks:10000}") int maxNumChunks,
+            @Value("${spring.ai.rag.chunker.keep-separator:true}") boolean keepSeparator) {
+        return TokenTextSplitter.builder()
+                .withChunkSize(chunkSize)
+                .withMinChunkSizeChars(minChunkSizeChars)
+                .withMinChunkLengthToEmbed(minChunkLengthToEmbed)
+                .withMaxNumChunks(maxNumChunks)
+                .withKeepSeparator(keepSeparator)
+                .build();
     }
 
 }

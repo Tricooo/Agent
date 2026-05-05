@@ -49,13 +49,26 @@ public class RagService implements IRagService {
 
         for (MultipartFile file : files) {
             TikaDocumentReader documentReader = new TikaDocumentReader(file.getResource());
+            //batch 模式，不是 streaming —— 全文加载到 token 数组里，对整个数组操作。
             List<Document> documents = tokenTextSplitter.apply(documentReader.get());
 
-            documents.forEach(doc -> {
+            // Step 3.2 chunk 级 metadata 扩展（PLAN.md §9.1 落点 B）
+            // schema 一次到位：parentSection / headingPath 在 Phase A 留空，Phase B 自写 splitter 后填值，避免再 TRUNCATE 重灌
+            int totalChunks = documents.size();
+            String sourcePath = file.getOriginalFilename();
+            for (int i = 0; i < totalChunks; i++) {
+                Document doc = documents.get(i);
+                // 文件级 metadata（沿用原 schema，避免破坏既有依赖如评测代码读 file_name）
                 doc.getMetadata().put("knowledge", tag);
                 doc.getMetadata().put("rag_id", ragId);
-                doc.getMetadata().put("file_name", file.getOriginalFilename());
-            });
+                doc.getMetadata().put("file_name", sourcePath);
+                // chunk 级 metadata
+                doc.getMetadata().put("chunkIndex", i);
+                doc.getMetadata().put("totalChunks", totalChunks);
+                doc.getMetadata().put("sourcePath", sourcePath);
+                doc.getMetadata().put("parentSection", "");
+                doc.getMetadata().put("headingPath", "");
+            }
 
             allDocuments.addAll(documents);
         }

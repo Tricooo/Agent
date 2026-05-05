@@ -1,7 +1,7 @@
 # RAG Eval 自动化 — 计划与状态
 
 > 这份文档是 RAG 评测链路工作的 single source of truth。任何接手会话先读这里。
-> 最后更新：2026-05-02
+> 最后更新：2026-05-05
 
 ## 目录组织
 
@@ -51,6 +51,13 @@ docs/dev-ops/rag-eval/
   - A 验证：`results/ffix/rag-eval-result-rag05-ffix.md`（May 2，RAG-05 单跑 duration=26702ms completed=true，之前固定 30s timeout）
   - B 验证：`results/ffix/rag-eval-result-baseline-ffix.md`（May 2 04:14，10 条全跑）的 RAG-04 行触发偶发 `RestClientException`，markdown details 直接显示 `error: RestClientException: ...`，不再 silent connection reset
 - **F-fix 链路完整 baseline**：`results/ffix/rag-eval-result-baseline-ffix.md`（May 2 04:14，threshold=0.60，10 条全跑，9/10 happy + 1 偶发）。这是后续 chunking / hybrid / rerank 的对照基线。
+- **Step 3 Phase A — 参数化基础设施完成（May 5）**：
+  - 3.1 `ai-agent-boot/src/main/java/com/tricoq/config/AiAgentConfig.java` TokenTextSplitter 5 参数化；`ai-agent-boot/src/main/resources/application-dev.yml` 加 chunker section（chunk-size=800 = Spring AI 默认值，基础设施就绪，调参不再需要改 Java）
+  - 3.2 `ai-agent-domain/.../service/rag/RagService.java` chunk 级 metadata：chunkIndex / totalChunks / sourcePath（填充）/ parentSection / headingPath（Phase B 留空，schema 一次到位）
+  - 3.3 `ai-agent-domain/.../element/RagAnswerAdvisor.java` 渲染端加来源行（buildSourceLine helper，graceful：sourcePath 空时返回 "" 兼容旧 chunk）
+  - 3.4 vector store TRUNCATE + 重灌（用户操作，May 5）
+  - 3.5 评测 10/10 completed（需预热后跑）：`results/step3-chunker-v1/rag-eval-result-step3-chunker-v1.md`
+  - **3.6 Gate 判定：部分达标**（详见 §3 D5）
 
 ### 2.2 关键认知（必读，否则会重复踩坑）
 
@@ -98,6 +105,57 @@ docs/dev-ops/rag-eval/
 
 - A: RAG-05 单跑 duration=26702ms completed=true（fix 前固定 30s timeout）
 - B: 全量 baseline 重跑时 RAG-04 偶发 `RestClientException: Error while extracting response for type [...] and content type [application/json]`（duration=28.2s，< 120s 不是 read-timeout，是 OpenAI 响应解析失败），markdown details 直接显示 errorClass/message。
+
+### D4（已决议 May 4）：Step 3 chunker + chunk metadata 启动
+
+**拍板基线**（用户 May 4 确认）：
+
+- `ai_client_advisor` 表 `rag_demo` 当前 `topK=4` / `similarityThreshold=0.6`，**Step 3 期间保持不动**（单变量隔离，让 chunker 改动 attribution 干净）
+- chunker：Phase A 调 `TokenTextSplitter` 参数 → 决策门不达标再触发 Phase B 自写 `MarkdownTextSplitter`
+- metadata 完整集：`chunkIndex` / `totalChunks` / `sourcePath` / `parentSection` / `headingPath`
+  - Phase A 阶段 `parentSection` / `headingPath` 字段建好但留空（schema 一次到位，避免 Phase B 再重灌）
+- 重灌策略：`TRUNCATE vector_store_openai` + admin 接口重新上传（`rag_demo` 原始文档可复用，已确认）
+- baseline 对照：`results/ffix/rag-eval-result-baseline-ffix.md`
+
+**决策门口径（margin-based eval）**：
+
+- pass 率 ≥ 10/10（不退化）
+- RAG-04 `max_score` ≥ 0.70（理想 ≥ 0.75）
+- 正例 - 弱相关 max score gap 扩大
+- empty 率不增加
+
+**口径警示（与 baseline 不可比的列）**：
+
+- ❌ 不可比：chunk count（边界变了）、max_score 绝对值（embedding 输入变了）
+- ✅ 可比：completed / hit-rate / score gap / empty 率
+
+**理由摘要**：
+
+`baseline-ffix.md` 显示 RAG-04 max_score=0.6481（正例）< RAG-07 max_score=0.6645（弱相关），是 score inversion 现象，单一 threshold 数学上无解。RAG-07 已在 `before()` empty/manual 拒答路径处理；RAG-04 偏低的根因怀疑是 chunk 边界稀释正例（默认 chunkSize=800 token ≈ 1500 中文字，正例段落可能只占 30% chunk 容量）。Step 3 = 改写入端 chunker + metadata + 渲染端三件套，验证 chunk 边界是否是当前 max_score 偏低的瓶颈。
+
+详细执行步骤见 §9。
+
+### D5（已决议 May 5）：Step 3 Phase A Gate — 部分达标，调参第二轮
+
+**评测产物**：`results/step3-chunker-v1/rag-eval-result-step3-chunker-v1.md`
+
+| 验收口径 | 结果 | 说明 |
+|---|---|---|
+| pass rate ≥ 10/10 | ✅ 10/10 | +1 vs baseline（RAG-04 baseline=RestClientException flaky → step3 completed=true 3/3 lit） |
+| RAG-04 max_score ≥ 0.70 | ❌ 0.6481 | chunkSize=800=默认值未改，scores 与 t055-triangle 完全一致，无改善 |
+| 正例-弱相关 gap 扩大 | ❌ 仍倒挂 | RAG-07 max=0.6645 > RAG-04 max=0.6481，delta=-0.0164，与 baseline 同 |
+| empty 率不增加 | ✅ 稳定 | RAG-06/RAG-08 empty=true 同 baseline |
+| RAG-10 regression | ⚠️ 2/5 vs 5/5 | 同 chunk 内容，LLM variability（missed: 正常范围/警告范围/危险范围） |
+
+**根因**：Step 3.1 做了 yml 参数化基础设施，但 chunk-size=800 是 Spring AI 1.0.3 默认值，重灌后 chunk 结构与 baseline 完全相同，scoring 无改善（scores 与 t055-triangle 完全一致印证此点）。
+
+**已确认下一步（Phase A 调参第二轮）**：
+1. 把 `application-dev.yml` `chunker.chunk-size: 800 → 400`
+2. TRUNCATE `vector_store_openai` + 重传 rag_demo 原始文档
+3. 预热后跑 `rag_eval_runner.py --session-prefix step3-chunker-v2`
+4. 对比 RAG-04 max_score 是否提升 + RAG-10 regression 是否 LLM variability
+- 预期：同内容切成更小 chunk，predict_linear 段落占比提升 → embedding score 应提升
+- 如 RAG-04 仍 ≤ 0.65 → 触发 Phase B（MarkdownTextSplitter 自写）
 
 ### Commit 范围（已落地，未 push）
 
@@ -169,3 +227,56 @@ D1 / D2 / Hygiene 已收口（见 §3）。下一会话接手时：
 - 任何会话推进了进展，**必须**回写到 §2 进展 / §3 决策项 / §4 延期话题
 - 不要重写 §1 总目标和 §5 约束，除非确实变化
 - 同时更新顶部"最后更新"日期
+
+## 9. Step 3 — Chunker + Chunk Metadata（in progress，May 4 启动）
+
+> Phase A 实现由 AI 协作辅助完成（候选人逐行 review + 验证 + 跑 verify）；Phase B（条件触发，复杂度更高）保留候选人主笔。授权变更日期：2026-05-05。
+> 拍板基线见 §3 D4，本节是执行手册。
+
+### 9.1 改动落点表
+
+| 落点 | 文件:行 | 当前状态 | Step 3 改动 |
+|---|---|---|---|
+| A. chunker @Bean | `ai-agent-boot/src/main/java/com/tricoq/config/AiAgentConfig.java:62-65` | `new TokenTextSplitter()` 全部默认参数 | 改为带参构造，5 个参数从 `application.yml` 注入 |
+| B. 写入端 metadata | `ai-agent-domain/src/main/java/com/tricoq/domain/agent/service/rag/RagService.java:50-58` | metadata 仅 3 字段（knowledge / rag_id / file_name），全部文件级 | 增 chunk 级字段（chunkIndex / totalChunks / sourcePath；parentSection / headingPath 字段建好留空） |
+| C. 渲染端 | `ai-agent-domain/src/main/java/com/tricoq/domain/agent/service/armory/node/factory/element/RagAnswerAdvisor.java:233-275`（`renderDocumentContext`）| 仅渲染 `[i+1] + text`，metadata 完全不进 prompt | 在 `[i+1]` 后追加来源行（如 `(来自: foo.md / 章节: Sec 1.2)`），让 LLM 可引用溯源 |
+| D. 配置入口（备用） | `ai-agent-domain/src/main/java/com/tricoq/domain/agent/model/enums/AiClientAdvisorTypeEnumVO.java:51-55` | 配置驱动（topK / threshold 从 DB `ai_client_advisor` 表 → DTO 流入）| **本阶段不动**，保持 topK=4 / threshold=0.6 |
+
+### 9.2 执行步骤（每步独立可回滚）
+
+1. **3.1 TokenTextSplitter 参数化** — 改 A 落点；`application-dev.yml` 加 chunker section（chunkSize / minChunkSizeChars / minChunkLengthToEmbed / maxNumChunks / keepSeparator）
+2. **3.2 写入端 chunk 级 metadata 扩展** — 改 B 落点；jsonb 自由扩展无 schema cost
+3. **3.3 渲染端展示 metadata** — 改 C 落点；让 LLM 看到 chunk 来源
+4. **3.4 vector store 重灌** — `TRUNCATE vector_store_openai` + admin 接口重新上传 `rag_demo` 原始文档
+5. **3.5 跑 baseline 评测** — `python rag_eval_runner.py`，10 条 case
+6. **3.6 决策门** — 看 §3 D4 验收口径
+   - 达标 → commit + 写 obsidian 笔记 + 收口
+   - 部分达标（max_score 抬升但 < 0.70）→ 调参再来一轮（chunkSize 再降一档）
+   - 不改善 / 退化 → 触发 Phase B
+7. **3.7 [Phase B 条件触发] MarkdownTextSplitter 自写** — `implements org.springframework.ai.transformer.splitter.TextSplitter`，按 file extension 路由（`.md` → MarkdownTextSplitter / 其它 → TokenTextSplitter 兜底）
+
+### 9.3 Spring AI 1.0.3 splitter 现状（context7 已验证）
+
+- 标准库**仅 `TokenTextSplitter`**，无 markdown-aware / recursive char / html splitter
+- `TokenTextSplitter` 5 参数默认值：`(chunkSize=800, minChunkSizeChars=350, minChunkLengthToEmbed=5, maxNumChunks=10000, keepSeparator=true)`
+- encoding 固定 CL100K_BASE（OpenAI tiktoken 系，1 token ≈ 1.5~2 中文字符）
+- 自写需 implements `org.springframework.ai.transformer.splitter.TextSplitter`（SPI 简单，单方法 `splitText(String): List<String>`）
+
+### 9.4 上下文恢复 hook（防 /compact 后丢失）
+
+/compact 后回到此处，按以下顺序读：
+
+1. **§3 D4** — 拍板基线（topK / threshold / chunker / metadata / 重灌 / baseline）
+2. **§9.1** — 落点表（精确到 file:line）
+3. **§9.2** — 步骤表（当前进展看哪一步是 in_progress）
+4. **§9.3** — Spring AI 1.0.3 splitter 现状
+5. **baseline 文件** — `results/ffix/rag-eval-result-baseline-ffix.md`（10/10，RAG-04 max=0.6481）
+6. **生产 live path proof** — `RagAnswerAdvisor` 在 `ai-agent-domain/.../element/`（不是 boot/test 下的同名 spike），`fixedAgentExecuteStrategy` 是 rag_demo 的 strategy
+
+### 9.5 面试故事链（写笔记时参考）
+
+- "默认 TokenTextSplitter 800 token 切，发现 RAG-04 max_score 偏低（0.6481）"
+- "假设：chunk 太大稀释正例 token 比例"
+- "Phase A：调 chunkSize 验证假设 + 加 chunk 级 metadata（溯源能力）"
+- "Phase A 不达标？→ Phase B：自写 MarkdownTextSplitter，按 heading 切，加 headingPath"
+- "evaluation 驱动迭代：margin-based 看 score gap，不看绝对值"

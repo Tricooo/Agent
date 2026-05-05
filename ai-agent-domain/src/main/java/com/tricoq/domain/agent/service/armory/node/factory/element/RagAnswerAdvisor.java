@@ -244,9 +244,12 @@ public class RagAnswerAdvisor implements BaseAdvisor {
                     document.getScore(),
                     document.getMetadata(),
                     StringUtils.abbreviate(document.getText(), 200));
+            // Step 3.3 渲染端追加 chunk 来源行（PLAN.md §9.1 落点 C），让 LLM 引用 "[i+1]" 时能看到溯源
+            String sourceLine = buildSourceLine(document.getMetadata());
             String renderedDocument = "["
                     + (i + 1)
                     + "]"
+                    + (sourceLine.isEmpty() ? "" : " " + sourceLine)
                     + System.lineSeparator()
                     + document.getText()
                     + System.lineSeparator()
@@ -289,6 +292,38 @@ public class RagAnswerAdvisor implements BaseAdvisor {
 
         return renderedDocument.substring(0, headChars)
                 + CHUNK_TRUNCATED_NOTICE;
+    }
+
+    /**
+     * 构造 chunk 来源行（Step 3.3，PLAN.md §9.1 落点 C）。
+     * 在多 chunk 上下文里让 LLM 引用 "[1]" / "[2]" 时能同时看到 chunk 来源文档 / 块序号 / 章节路径，
+     * 提升 attribution 能力 + 评测时直接定位 chunk-doc 双向关系。
+     *
+     * Phase A 仅 sourcePath / chunkIndex / totalChunks 有值；
+     * parentSection / headingPath 在 Phase A 留空（Phase B 自写 splitter 后才填值），渲染时 graceful 跳过。
+     */
+    private String buildSourceLine(Map<String, Object> metadata) {
+        Object sourcePath = metadata.get("sourcePath");
+        if (sourcePath == null || StringUtils.isBlank(sourcePath.toString())) {
+            return "";
+        }
+
+        StringBuilder sb = new StringBuilder("(来自: ");
+        sb.append(sourcePath);
+
+        Object chunkIndex = metadata.get("chunkIndex");
+        Object totalChunks = metadata.get("totalChunks");
+        if (chunkIndex != null && totalChunks != null) {
+            sb.append(", chunk ").append(chunkIndex).append("/").append(totalChunks);
+        }
+
+        Object parentSection = metadata.get("parentSection");
+        if (parentSection != null && StringUtils.isNotBlank(parentSection.toString())) {
+            sb.append(", 章节: ").append(parentSection);
+        }
+
+        sb.append(")");
+        return sb.toString();
     }
 
     private void addMetadataIfPresent(ChatResponse.Builder responseBuilder, Map<String, Object> context, String key) {
