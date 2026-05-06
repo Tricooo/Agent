@@ -76,8 +76,8 @@ spring:
       # 默认值与 Spring AI 1.0.3 TokenTextSplitter 完全一致 → 改 0 行为
       # 调参后必须 TRUNCATE vector_store_openai + 重传文档（Step 3.4）
       chunker:
-        chunk-size: 800
-        min-chunk-size-chars: 350
+        chunk-size: 250
+        min-chunk-size-chars: 109
         min-chunk-length-to-embed: 5
         max-num-chunks: 10000
         # keepSeparator=false 时把所有 System.lineSeparator()
