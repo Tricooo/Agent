@@ -1,7 +1,7 @@
 # RAG Eval 自动化 — 计划与状态
 
 > 这份文档是 RAG 评测链路工作的 single source of truth。任何接手会话先读这里。
-> 最后更新：2026-05-05 22:20 EDT（D7：Step 3 Phase A 收口）
+> 最后更新：2026-05-06 EDT（D9：Step 3 Phase A.5 低换行控制组收口）
 
 ## 目录组织
 
@@ -9,7 +9,7 @@
 docs/dev-ops/rag-eval/
 ├── PLAN.md                      ← 本文（single source of truth）
 ├── rag_eval_runner.py           ← 评测脚本
-├── cases.json                   ← 10 条评测用例（脚本与 cases 同目录是 Path(__file__).with_name 硬约定）
+├── cases.json                   ← 14 条评测用例（脚本与 cases 同目录是 Path(__file__).with_name 硬约定）
 └── results/
     ├── _archive/                ← F-fix 之前，旧 schema 无 retrieved/score/empty 三列，不可与 ffix 互比 score
     │   ├── rag-eval-result.md                ← Apr 28，0.65 误杀证据（answer 文本可证）
@@ -22,7 +22,9 @@ docs/dev-ops/rag-eval/
     │   └── rag-eval-result-rag05-ffix.md         ← A+B fix RAG-05 单跑验证
     ├── step3-chunker-v1/         ← chunkSize=800 A/A test
     ├── step3-chunker-v2/         ← chunkSize=400 实测，v2 gate 3/4
-    └── step3-chunker-v3/         ← chunkSize=250 实测，v3 gate 4/4 ✓ Phase A 收口（May 5 22:17）
+    ├── step3-chunker-v3/         ← chunkSize=250 实测，v3 gate 4/4 ✓ Phase A 收口（May 5 22:17）
+    ├── step3-control-v3/         ← low-newline control-only，RAG-11/12/13/14 通过（May 6）
+    └── step3-full-v3-with-control/ ← full 14 regression，原 10 条不退化 + control 通过（May 6）
 ```
 
 > 归档原则：按"评测口径是否一致"分。F-fix 是 schema 硬边界——之前的产物没有 `retrieved/score/empty` 三列，永久不可与之后互比 score。
@@ -68,6 +70,13 @@ docs/dev-ops/rag-eval/
   - v3 配置：`application-dev.yml` `chunk-size=250` / `min-chunk-size-chars=109`，用户已 TRUNCATE `vector_store_openai` 并重传 `rag_demo`（chunks v1=4 / v2=7 / v3=10）
   - v3 结果：RAG-04 max **0.7406**（≥0.70 决策门 ✓ 跨过）；RAG-07 max 0.6726；gap **+0.0680**（v2 +0.0081 → v3 扩大 8×）；10/10 completed；empty 仍 RAG-06/08；gate **4/4** → Phase A 收口
   - 详细决策见 §3 D7
+- **Step 3 Phase A.5 — low-newline control + full regression 完成（May 6）**：
+  - 新增控制文档：`docs/dev-ops/rag-file/control-cn-low-newline.txt` / `control-en-long-paragraph.txt`
+  - 新增 case：RAG-11 / RAG-12 / RAG-13 / RAG-14
+  - control-only 产物：`results/step3-control-v3/rag-eval-result-step3-control-v3.md`
+  - full 14 regression 产物：`results/step3-full-v3-with-control/rag-eval-result-step3-full-v3-with-control.md`
+  - 结果：RAG-11/13 正例命中，RAG-12/14 拒答；原 RAG-01..10 不退化
+  - 详细决策见 §3 D9
 
 ### 2.2 关键认知（必读，否则会重复踩坑）
 
@@ -232,10 +241,137 @@ spring.ai.rag.chunker:
 - Phase B 自写 `MarkdownTextSplitter`（决策门通过反向不命中）
 - 在 Step 4 之前继续调 chunker 参数（边际收益已显著下降，超出 Phase A 范围）
 
-### Commit 范围（已落地，未 push）
+### D8（已决议 2026-05-06）：Phase A.5 Generalizability Probe — Step 4 启动前补 control case
+
+**触发原因**：D7 决策门 4/4 通过经 Codex review 发现 generalizability 缺口——v3 边界回退几乎全靠 `\n` 命中，而 `\n` 高密度来自 rag_demo 当前 2 份 markdown 文档的结构副作用（list / code fence / heading 强制每行换行）。`TokenTextSplitter.java:105-107` 仅识别 `.?!\n` 4 个 ASCII 字符的 lastIndexOf 链，对纯中文长文（全角 `。？！` + 少换行）会退化为 token 硬切。Phase A 决策门的有效声明范围严格地说是"在 markdown 类文档上达到决策门"，不是"通用 chunker 改进"。
+
+**Codex review 暴露的关键校正**（2026-05-06，详见会话记录）：
+
+1. **Hybrid 不独立于 chunk 边界**：PG FTS 和 pgvector 检索同一批 chunk，hybrid 在坏 chunk 上做 ablation 无法分离收益来源——A 必须先于 Step 4，不是策略选择，是必要前置
+2. **score 提升 ≠ 目标 chunk 命中**：v3 RAG-04 max=0.7406 是 top-K max similarity，LLM 可能从邻近/干扰 chunk 拼答案；evaluator 需要补 chunk-level attribution metric
+3. **C 优先于 B**：当前 root cause 是 CJK 标点 + 低换行密度，C（自写 splitter 加中文标点回退）直接对应；B（`MarkdownDocumentReader`）解决的是 markdown 结构维度，是另一支
+4. **决策门分两层**：Step 3 attribution gate（当前 Phase A.5 收口）+ Promotion gate（远期声称"通用 chunker"前要求覆盖 markdown + low-newline plain text）
+
+**A0 control case 设计**（接受 Codex 4 case + 2 文档方案）：
+
+| 文档 | 规格 | 用途 |
+|---|---|---|
+| `control-cn-low-newline.txt` | 2500-4000 中文字 / 2-3 段超长（每段 800-1200 字） / 全角 `。？！；：` / 少换行 / 埋深层正例 + 干扰项 | CJK 句界回退场景验证 |
+| `control-en-long-paragraph.txt` | 1500-2500 词 / 少换行 / 英文 `.` | 验证英文 `.` 回退路径未被中文修复破坏 |
+
+| Case | 类型 | 期望 |
+|---|---|---|
+| RAG-11 | 中文 literal 深层正例 | 命中 2-3 个独特词 |
+| RAG-12 | 中文 manual 弱相关 / 干扰项 | 拒答或明确"未覆盖" |
+| RAG-13 | 英文 literal 深层正例 | 命中独特词 |
+| RAG-14 | 英文 manual 弱相关 | 拒答 |
+
+**PDF 不加**：引入 Tika/PdfBox 提取质量 + 分页 + 页眉页脚噪声，不再是 chunker control，应在后续 reader matrix 阶段做。
+
+**A1 ingest 诊断脚本**（离线工具）：
+
+- 每个 control 文档的 chunk 数 / 目标锚点在哪个 chunk / 目标句是否被切断 / 相邻 chunk preview
+- SQL：`SELECT id, content, metadata FROM vector_store_openai WHERE metadata->>'sourcePath' = ?`
+- 若后续实现，输出建议放：`docs/dev-ops/rag-eval/results/phase-a5-control/ingest-diagnostic-<timestamp>.md`
+
+**新增 attribution metric `target_chunk_intactness`**：目标句是否完整在单个 chunk 内（基于 control 文档埋点 + ingest 诊断输出），让 Codex 主张"score 提升 ≠ 目标 chunk 命中"的盲点可量化进决策门。
+
+**Step 3 attribution gate（Phase A.5 收口口径）**：
+
+- 原 10 case 不退化（pass 10/10 + 决策门 4/4 维持）
+- control-cn 正例可召回（RAG-11 retrieved=true + score ≥ baseline 范围）
+- control-cn 弱相关不误答（RAG-12 不输出捏造内容）
+- control-en 不退化（RAG-13/14 行为对照英文 `.` 回退路径）
+- `target_chunk_intactness` ≥ 阈值（具体阈值 A0 跑完后定）
+
+**Promotion gate（远期，不在当前 sprint）**：
+
+- 要声称"通用 chunker 改进"前覆盖 markdown + low-newline plain text 至少两类形态
+- 要进 production 再加 PDF / HTML 控制组
+
+**A → C → Step 4 决策路径**：
 
 ```
-05a3f49 (HEAD -> main) feat(rag): Step 3.1-3.5 chunker参数化+chunk metadata+渲染来源+Phase A评测
+A0 (半天)        : 补 control 文档 + RAG-11/12/13/14 case + ingest 诊断脚本
+A1 (1-2h)        : 跑 v3 chunker 评测 + ingest 诊断 + 算 target_chunk_intactness
+gate decision    : Step 3 attribution gate 是否通过
+  ├─ ✅ 通过     → 进 Step 4 Hybrid + RRF（3-5 day）
+  └─ ❌ 失败     → C: CjkAwareTokenTextSplitter (半天) → 重跑 A1 → 再 Step 4
+```
+
+**C 实现路径**（仅在 A 失败时触发）：
+
+- `CjkAwareTokenTextSplitter extends TextSplitter`（**不是 extends TokenTextSplitter**——1.0.3 sources 显示 `doSplit` protected 但 encode/decode helpers + 5 字段全 private，继承会复制状态）
+- `TextSplitter` 本身 implements `DocumentTransformer`，是 idiomatic Spring AI ETL pattern：Reader → Transformer → VectorStore
+- `@ConfigurationProperties` 替代当前 5 个 `@Value`（Spring 风格 + 类型安全）
+- 强边界：`\n\n`, `\n`, `.?!。？！`
+- 弱边界：`;；:` 可选
+- **`，`（中文逗号）不进强边界**——长中文句逗号多，加了会过碎
+
+**待 verify（不影响当前决策）**：
+
+Spring AI current API（1.1.x / 2.0.0-m3）是否引入带 `punctuationMarks` 参数的 `TokenTextSplitter` 构造器（Codex 提到 doc URL，1.0.3 [源码验证] 确认无）。验证后若属实，未来 BOM 升级可能不需自写 splitter——影响 C 的 ROI 评估。
+
+**不再做（D8 范围）**：
+
+- 推翻 D7 Phase A 锁定参数（`chunk-size=250 / min-chunk-size-chars=109` 在 markdown 形态上仍是有效结论）
+- 把 Step 4 Hybrid 排到 A 前面（hybrid 在坏 chunk 上做 ablation 归因混乱，A 必须先做）
+- 在 A 阶段加 PDF / HTML 控制组（属 reader matrix 维度，不是 chunker control）
+
+**证据锚点**：
+
+- `TokenTextSplitter.java:105-107`（spring-ai-commons-1.0.3-sources.jar 解压）：仅 `.?!\n` 4 字符 lastIndexOf
+- 项目 Reader 现状：`RagService.java:51` 用 `TikaDocumentReader`，未引入 `spring-ai-markdown-document-reader`
+- v3 评测产物：`docs/dev-ops/rag-eval/results/step3-chunker-v3/rag-eval-result-step3-chunker-v3.md`
+- rag_demo 文档清单：`docs/dev-ops/rag-file/{ai-agent-prompt-optimization,grafana-mcp-tools-guide}.md`
+- 文档形态实测：2 份 markdown 中文，每 ~31 / ~16 字符 1 个 `\n`（UTF-8 字符口径，非 byte），中文标点不识别 + 英文 `.` 稀疏
+
+### D9（已验证 2026-05-06）：Phase A.5 通过，Step 3 不继续调 chunker，下一候选 Step 4 Hybrid
+
+**新增产物**（commit `2877cbc`）：
+
+- `docs/dev-ops/rag-file/control-cn-low-newline.txt`
+- `docs/dev-ops/rag-file/control-en-long-paragraph.txt`
+- `docs/dev-ops/rag-eval/cases.json` 新增 RAG-11/12/13/14
+- `docs/dev-ops/rag-eval/results/step3-control-v3/rag-eval-result-step3-control-v3.md`
+- `docs/dev-ops/rag-eval/results/step3-full-v3-with-control/rag-eval-result-step3-full-v3-with-control.md`
+
+**control-only 结果**（filterExpression = `knowledge in ['control-cn-low-newline', 'control-en-long-paragraph']`）：
+
+| case | 类型 | retrieved | score range | 判分 |
+|---|---|---:|---|---|
+| RAG-11 | 中文低换行正例 | 4 | 0.7175..0.7763 | literal 2/2 |
+| RAG-12 | 中文弱相关 / 未覆盖问题 | 4 | 0.6475..0.7169 | manual 拒答 |
+| RAG-13 | 英文长段落正例 | 4 | 0.7632..0.7906 | literal 2/2 |
+| RAG-14 | 英文弱相关 / 未覆盖问题 | 4 | 0.7432..0.7799 | manual 拒答 |
+
+**full 14 regression 结果**（filterExpression = `knowledge in ['grafana-mcp-tools-guide', 'control-cn-low-newline', 'control-en-long-paragraph']`）：
+
+- 原 RAG-01..10 行为不退化；RAG-06 / RAG-08 仍 empty 拒答
+- RAG-10 仍是 literal 表达漂移 2/5（缺正常/警告/危险范围），与 v1/v3 既有现象一致，不归因于 control 文档
+- 新 RAG-11 / RAG-13 正例命中，RAG-12 / RAG-14 拒答
+
+**RAG-14 定性**：
+
+RAG-14 是 negative-evidence answerability case（负证据型拒答）。英文控制组文档明确写了没有指定 cloud provider、该问题不能从文档回答；高分表示召回到“没有答案”的相关证据，不是弱相关误召回后靠模型硬压住。它能验证 prompt + 模型在显式负证据下的拒答能力，但不能替代“纯缺失答案、无负证据”的拒答评测。
+
+**决策**：
+
+1. 保留 v3 参数：`chunk-size=250 / min-chunk-size-chars=109`
+2. 不继续调 chunker，不触发自写 CJK/Markdown splitter
+3. 当前结论边界收窄为：Phase A 参数在 markdown + 低换行中英文纯文本控制组上未发现阻断性退化，足够进入下一工程维度；不宣称通用 chunker
+4. 下一候选进入 Step 4 Hybrid + RRF。理由是补单路向量召回的词面通道（PG FTS），不是为了修 RAG-14
+
+**遗留观测缺口**：
+
+当前 runner report 不展开 top-K chunk 的 `sourcePath/chunkIndex/score/preview`，只能看到 retrieved / score range / empty / context chars。后续若要把 attribution gate 做严，应把 top-K chunk attribution 写入 markdown 报告。
+
+### Commit 范围（已落地）
+
+```
+2877cbc test(rag): add low-newline control eval cases
+ec0e4fa feat(rag): Step 3 Phase A 收口 - chunker v3 (250/109) 决策门 4/4 通过
+05a3f49 feat(rag): Step 3.1-3.5 chunker参数化+chunk metadata+渲染来源+Phase A评测
 e4dea8b docs(rag-eval): 补齐 944c006 漏 stage 的 PLAN.md 目录索引
 944c006 docs(rag-eval): reorganize results into _archive/ and ffix/ subdirs
 f5b33a8 fix: Codex P2 - runner completed 语义 + 三列 — 含义文档化
@@ -247,14 +383,6 @@ f78cde1 chore: gitignore 增量 - 本地日志目录 + Python 缓存
 fc49eb4 docs: RAG eval 接力计划 + 历史评测产物归档
 6da727e feature: RAG eval - F-fix 链路 SSE 下发 type=retrieval 事件
 ```
-
-未提交的当前状态（D7 收口后即将一次性提交）：
-
-- `.gitignore`：planning-with-files 三件套本地工作记忆忽略规则
-- `ai-agent-boot/src/main/resources/application-dev.yml`：v3 参数 250/109 已落盘
-- `docs/dev-ops/rag-eval/PLAN.md`：D7 收口决议
-- `docs/dev-ops/rag-eval/results/step3-chunker-v2/rag-eval-result-step3-chunker-v2.md`：v2 评测产物
-- `docs/dev-ops/rag-eval/results/step3-chunker-v3/rag-eval-result-step3-chunker-v3.md`：v3 评测产物（May 5 22:17）
 
 ## 4. 延期话题（用户上一会话明确说"后续讨论"，不要主动开工）
 
@@ -294,9 +422,9 @@ fc49eb4 docs: RAG eval 接力计划 + 历史评测产物归档
 
 下一会话接手时：
 
-1. Read 这份 `PLAN.md` 全文（特别是 §3 D7 = Step 3 Phase A 收口决议）
-2. 确认 §3 commit 范围是否已落地（`git log --oneline -5` 看是否有 D7 收口 commit）
-3. 当前游标：**Step 3 Phase A 已收口**（v3 决策门 4/4，gate 通过，不触发 Phase B）；下一步等用户在 §4 延期话题或 Step 4 Hybrid Retrieval 之间选
+1. Read 这份 `PLAN.md` 全文（特别是 §3 D7/D8/D9：Phase A 收口、generalizability 缺口、Phase A.5 实测收口）
+2. 确认 §3 commit 范围是否已落地（`git log --oneline -5` 看 `ec0e4fa` 和 `2877cbc`）
+3. 当前游标：**Step 3 Phase A.5 已收口**。v3 参数 250/109 保留，不继续调 chunker，不触发自写 splitter；下一候选 Step 4 Hybrid Retrieval（PG FTS + pgvector + 应用层 RRF）
 4. 如果改 yml / 重启 backend / 重灌向量库后再跑 eval：必须先预热 `POST http://localhost:8099/api/v1/agent/armory_agent` body `{"agentId":"rag_demo"}`（未预热直接打 auto_agent 会 HTTP 500，duration ~5ms，看似 endpoint 死了）
 5. **不要**自行重跑 v1/v2/v3 中任何一轮——Phase A 已锁定参数 250/109，重跑只会消耗 LLM 配额且 score 必然飘动（embedding 不变 score 应稳定，LLM 输出会因 sampling 飘）
 
@@ -315,11 +443,11 @@ fc49eb4 docs: RAG eval 接力计划 + 历史评测产物归档
 - 不要重写 §1 总目标和 §5 约束，除非确实变化
 - 同时更新顶部"最后更新"日期
 
-## 9. Step 3 — Chunker + Chunk Metadata（in progress，May 4 启动）
+## 9. Step 3 — Chunker + Chunk Metadata（completed，May 4 启动，May 6 Phase A.5 收口）
 
 > Phase A 实现由 AI 协作辅助完成（候选人逐行 review + 验证 + 跑 verify）；Phase B（条件触发，复杂度更高）保留候选人主笔。授权变更日期：2026-05-05。
 > 拍板基线见 §3 D4，本节是执行手册。
-> 当前游标（2026-05-05 22:20 EDT）：**Phase A 已收口（D7）**——3.1-3.6 全部完成（v1/v2/v3 三轮调参），决策门 4/4 通过，不触发 3.7 Phase B。Phase A 锁定参数：chunk-size=250 / min-chunk-size-chars=109。
+> 当前游标（2026-05-06 EDT）：**Phase A.5 已收口（D9）**——3.1-3.6 完成（v1/v2/v3 三轮调参），3.7 Phase B 不触发，D8 generalizability 缺口已由 D9 低换行控制组验证。Phase A 锁定参数：chunk-size=250 / min-chunk-size-chars=109。
 
 ### 9.1 改动落点表
 
