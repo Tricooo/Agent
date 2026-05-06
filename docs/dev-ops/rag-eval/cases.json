@@ -130,5 +130,53 @@
       "警告范围",
       "危险范围"
     ]
+  },
+  {
+    "id": "RAG-11",
+    "case_type": "control_plaintext_cn_answerable",
+    "score_mode": "literal",
+    "question": "控制组文档里冷数据迁移阈值是什么？归档窗口编号是什么？",
+    "should_answer": true,
+    "expected_source_section": "control-cn-low-newline.txt / 容量治理控制组",
+    "expected_points": [
+      "连续二十一天未访问",
+      "ARCHIVE-CN-7319"
+    ]
+  },
+  {
+    "id": "RAG-12",
+    "case_type": "control_plaintext_cn_weak_related",
+    "score_mode": "manual",
+    "question": "控制组文档指定的归档审批人是谁？",
+    "should_answer": false,
+    "expected_source_section": "无",
+    "expected_points": [
+      "文档没有指定审批人",
+      "无法基于当前知识库回答"
+    ]
+  },
+  {
+    "id": "RAG-13",
+    "case_type": "control_plaintext_en_answerable",
+    "score_mode": "literal",
+    "question": "According to the control document, what is the fallback queue name and what retry budget applies to that fallback path?",
+    "should_answer": true,
+    "expected_source_section": "control-en-long-paragraph.txt / webhook fallback runbook",
+    "expected_points": [
+      "silver-river-42",
+      "seven attempts within eighteen minutes"
+    ]
+  },
+  {
+    "id": "RAG-14",
+    "case_type": "control_plaintext_en_weak_related",
+    "score_mode": "manual",
+    "question": "According to the control document, which cloud provider hosts the fallback queue?",
+    "should_answer": false,
+    "expected_source_section": "无",
+    "expected_points": [
+      "does not specify which cloud provider",
+      "cannot be answered from this document"
+    ]
   }
 ]
