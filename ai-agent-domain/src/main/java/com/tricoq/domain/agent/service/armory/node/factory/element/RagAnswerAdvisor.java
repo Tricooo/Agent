@@ -4,8 +4,6 @@ import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.TypeReference;
 import com.tricoq.domain.agent.model.entity.VectorKeywordEntity;
 import com.tricoq.domain.agent.model.valobj.RetrievalOptionsVO;
-import lombok.AllArgsConstructor;
-import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.ai.chat.client.ChatClientRequest;
@@ -68,6 +66,10 @@ public class RagAnswerAdvisor implements BaseAdvisor {
     private static final int MAX_KEYWORD_TERMS = 12;
     private static final int MIN_KEYWORD_LENGTH = 2;
     private static final FilterExpressionConverter PG_FILTER_EXPRESSION_CONVERTER = new PgVectorFilterExpressionConverter();
+    private static final String RETRIEVAL_MODE_HYBRID = "HYBRID";
+    private static final String RETRIEVAL_SOURCE_VECTOR = "VECTOR";
+    private static final String RETRIEVAL_SOURCE_KEYWORD = "KEYWORD";
+    private static final String RETRIEVAL_SOURCE_VECTOR_KEYWORD = "VECTOR_KEYWORD";
 
 
     public RagAnswerAdvisor(VectorStore vectorStore, SearchRequest searchRequest) {
@@ -221,8 +223,8 @@ public class RagAnswerAdvisor implements BaseAdvisor {
 
         Map<String, RrfDocumentCandidate> candidates = new HashMap<>();
 
-        addRrfScores(candidates, vectorDocuments);
-        addRrfScores(candidates, keywordDocuments);
+        addRrfScores(candidates, vectorDocuments, RETRIEVAL_SOURCE_VECTOR);
+        addRrfScores(candidates, keywordDocuments, RETRIEVAL_SOURCE_KEYWORD);
 
         if (CollectionUtils.isEmpty(candidates)) {
             return List.of();
@@ -231,10 +233,13 @@ public class RagAnswerAdvisor implements BaseAdvisor {
         List<RrfDocumentCandidate> candidateList = new ArrayList<>(candidates.values());
         candidateList.sort(Comparator.comparing(RrfDocumentCandidate::getScore).reversed());
 
-        return candidateList.stream().map(RrfDocumentCandidate::getDocument).limit(topK).toList();
+        return candidateList.stream()
+                .limit(topK)
+                .map(this::toRrfDocument)
+                .toList();
     }
 
-    private void addRrfScores(Map<String, RrfDocumentCandidate> candidates, List<Document> documents) {
+    private void addRrfScores(Map<String, RrfDocumentCandidate> candidates, List<Document> documents, String retrievalSource) {
         if (CollectionUtils.isEmpty(documents)) {
             return;
         }
@@ -246,10 +251,36 @@ public class RagAnswerAdvisor implements BaseAdvisor {
             }
             RrfDocumentCandidate candidate = candidates.get(key);
             if (candidate == null) {
-                candidates.put(key, new RrfDocumentCandidate(document, calculateScore(i + 1)));
-                continue;
+                candidate = new RrfDocumentCandidate(document);
+                candidates.put(key, candidate);
             }
-            candidate.setScore(candidate.getScore() + calculateScore(i + 1));
+            int rank = i + 1;
+            candidate.addScore(calculateScore(rank));
+            candidate.recordSource(retrievalSource, rank, document.getScore());
+        }
+    }
+
+    private Document toRrfDocument(RrfDocumentCandidate candidate) {
+        Document document = candidate.getDocument();
+        Map<String, Object> metadata = new HashMap<>(document.getMetadata());
+        metadata.put("retrievalMode", RETRIEVAL_MODE_HYBRID);
+        metadata.put("retrievalSource", candidate.retrievalSource());
+        metadata.put("rrfScore", candidate.getScore());
+        metadata.put("rrfK", retrievalOptions.effectiveRrfK());
+        addMetadataIfPresent(metadata, "vectorRank", candidate.getVectorRank());
+        addMetadataIfPresent(metadata, "vectorScore", candidate.getVectorScore());
+        addMetadataIfPresent(metadata, "keywordRank", candidate.getKeywordRank());
+        addMetadataIfPresent(metadata, "keywordScore", candidate.getKeywordScore());
+
+        return document.mutate()
+                .metadata(metadata)
+                .score(candidate.getScore())
+                .build();
+    }
+
+    private void addMetadataIfPresent(Map<String, Object> metadata, String key, Object value) {
+        if (value != null) {
+            metadata.put(key, value);
         }
     }
 
@@ -290,11 +321,67 @@ public class RagAnswerAdvisor implements BaseAdvisor {
         return sourcePathText + "#" + chunkIndexText;
     }
 
-    @Data
-    @AllArgsConstructor
     private static class RrfDocumentCandidate {
         private final Document document;
         private double score;
+        private Integer vectorRank;
+        private Double vectorScore;
+        private Integer keywordRank;
+        private Double keywordScore;
+
+        private RrfDocumentCandidate(Document document) {
+            this.document = document;
+        }
+
+        private Document getDocument() {
+            return document;
+        }
+
+        private double getScore() {
+            return score;
+        }
+
+        private Integer getVectorRank() {
+            return vectorRank;
+        }
+
+        private Double getVectorScore() {
+            return vectorScore;
+        }
+
+        private Integer getKeywordRank() {
+            return keywordRank;
+        }
+
+        private Double getKeywordScore() {
+            return keywordScore;
+        }
+
+        private void addScore(double score) {
+            this.score += score;
+        }
+
+        private void recordSource(String retrievalSource, int rank, Double sourceScore) {
+            if (RETRIEVAL_SOURCE_VECTOR.equals(retrievalSource)) {
+                vectorRank = rank;
+                vectorScore = sourceScore;
+                return;
+            }
+            if (RETRIEVAL_SOURCE_KEYWORD.equals(retrievalSource)) {
+                keywordRank = rank;
+                keywordScore = sourceScore;
+            }
+        }
+
+        private String retrievalSource() {
+            if (vectorRank != null && keywordRank != null) {
+                return RETRIEVAL_SOURCE_VECTOR_KEYWORD;
+            }
+            if (vectorRank != null) {
+                return RETRIEVAL_SOURCE_VECTOR;
+            }
+            return RETRIEVAL_SOURCE_KEYWORD;
+        }
     }
 
 
