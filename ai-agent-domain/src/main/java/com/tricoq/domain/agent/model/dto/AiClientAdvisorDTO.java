@@ -69,7 +69,6 @@ public class AiClientAdvisorDTO {
     private RagAnswer ragAnswer;
 
     @Data
-    @Builder
     @AllArgsConstructor
     @NoArgsConstructor
     public static class ChatMemory {
@@ -77,7 +76,6 @@ public class AiClientAdvisorDTO {
     }
 
     @Data
-    @Builder
     @AllArgsConstructor
     @NoArgsConstructor
     public static class RagAnswer {
@@ -85,6 +83,22 @@ public class AiClientAdvisorDTO {
         //score判断的阈值
         private double similarityThreshold = 0.0;
         private String filterExpression;
+        /**
+         * 检索模式：VECTOR / HYBRID。默认 VECTOR，避免旧 extParam 在升级后行为漂移。
+         */
+        private String retrievalMode = "VECTOR";
+        /**
+         * HYBRID 模式下向量召回候选数；<=0 时回退到 topK。
+         */
+        private int vectorTopK = 0;
+        /**
+         * HYBRID 模式下 PG FTS 词面召回候选数；<=0 时回退到 topK。
+         */
+        private int keywordTopK = 0;
+        /**
+         * Reciprocal Rank Fusion 的平滑常量，常用默认值 60。
+         */
+        private int rrfK = 60;
     }
 
 }

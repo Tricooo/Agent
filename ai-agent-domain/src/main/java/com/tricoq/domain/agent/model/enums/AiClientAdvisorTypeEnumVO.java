@@ -2,6 +2,7 @@ package com.tricoq.domain.agent.model.enums;
 
 import com.tricoq.domain.agent.model.dto.AiClientAdvisorDTO;
 import com.tricoq.domain.agent.model.dto.AiClientRuntimeProfile;
+import com.tricoq.domain.agent.model.valobj.RetrievalOptionsVO;
 import com.tricoq.domain.agent.service.armory.node.factory.element.RagAnswerAdvisor;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -49,12 +50,14 @@ public enum AiClientAdvisorTypeEnumVO {
             if (ragAnswer == null) {
                 return null;
             }
+            int topK = safeTopK(ragAnswer.getTopK());
             SearchRequest searchRequest = SearchRequest.builder()
                     .filterExpression(StringUtils.defaultIfEmpty(ragAnswer.getFilterExpression(), StringUtils.EMPTY))
-                    .topK(safeTopK(ragAnswer.getTopK()))
+                    .topK(topK)
                     .similarityThreshold(safeSimilarityThreshold(ragAnswer.getSimilarityThreshold()))
                     .build();
-            return new RagAnswerAdvisor(vectorStore, searchRequest);
+            RetrievalOptionsVO options = RetrievalOptionsVO.from(ragAnswer, topK);
+            return new RagAnswerAdvisor(vectorStore, searchRequest, options);
         }
 
         @Override

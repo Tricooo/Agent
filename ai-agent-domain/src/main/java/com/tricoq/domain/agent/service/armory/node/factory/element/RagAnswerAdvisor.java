@@ -1,5 +1,11 @@
 package com.tricoq.domain.agent.service.armory.node.factory.element;
 
+import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.TypeReference;
+import com.tricoq.domain.agent.model.entity.VectorKeywordEntity;
+import com.tricoq.domain.agent.model.valobj.RetrievalOptionsVO;
+import lombok.AllArgsConstructor;
+import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.ai.chat.client.ChatClientRequest;
@@ -17,14 +23,19 @@ import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.filter.Filter;
+import org.springframework.ai.vectorstore.filter.FilterExpressionConverter;
 import org.springframework.ai.vectorstore.filter.FilterExpressionTextParser;
+import org.springframework.ai.vectorstore.pgvector.PgVectorFilterExpressionConverter;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
 import org.springframework.util.CollectionUtils;
 import reactor.core.publisher.Flux;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * RAG 顾问
@@ -45,16 +56,28 @@ public class RagAnswerAdvisor implements BaseAdvisor {
     private final VectorStore vectorStore;
     private final SearchRequest searchRequest;
     private final String userTextAdvisor;
+    private final RetrievalOptionsVO retrievalOptions;
 
     private static final int DEFAULT_MAX_CONTEXT_CHARS = 6000;
     private static final String CHUNK_TRUNCATED_NOTICE = "\n...[chunk truncated]...\n";
     private static final int MIN_CHUNK_HEAD_CHARS = 1000;
-    private static final String EMPTY_RETRIEVAL_CONTEXT = "未检索到满足当前知识库过滤条件和相似度阈值的知识片段。请明确告知用户：当前知识库没有可用上下文，不能基于知识库回答该问题。";
+    private static final String EMPTY_RETRIEVAL_CONTEXT =
+            "未检索到满足当前知识库过滤条件和相似度阈值的知识片段。请明确告知用户：当前知识库没有可用上下文，不能基于知识库回答该问题。";
+
+    private static final Pattern KEYWORD_TOKEN_PATTERN = Pattern.compile("[A-Za-z0-9_./]+");
+    private static final int MAX_KEYWORD_TERMS = 12;
+    private static final int MIN_KEYWORD_LENGTH = 2;
+    private static final FilterExpressionConverter PG_FILTER_EXPRESSION_CONVERTER = new PgVectorFilterExpressionConverter();
 
 
     public RagAnswerAdvisor(VectorStore vectorStore, SearchRequest searchRequest) {
+        this(vectorStore, searchRequest, new RetrievalOptionsVO());
+    }
+
+    public RagAnswerAdvisor(VectorStore vectorStore, SearchRequest searchRequest, RetrievalOptionsVO retrievalOptions) {
         this.vectorStore = vectorStore;
         this.searchRequest = searchRequest;
+        this.retrievalOptions = retrievalOptions == null ? new RetrievalOptionsVO() : retrievalOptions;
         this.userTextAdvisor = """
                 
                 Context information is below, surrounded by ---------------------
@@ -90,7 +113,7 @@ public class RagAnswerAdvisor implements BaseAdvisor {
 
         SearchRequest request = SearchRequest.from(searchRequest).query(userText)
                 .filterExpression(doGetFilterExpression(context)).build();
-        List<Document> documents = vectorStore.similaritySearch(request);
+        List<Document> documents = retrieveDocuments(userText, request);
         if (CollectionUtils.isEmpty(documents)) {
             // 空召回不可静默，是 RAG 链路重要状态；同时不能退化成普通聊天，仍要把“无可用上下文”的边界写进 prompt。
             String emptyContext = EMPTY_RETRIEVAL_CONTEXT;
@@ -174,6 +197,106 @@ public class RagAnswerAdvisor implements BaseAdvisor {
                 .context(advisedUserParams)
                 .build();
     }
+
+    private List<Document> retrieveDocuments(String userText, SearchRequest request) {
+        if (!retrievalOptions.isHybridMode()) {
+            return vectorStore.similaritySearch(request);
+        }
+
+        SearchRequest vectorRequest = SearchRequest.from(request)
+                .topK(retrievalOptions.effectiveVectorTopK(request.getTopK()))
+                .build();
+
+        List<Document> vectorDocuments = vectorStore.similaritySearch(vectorRequest);
+        List<Document> keywordDocuments = keywordSearch(userText, request);
+
+        return rrMerge(vectorDocuments, keywordDocuments, request.getTopK());
+    }
+
+    private List<Document> rrMerge(List<Document> vectorDocuments, List<Document> keywordDocuments, int topK) {
+        //score = 1 / (rrfK + rank)
+        if (topK <= 0) {
+            return List.of();
+        }
+
+        Map<String, RrfDocumentCandidate> candidates = new HashMap<>();
+
+        addRrfScores(candidates, vectorDocuments);
+        addRrfScores(candidates, keywordDocuments);
+
+        if (CollectionUtils.isEmpty(candidates)) {
+            return List.of();
+        }
+
+        List<RrfDocumentCandidate> candidateList = new ArrayList<>(candidates.values());
+        candidateList.sort(Comparator.comparing(RrfDocumentCandidate::getScore).reversed());
+
+        return candidateList.stream().map(RrfDocumentCandidate::getDocument).limit(topK).toList();
+    }
+
+    private void addRrfScores(Map<String, RrfDocumentCandidate> candidates, List<Document> documents) {
+        if (CollectionUtils.isEmpty(documents)) {
+            return;
+        }
+        for (int i = 0; i < documents.size(); i++) {
+            Document document = documents.get(i);
+            String key = documentKey(document);
+            if (StringUtils.isBlank(key)) {
+                continue;
+            }
+            RrfDocumentCandidate candidate = candidates.get(key);
+            if (candidate == null) {
+                candidates.put(key, new RrfDocumentCandidate(document, calculateScore(i + 1)));
+                continue;
+            }
+            candidate.setScore(candidate.getScore() + calculateScore(i + 1));
+        }
+    }
+
+    private double calculateScore(int rank) {
+        BigDecimal score = BigDecimal.ONE.divide(
+                BigDecimal.valueOf(retrievalOptions.effectiveRrfK() + rank),
+                5,
+                RoundingMode.HALF_UP
+        );
+        return score.doubleValue();
+    }
+
+    private String documentKey(Document document) {
+        if (document == null) {
+            return StringUtils.EMPTY;
+        }
+        if (StringUtils.isNotBlank(document.getId())) {
+            return document.getId();
+        }
+
+        Map<String, Object> metadata = document.getMetadata();
+        if (CollectionUtils.isEmpty(metadata)) {
+            return StringUtils.EMPTY;
+        }
+
+        Object sourcePath = metadata.get("sourcePath");
+        Object chunkIndex = metadata.get("chunkIndex");
+        if (sourcePath == null || chunkIndex == null) {
+            return StringUtils.EMPTY;
+        }
+
+        String sourcePathText = sourcePath.toString();
+        String chunkIndexText = chunkIndex.toString();
+        if (StringUtils.isBlank(sourcePathText) || StringUtils.isBlank(chunkIndexText)) {
+            return StringUtils.EMPTY;
+        }
+
+        return sourcePathText + "#" + chunkIndexText;
+    }
+
+    @Data
+    @AllArgsConstructor
+    private static class RrfDocumentCandidate {
+        private final Document document;
+        private double score;
+    }
+
 
     /**
      * Logic to be executed after the rest of the advisor chain is called.
@@ -298,7 +421,7 @@ public class RagAnswerAdvisor implements BaseAdvisor {
      * 构造 chunk 来源行（Step 3.3，PLAN.md §9.1 落点 C）。
      * 在多 chunk 上下文里让 LLM 引用 "[1]" / "[2]" 时能同时看到 chunk 来源文档 / 块序号 / 章节路径，
      * 提升 attribution 能力 + 评测时直接定位 chunk-doc 双向关系。
-     *
+     * <p>
      * Phase A 仅 sourcePath / chunkIndex / totalChunks 有值；
      * parentSection / headingPath 在 Phase A 留空（Phase B 自写 splitter 后才填值），渲染时 graceful 跳过。
      */
@@ -364,5 +487,135 @@ public class RagAnswerAdvisor implements BaseAdvisor {
             boolean truncated
     ) {
     }
+
+
+    private List<Document> keywordSearch(String userText, SearchRequest request) {
+        //从用户问题构建需要查询的keyword字符串
+        String keywordQuery = buildKeywordQuery(userText);
+        if (StringUtils.isBlank(keywordQuery)) {
+            return List.of();
+        }
+
+        JdbcTemplate template = vectorStore.getNativeClient().filter(JdbcTemplate.class::isInstance)
+                .map(JdbcTemplate.class::cast)
+                .orElseThrow(() -> new IllegalArgumentException("向量数据库jdbcTemplate缺失"));
+
+        Filter.Expression filterExpression = request.getFilterExpression();
+        String sql = buildKeywordQuerySql(filterExpression != null);
+        int keywordTopK = retrievalOptions.effectiveKeywordTopK(request.getTopK());
+        Object[] queryArgs = buildKeywordQueryArgs(keywordQuery, filterExpression, keywordTopK);
+
+        RowMapper<VectorKeywordEntity> rowMapper = (rs, rowNum) -> {
+            VectorKeywordEntity entity = new VectorKeywordEntity();
+            entity.setId(rs.getString("id"));
+            entity.setContent(rs.getString("content"));
+            entity.setMetaData(rs.getString("metadata"));
+            entity.setKeywordScore(rs.getDouble("keyword_score"));
+            return entity;
+        };
+
+        List<VectorKeywordEntity> results = template.query(sql, rowMapper, queryArgs);
+
+        List<Document> documents = new ArrayList<>();
+        for (VectorKeywordEntity result : results) {
+            String metaData = result.getMetaData();
+            Map<String, Object> metadata = parseMetadata(metaData);
+            documents.add(Document.builder()
+                    .id(result.getId())
+                    .text(result.getContent())
+                    .metadata(metadata)
+                    .score(result.getKeywordScore())
+                    .build());
+        }
+        return documents;
+    }
+
+    private String buildKeywordQuerySql(boolean hasFilterExpression) {
+        StringBuilder sql = new StringBuilder("""
+                WITH keyword_query AS (
+                    SELECT websearch_to_tsquery('simple', ?) AS fts_query
+                )
+                SELECT id::text AS id,
+                       content,
+                       metadata::text AS metadata,
+                       ts_rank_cd(to_tsvector('simple', content), keyword_query.fts_query) AS keyword_score
+                FROM vector_store_openai, keyword_query
+                WHERE to_tsvector('simple', content) @@ keyword_query.fts_query
+                """);
+        if (hasFilterExpression) {
+            sql.append(" AND metadata::jsonb @@ CAST(? AS jsonpath)\n");
+        }
+        sql.append("""
+                ORDER BY keyword_score DESC
+                LIMIT ?
+                """);
+        return sql.toString();
+    }
+
+    private Object[] buildKeywordQueryArgs(String keywordQuery, Filter.Expression filterExpression, int keywordTopK) {
+        if (filterExpression == null) {
+            return new Object[]{keywordQuery, keywordTopK};
+        }
+        String jsonPathFilter = PG_FILTER_EXPRESSION_CONVERTER.convertExpression(filterExpression);
+        return new Object[]{keywordQuery, jsonPathFilter, keywordTopK};
+    }
+
+    /**
+     * 把用户的自然语言问题，转成 PG FTS 更容易检索的关键词查询串
+     *
+     * @param userText 用户问题
+     * @return 查询字符串
+     */
+    private String buildKeywordQuery(String userText) {
+        if (StringUtils.isBlank(userText)) {
+            return StringUtils.EMPTY;
+        }
+
+        Set<String> keywords = new LinkedHashSet<>();
+        Matcher matcher = KEYWORD_TOKEN_PATTERN.matcher(userText);
+
+        while (matcher.find() && keywords.size() < MAX_KEYWORD_TERMS) {
+            addKeyword(keywords, matcher.group());
+        }
+        return String.join(" OR ", keywords);
+    }
+
+    /**
+     * 用于拆分A_B这种词，原词+拆后的词都作为keyword
+     *
+     * @param keywords 集合
+     * @param rawToken 原始keyword
+     */
+    private void addKeyword(Set<String> keywords, String rawToken) {
+        if (StringUtils.isBlank(rawToken)) {
+            return;
+        }
+
+        String token = rawToken.trim();
+        if (isUsefulKeyword(token)) {
+            keywords.add(token);
+        }
+
+        for (String part : token.split("[_./]+")) {
+            if (isUsefulKeyword(part)) {
+                keywords.add(part);
+            }
+        }
+    }
+
+
+    private boolean isUsefulKeyword(String token) {
+        return StringUtils.isNotBlank(token)
+                && token.length() >= MIN_KEYWORD_LENGTH;
+    }
+
+    private Map<String, Object> parseMetadata(String metadataJson) {
+        if (StringUtils.isBlank(metadataJson)) {
+            return Map.of();
+        }
+        return JSON.parseObject(metadataJson, new TypeReference<>() {
+        });
+    }
+
 
 }
