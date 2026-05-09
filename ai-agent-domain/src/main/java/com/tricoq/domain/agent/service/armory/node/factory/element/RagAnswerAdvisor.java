@@ -478,17 +478,11 @@ public class RagAnswerAdvisor implements BaseAdvisor {
                 : chatClientResponse.context();
 
         ChatResponse.Builder responseBuilder = ChatResponse.builder().from(chatClientResponse.chatResponse());
-        addMetadataIfPresent(responseBuilder, responseContext, "qa_retrieved_documents");
-        addMetadataIfPresent(responseBuilder, responseContext, "qa_retrieved_document_count");
-        addMetadataIfPresent(responseBuilder, responseContext, "qa_retrieval_empty");
-        addMetadataIfPresent(responseBuilder, responseContext, "qa_context_max_chars");
-        addMetadataIfPresent(responseBuilder, responseContext, "qa_context_actual_chars");
-        addMetadataIfPresent(responseBuilder, responseContext, "qa_context_selected_count");
-        addMetadataIfPresent(responseBuilder, responseContext, "qa_context_dropped_count");
-        addMetadataIfPresent(responseBuilder, responseContext, "qa_context_truncated");
-        addMetadataIfPresent(responseBuilder, responseContext, "qa_similarity_threshold");
-        addMetadataIfPresent(responseBuilder, responseContext, "qa_min_retrieved_score");
-        addMetadataIfPresent(responseBuilder, responseContext, "qa_max_retrieved_score");
+        responseContext.forEach((key, value) -> {
+            if (StringUtils.startsWith(key, "qa_") && value != null) {
+                responseBuilder.metadata(key, value);
+            }
+        });
 
         return ChatClientResponse.builder()
                 .chatResponse(responseBuilder.build())
@@ -614,13 +608,6 @@ public class RagAnswerAdvisor implements BaseAdvisor {
 
         sb.append(")");
         return sb.toString();
-    }
-
-    private void addMetadataIfPresent(ChatResponse.Builder responseBuilder, Map<String, Object> context, String key) {
-        Object value = context.get(key);
-        if (value != null) {
-            responseBuilder.metadata(key, value);
-        }
     }
 
     private Double minScore(List<Document> documents) {
