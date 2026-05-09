@@ -1,6 +1,7 @@
 package com.tricoq.domain.agent.model.valobj;
 
 import com.tricoq.domain.agent.model.dto.AiClientAdvisorDTO;
+import com.tricoq.domain.agent.model.enums.KeyWordPolicy;
 import lombok.Data;
 import org.apache.commons.lang3.StringUtils;
 
@@ -33,7 +34,13 @@ public class RetrievalOptionsVO {
      */
     private int rrfK = DEFAULT_RRF_K;
 
+    private KeyWordPolicy keyWordPolicy = KeyWordPolicy.STRONG;
+
     public static RetrievalOptionsVO from(AiClientAdvisorDTO.RagAnswer ragAnswer, int topK) {
+        return from(ragAnswer, topK, null);
+    }
+
+    public static RetrievalOptionsVO from(AiClientAdvisorDTO.RagAnswer ragAnswer, int topK, KeyWordPolicy keyWordPolicy) {
         RetrievalOptionsVO options = new RetrievalOptionsVO();
         if (ragAnswer == null) {
             return options;
@@ -44,6 +51,9 @@ public class RetrievalOptionsVO {
         options.setVectorTopK(positiveOrDefault(ragAnswer.getVectorTopK(), effectiveTopK));
         options.setKeywordTopK(positiveOrDefault(ragAnswer.getKeywordTopK(), effectiveTopK));
         options.setRrfK(positiveOrDefault(ragAnswer.getRrfK(), DEFAULT_RRF_K));
+        if (null != keyWordPolicy) {
+            options.setKeyWordPolicy(keyWordPolicy);
+        }
         return options;
     }
 

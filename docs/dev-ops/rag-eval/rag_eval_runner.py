@@ -209,7 +209,7 @@ def _append_retrieved_documents(lines: list[str], data: dict[str, Any]) -> None:
             metadata = {}
 
         lines.append(
-            "    - #{idx} score=`{score}`, source=`{source}`, chunk=`{chunk}`, retrievalSource=`{retrieval_source}`, rrfScore=`{rrf_score}`, vectorRank=`{vector_rank}`, vectorScore=`{vector_score}`, keywordRank=`{keyword_rank}`, keywordScore=`{keyword_score}`".format(
+            "    - #{idx} score=`{score}`, source=`{source}`, chunk=`{chunk}`, retrievalSource=`{retrieval_source}`, rrfScore=`{rrf_score}`, vectorRank=`{vector_rank}`, vectorScore=`{vector_score}`, keywordRank=`{keyword_rank}`, keywordScore=`{keyword_score}`, keywordSkippedReason=`{keyword_skipped_reason}`".format(
                 idx=doc_index,
                 score=_fmt_score(document.get("score")),
                 source=md_escape(_metadata_value(metadata, "sourcePath")),
@@ -220,6 +220,7 @@ def _append_retrieved_documents(lines: list[str], data: dict[str, Any]) -> None:
                 vector_score=_fmt_score(metadata.get("vectorScore")),
                 keyword_rank=md_escape(_metadata_value(metadata, "keywordRank")),
                 keyword_score=_fmt_score(metadata.get("keywordScore")),
+                keyword_skipped_reason=md_escape(_metadata_value(metadata, "keywordSkippedReason")),
             )
         )
         preview = _document_preview(document)
@@ -242,7 +243,7 @@ def write_markdown(path: Path, results: list[dict[str, Any]], api_url: str, agen
     lines.append(">")
     lines.append("> `retrieved` / `score` / `empty` 三列的 `—` 表示**没拿到成功的 ChatResponse metadata**，不等价于\"无检索\"。当前实现把 retrieval SSE 帧放在 `.call().chatResponse()` 返回之后才发，所以 LLM 调用失败时（即使 RAG 检索本身成功）三列都会是 `—`。要区分\"检索失败\"和\"生成失败\"，对照 `error` 列 / details 区 / backend log。")
     lines.append(">")
-    lines.append("> Details 区的 `documents` 会展开 top-K chunk attribution；HYBRID 模式下 `score` 是 RRF score，原始向量分与关键词分分别看 `vectorScore` / `keywordScore`。")
+    lines.append("> Details 区的 `documents` 会展开 top-K chunk attribution；HYBRID 模式下 `score` 是 RRF score，原始向量分与关键词分分别看 `vectorScore` / `keywordScore`；keyword 分支未参与时看 `keywordSkippedReason`。")
     lines.append("")
     lines.append("| id | type | completed | duration_ms | should_answer | retrieved | score | empty | literal_hit | missed_points | answer_preview | manual_pass |")
     lines.append("|---|---|---:|---:|---:|---:|---|---:|---:|---|---|---|")

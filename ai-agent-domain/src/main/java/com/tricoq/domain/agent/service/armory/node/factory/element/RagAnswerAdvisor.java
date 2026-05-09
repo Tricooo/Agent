@@ -3,8 +3,11 @@ package com.tricoq.domain.agent.service.armory.node.factory.element;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.TypeReference;
 import com.tricoq.domain.agent.model.entity.VectorKeywordEntity;
+import com.tricoq.domain.agent.model.enums.KeyWordPolicy;
 import com.tricoq.domain.agent.model.valobj.RetrievalOptionsVO;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.collections4.MapUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
@@ -26,7 +29,6 @@ import org.springframework.ai.vectorstore.filter.FilterExpressionTextParser;
 import org.springframework.ai.vectorstore.pgvector.PgVectorFilterExpressionConverter;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
-import org.springframework.util.CollectionUtils;
 import reactor.core.publisher.Flux;
 
 import java.math.BigDecimal;
@@ -62,14 +64,24 @@ public class RagAnswerAdvisor implements BaseAdvisor {
     private static final String EMPTY_RETRIEVAL_CONTEXT =
             "未检索到满足当前知识库过滤条件和相似度阈值的知识片段。请明确告知用户：当前知识库没有可用上下文，不能基于知识库回答该问题。";
 
-    private static final Pattern KEYWORD_TOKEN_PATTERN = Pattern.compile("[A-Za-z0-9_./]+");
+    private static final Pattern KEYWORD_TOKEN_PATTERN = Pattern.compile("[A-Za-z0-9_./-]+");
+    // 命中任一结构特征 → 强标识符
+    // 含下划线、点号、斜线或连字符：query_prometheus, node.cpu, silver-river-42
+    // 数字+字母混合：silver42, CN7319
+    // 字母+数字混合：ARCHIVE-CN-7319
+    private static final Pattern STRONG_TOKEN_PATTERN = Pattern.compile(
+            ".*[_.\\-/].*" + "|.*\\d+.*[a-zA-Z].*" + "|.*[a-zA-Z].*\\d+.*"
+    );
     private static final int MAX_KEYWORD_TERMS = 12;
     private static final int MIN_KEYWORD_LENGTH = 2;
+    private static final int MIN_STRONG_KEYWORD_LENGTH = 5;
     private static final FilterExpressionConverter PG_FILTER_EXPRESSION_CONVERTER = new PgVectorFilterExpressionConverter();
     private static final String RETRIEVAL_MODE_HYBRID = "HYBRID";
     private static final String RETRIEVAL_SOURCE_VECTOR = "VECTOR";
     private static final String RETRIEVAL_SOURCE_KEYWORD = "KEYWORD";
     private static final String RETRIEVAL_SOURCE_VECTOR_KEYWORD = "VECTOR_KEYWORD";
+    private static final String KEYWORD_SKIPPED_REASON_NO_KEYWORD_QUERY = "NO_KEYWORD_QUERY";
+    private static final String KEYWORD_SKIPPED_REASON_NO_KEYWORD_RESULTS = "NO_KEYWORD_RESULTS";
 
 
     public RagAnswerAdvisor(VectorStore vectorStore, SearchRequest searchRequest) {
@@ -210,12 +222,15 @@ public class RagAnswerAdvisor implements BaseAdvisor {
                 .build();
 
         List<Document> vectorDocuments = vectorStore.similaritySearch(vectorRequest);
-        List<Document> keywordDocuments = keywordSearch(userText, request);
+        String keywordQuery = buildKeywordQuery(userText);
+        List<Document> keywordDocuments = keywordSearch(keywordQuery, request);
+        String keywordSkippedReason = keywordSkippedReason(keywordQuery, keywordDocuments);
 
-        return rrMerge(vectorDocuments, keywordDocuments, request.getTopK());
+        return rrMerge(vectorDocuments, keywordDocuments, request.getTopK(), keywordSkippedReason);
     }
 
-    private List<Document> rrMerge(List<Document> vectorDocuments, List<Document> keywordDocuments, int topK) {
+    private List<Document> rrMerge(List<Document> vectorDocuments, List<Document> keywordDocuments, int topK,
+                                   String keywordSkippedReason) {
         //score = 1 / (rrfK + rank)
         if (topK <= 0) {
             return List.of();
@@ -226,7 +241,7 @@ public class RagAnswerAdvisor implements BaseAdvisor {
         addRrfScores(candidates, vectorDocuments, RETRIEVAL_SOURCE_VECTOR);
         addRrfScores(candidates, keywordDocuments, RETRIEVAL_SOURCE_KEYWORD);
 
-        if (CollectionUtils.isEmpty(candidates)) {
+        if (MapUtils.isEmpty(candidates)) {
             return List.of();
         }
 
@@ -235,7 +250,7 @@ public class RagAnswerAdvisor implements BaseAdvisor {
 
         return candidateList.stream()
                 .limit(topK)
-                .map(this::toRrfDocument)
+                .map(candidate -> toRrfDocument(candidate, keywordSkippedReason))
                 .toList();
     }
 
@@ -260,13 +275,14 @@ public class RagAnswerAdvisor implements BaseAdvisor {
         }
     }
 
-    private Document toRrfDocument(RrfDocumentCandidate candidate) {
+    private Document toRrfDocument(RrfDocumentCandidate candidate, String keywordSkippedReason) {
         Document document = candidate.getDocument();
         Map<String, Object> metadata = new HashMap<>(document.getMetadata());
         metadata.put("retrievalMode", RETRIEVAL_MODE_HYBRID);
         metadata.put("retrievalSource", candidate.retrievalSource());
         metadata.put("rrfScore", candidate.getScore());
         metadata.put("rrfK", retrievalOptions.effectiveRrfK());
+        addMetadataIfPresent(metadata, "keywordSkippedReason", keywordSkippedReason);
         addMetadataIfPresent(metadata, "vectorRank", candidate.getVectorRank());
         addMetadataIfPresent(metadata, "vectorScore", candidate.getVectorScore());
         addMetadataIfPresent(metadata, "keywordRank", candidate.getKeywordRank());
@@ -302,7 +318,7 @@ public class RagAnswerAdvisor implements BaseAdvisor {
         }
 
         Map<String, Object> metadata = document.getMetadata();
-        if (CollectionUtils.isEmpty(metadata)) {
+        if (MapUtils.isEmpty(metadata)) {
             return StringUtils.EMPTY;
         }
 
@@ -576,9 +592,7 @@ public class RagAnswerAdvisor implements BaseAdvisor {
     }
 
 
-    private List<Document> keywordSearch(String userText, SearchRequest request) {
-        //从用户问题构建需要查询的keyword字符串
-        String keywordQuery = buildKeywordQuery(userText);
+    private List<Document> keywordSearch(String keywordQuery, SearchRequest request) {
         if (StringUtils.isBlank(keywordQuery)) {
             return List.of();
         }
@@ -615,6 +629,16 @@ public class RagAnswerAdvisor implements BaseAdvisor {
                     .build());
         }
         return documents;
+    }
+
+    private String keywordSkippedReason(String keywordQuery, List<Document> keywordDocuments) {
+        if (StringUtils.isBlank(keywordQuery)) {
+            return KEYWORD_SKIPPED_REASON_NO_KEYWORD_QUERY;
+        }
+        if (CollectionUtils.isEmpty(keywordDocuments)) {
+            return KEYWORD_SKIPPED_REASON_NO_KEYWORD_RESULTS;
+        }
+        return null;
     }
 
     private String buildKeywordQuerySql(boolean hasFilterExpression) {
@@ -662,9 +686,34 @@ public class RagAnswerAdvisor implements BaseAdvisor {
         Matcher matcher = KEYWORD_TOKEN_PATTERN.matcher(userText);
 
         while (matcher.find() && keywords.size() < MAX_KEYWORD_TERMS) {
-            addKeyword(keywords, matcher.group());
+            addStrongKeyword(keywords, matcher.group());
         }
+
+        if (keywords.isEmpty() && KeyWordPolicy.FALLBACK.equals(retrievalOptions.getKeyWordPolicy())) {
+            matcher.reset();
+            while (matcher.find() && keywords.size() < MAX_KEYWORD_TERMS) {
+                addKeyword(keywords, matcher.group());
+            }
+        }
+
         return String.join(" OR ", keywords);
+    }
+
+    /**
+     * 需要区分泛词和强token
+     *
+     * @param keywords 集合
+     * @param rawToken 原始keyword
+     */
+    private void addStrongKeyword(Set<String> keywords, String rawToken) {
+        if (StringUtils.isBlank(rawToken)) {
+            return;
+        }
+
+        String token = rawToken.trim();
+        if (isStrongKeyword(token)) {
+            keywords.add(token);
+        }
     }
 
     /**
@@ -683,7 +732,7 @@ public class RagAnswerAdvisor implements BaseAdvisor {
             keywords.add(token);
         }
 
-        for (String part : token.split("[_./]+")) {
+        for (String part : token.split("[_./-]+")) {
             if (isUsefulKeyword(part)) {
                 keywords.add(part);
             }
@@ -694,6 +743,13 @@ public class RagAnswerAdvisor implements BaseAdvisor {
     private boolean isUsefulKeyword(String token) {
         return StringUtils.isNotBlank(token)
                 && token.length() >= MIN_KEYWORD_LENGTH;
+    }
+
+    private boolean isStrongKeyword(String token) {
+        if (StringUtils.isNotBlank(token) && token.length() >= MIN_STRONG_KEYWORD_LENGTH) {
+            return STRONG_TOKEN_PATTERN.matcher(token).matches();
+        }
+        return false;
     }
 
     private Map<String, Object> parseMetadata(String metadataJson) {
