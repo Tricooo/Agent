@@ -183,6 +183,50 @@ def _retrieval_summary_cells(retrievals: list[dict[str, Any]]) -> tuple[str, str
     return retrieved_cell, score_cell, empty_cell
 
 
+def _metadata_value(metadata: dict[str, Any], key: str) -> Any:
+    value = metadata.get(key)
+    return "—" if value is None else value
+
+
+def _document_preview(document: dict[str, Any], limit: int = 180) -> str:
+    text = document.get("text") or document.get("content") or ""
+    return answer_preview(str(text), limit)
+
+
+def _append_retrieved_documents(lines: list[str], data: dict[str, Any]) -> None:
+    documents = data.get("qa_retrieved_documents") or []
+    if not documents:
+        return
+
+    lines.append("  - documents:")
+    for doc_index, document in enumerate(documents, start=1):
+        if not isinstance(document, dict):
+            lines.append(f"    - #{doc_index}: `{md_escape(document)}`")
+            continue
+
+        metadata = document.get("metadata") or {}
+        if not isinstance(metadata, dict):
+            metadata = {}
+
+        lines.append(
+            "    - #{idx} score=`{score}`, source=`{source}`, chunk=`{chunk}`, retrievalSource=`{retrieval_source}`, rrfScore=`{rrf_score}`, vectorRank=`{vector_rank}`, vectorScore=`{vector_score}`, keywordRank=`{keyword_rank}`, keywordScore=`{keyword_score}`".format(
+                idx=doc_index,
+                score=_fmt_score(document.get("score")),
+                source=md_escape(_metadata_value(metadata, "sourcePath")),
+                chunk=md_escape(_metadata_value(metadata, "chunkIndex")),
+                retrieval_source=md_escape(_metadata_value(metadata, "retrievalSource")),
+                rrf_score=_fmt_score(metadata.get("rrfScore")),
+                vector_rank=md_escape(_metadata_value(metadata, "vectorRank")),
+                vector_score=_fmt_score(metadata.get("vectorScore")),
+                keyword_rank=md_escape(_metadata_value(metadata, "keywordRank")),
+                keyword_score=_fmt_score(metadata.get("keywordScore")),
+            )
+        )
+        preview = _document_preview(document)
+        if preview:
+            lines.append(f"      - preview: {md_escape(preview)}")
+
+
 def write_markdown(path: Path, results: list[dict[str, Any]], api_url: str, agent_id: str) -> None:
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     lines: list[str] = []
@@ -197,6 +241,8 @@ def write_markdown(path: Path, results: list[dict[str, Any]], api_url: str, agen
     lines.append("> `literal_hit` 仅做字面子串匹配，是 smoke signal。`score_mode=manual` 的 case（拒答 / 改写 / 概念题）不做字面匹配，统一看 `manual_pass`；`score_mode=literal` 的 case（参数 / 公式 / 清单）才参考 `literal_hit`。")
     lines.append(">")
     lines.append("> `retrieved` / `score` / `empty` 三列的 `—` 表示**没拿到成功的 ChatResponse metadata**，不等价于\"无检索\"。当前实现把 retrieval SSE 帧放在 `.call().chatResponse()` 返回之后才发，所以 LLM 调用失败时（即使 RAG 检索本身成功）三列都会是 `—`。要区分\"检索失败\"和\"生成失败\"，对照 `error` 列 / details 区 / backend log。")
+    lines.append(">")
+    lines.append("> Details 区的 `documents` 会展开 top-K chunk attribution；HYBRID 模式下 `score` 是 RRF score，原始向量分与关键词分分别看 `vectorScore` / `keywordScore`。")
     lines.append("")
     lines.append("| id | type | completed | duration_ms | should_answer | retrieved | score | empty | literal_hit | missed_points | answer_preview | manual_pass |")
     lines.append("|---|---|---:|---:|---:|---:|---|---:|---:|---|---|---|")
@@ -277,6 +323,7 @@ def write_markdown(path: Path, results: list[dict[str, Any]], api_url: str, agen
                         mx=data.get("qa_context_max_chars"),
                     )
                 )
+                _append_retrieved_documents(lines, data)
         lines.append("")
         lines.append("answer:")
         lines.append("")

@@ -1,7 +1,7 @@
 # RAG Eval 自动化 — 计划与状态
 
 > 这份文档是 RAG 评测链路工作的 single source of truth。任何接手会话先读这里。
-> 最后更新：2026-05-06 EDT（D9：Step 3 Phase A.5 低换行控制组收口）
+> 最后更新：2026-05-08 EDT（D10：Step 4 Hybrid + RRF A/B 归因）
 
 ## 目录组织
 
@@ -24,7 +24,9 @@ docs/dev-ops/rag-eval/
     ├── step3-chunker-v2/         ← chunkSize=400 实测，v2 gate 3/4
     ├── step3-chunker-v3/         ← chunkSize=250 实测，v3 gate 4/4 ✓ Phase A 收口（May 5 22:17）
     ├── step3-control-v3/         ← low-newline control-only，RAG-11/12/13/14 通过（May 6）
-    └── step3-full-v3-with-control/ ← full 14 regression，原 10 条不退化 + control 通过（May 6）
+    ├── step3-full-v3-with-control/ ← full 14 regression，原 10 条不退化 + control 通过（May 6）
+    ├── step4-hybrid-rrf/         ← Hybrid + RRF full 14 regression + top-K attribution（May 8）
+    └── step4-vector-ablation/    ← 同代码/同数据下 VECTOR 对照组（May 8）
 ```
 
 > 归档原则：按"评测口径是否一致"分。F-fix 是 schema 硬边界——之前的产物没有 `retrieved/score/empty` 三列，永久不可与之后互比 score。
@@ -77,6 +79,15 @@ docs/dev-ops/rag-eval/
   - full 14 regression 产物：`results/step3-full-v3-with-control/rag-eval-result-step3-full-v3-with-control.md`
   - 结果：RAG-11/13 正例命中，RAG-12/14 拒答；原 RAG-01..10 不退化
   - 详细决策见 §3 D9
+- **Step 4 Hybrid + RRF — 功能闭环完成（May 8）**：
+  - 实现：pgvector 向量召回 + PostgreSQL FTS 关键词召回 + 应用层 RRF 合并
+  - 配置入口：`AiClientAdvisorDTO.RagAnswer` 新增 `retrievalMode/vectorTopK/keywordTopK/rrfK`
+  - 可观测性：合并后 `Document.score` 为 `rrfScore`，metadata 记录 `retrievalSource/vectorRank/vectorScore/keywordRank/keywordScore`
+  - full 14 regression 产物：`results/step4-hybrid-rrf/rag-eval-result-step4-hybrid-rrf.md`
+  - attribution 产物：`results/step4-hybrid-rrf/rag-eval-result-step4-hybrid-rrf-attribution.md`
+  - VECTOR 对照产物：`results/step4-vector-ablation/rag-eval-result-step4-vector-ablation.md`
+  - 结果：14/14 completed；RAG-06/RAG-08 仍 empty 拒答；RAG-10 保持既有 literal 表达漂移；A/B 显示当前 Hybrid 没有带来答案指标提升，且 RAG-04 目标 chunk 被 RRF 从向量第 1 降到第 3
+  - 详细决策见 §3 D10
 
 ### 2.2 关键认知（必读，否则会重复踩坑）
 
@@ -366,9 +377,88 @@ RAG-14 是 negative-evidence answerability case（负证据型拒答）。英文
 
 当前 runner report 不展开 top-K chunk 的 `sourcePath/chunkIndex/score/preview`，只能看到 retrieved / score range / empty / context chars。后续若要把 attribution gate 做严，应把 top-K chunk attribution 写入 markdown 报告。
 
+### D10（已验证 2026-05-08）：Step 4 Hybrid + RRF 功能完成，但 A/B 未证明收益，下一步先做 Hybrid calibration
+
+**新增提交**：
+
+- `aee5a75 feat: add hybrid RAG retrieval`
+- `f65c365 feat: expose hybrid retrieval metadata`
+
+**实现范围**：
+
+- `AiClientAdvisorDTO.RagAnswer` 增加 `retrievalMode/vectorTopK/keywordTopK/rrfK`
+- `RetrievalOptionsVO` 集中封装 fallback：blank/unknown mode → VECTOR，topK/rrfK <= 0 走默认
+- `RagAnswerAdvisor` HYBRID 分支：
+  - vector side：pgvector `similaritySearch`，topK 使用 `effectiveVectorTopK`
+  - keyword side：PostgreSQL FTS，`websearch_to_tsquery('simple', ?)` + `ts_rank_cd(...)`
+  - filter：Spring AI `Filter.Expression` 经 `PgVectorFilterExpressionConverter` 转 JSONPath，并用 `metadata::jsonb @@ CAST(? AS jsonpath)` 参数绑定
+  - merge：应用层 RRF，`1 / (rrfK + rank)`，默认 `rrfK=60`
+- 可观测性：
+  - 合并后 `Document.score` 改为 `rrfScore`
+  - metadata 写入 `retrievalMode/retrievalSource/rrfScore/rrfK/vectorRank/vectorScore/keywordRank/keywordScore`
+
+**当前运行配置**（`rag_advisor_grafana`）：
+
+```json
+{
+  "topK": 4,
+  "similarityThreshold": 0.6,
+  "filterExpression": "knowledge in ['grafana-mcp-tools-guide', 'control-cn-low-newline', 'control-en-long-paragraph']",
+  "retrievalMode": "HYBRID",
+  "vectorTopK": 4,
+  "keywordTopK": 6,
+  "rrfK": 60
+}
+```
+
+**验证产物**：
+
+- `docs/dev-ops/rag-eval/results/step4-hybrid-rrf/rag-eval-result-step4-hybrid-rrf.md`
+- `docs/dev-ops/rag-eval/results/step4-hybrid-rrf/rag-eval-result-step4-hybrid-rrf-attribution.md`
+- `docs/dev-ops/rag-eval/results/step4-vector-ablation/rag-eval-result-step4-vector-ablation.md`
+
+| 口径 | 结果 |
+|---|---|
+| full 14 completed | 14/14 |
+| RAG-06 / RAG-08 empty 拒答 | 维持 |
+| RAG-02 / RAG-03 / RAG-05 | literal 全命中 |
+| RAG-11 / RAG-13 control 正例 | literal 全命中 |
+| RAG-12 / RAG-14 control 弱相关 | 拒答 / 负证据回答维持 |
+| RAG-04 | 语义正确；attribution 显示目标 chunk `grafana-mcp-tools-guide.md#5` 在 VECTOR 是第 1，HYBRID/RRF 后降到第 3 |
+| RAG-10 | 仍为既有 literal 表达漂移：缺 `正常范围 / 警告范围 / 危险范围`，不归因于 Hybrid |
+
+**A/B attribution 关键发现**：
+
+| case | VECTOR | HYBRID + RRF | 判断 |
+|---|---|---|---|
+| RAG-02 | `chunk=1`（参数说明）排第 1 | `chunk=3` 因 keywordRank=1 排第 1，`chunk=1` 降第 2 | keyword 通道参与排序，但未证明比纯向量更好 |
+| RAG-04 | 目标 `chunk=5` 排第 1，vectorScore=0.7406 | 目标 `chunk=5` 只来自 VECTOR，排第 3；`chunk=4/1` 因命中 `PromQL` 词面被 RRF 提到前 2 | 当前 keyword query 对“PromQL”这类泛词过敏，产生负向排序干扰 |
+| RAG-07 | top4 全是 grafana 文档 | 引入 1 条 `KEYWORD` only 的 `control-en-long-paragraph.txt#4` 噪声 | keyword 分支在弱相关问题上有跨文档噪声风险 |
+| RAG-13 | 英文控制组 top4 都正确 | top4 都是 `VECTOR_KEYWORD`，顺序小幅调整 | 英文词面问题上 Hybrid 确实参与排序，但答案指标未新增收益 |
+
+**解释边界**：
+
+1. Step 4 后 markdown 报告里的 `score` 已经是 RRF score，不再是 Step 3 的向量相似度 score；不能直接拿 `0.03` 和 Step 3 的 `0.74` 比。
+2. `rag_eval_runner.py` 已展开 top-K doc attribution；判断 Hybrid 贡献要看每条 document metadata 的 `retrievalSource/vectorRank/vectorScore/keywordRank/keywordScore`。
+3. 当前 14 条用例已经证明 Hybrid **可用且大体不退化**，但没有证明它比纯向量更优。
+4. 当前主要问题不是 RRF 公式本身，而是 keyword query 构造过宽：`PromQL`、`Grafana`、`MCP`、`query` 这类泛词容易把词面相关但语义不够聚焦的 chunk 提前。
+5. Hybrid + RRF 解决的是“单路向量召回缺少词面通道”的问题；要证明它有效，需要更聚焦的 lexical probe 或更严格的 keyword gating。
+
+**决策**：
+
+1. Step 4 功能闭环通过，HYBRID 配置已恢复并保留，但不能在面试里宣称“明显提升了效果”。
+2. 下一步不直接进入 Step 5 Reranker；先做 Step 4.1 Hybrid calibration。
+3. Step 4.1 最小目标：
+   - 给 `buildKeywordQuery` 加 stopword / generic token 过滤，优先保留技术标识符（如 `query_prometheus`、`node_filesystem_avail_bytes`、`ARCHIVE-CN-7319`、`silver-river-42`）
+   - 或增加 keyword 分支启用条件：只有 query 中出现足够强的技术 token 时才走 PG FTS
+   - 重跑 VECTOR vs HYBRID attribution，要求 RAG-04 目标 chunk 不再被降序，RAG-07 不再引入跨文档 keyword-only 噪声
+4. Step 4.1 通过后再进入 Step 5 Reranker：目标是对已召回 top-K 做二阶段排序，提升最终上下文顺序稳定性。
+
 ### Commit 范围（已落地）
 
 ```
+f65c365 feat: expose hybrid retrieval metadata
+aee5a75 feat: add hybrid RAG retrieval
 2877cbc test(rag): add low-newline control eval cases
 ec0e4fa feat(rag): Step 3 Phase A 收口 - chunker v3 (250/109) 决策门 4/4 通过
 05a3f49 feat(rag): Step 3.1-3.5 chunker参数化+chunk metadata+渲染来源+Phase A评测
@@ -390,8 +480,8 @@ fc49eb4 docs: RAG eval 接力计划 + 历史评测产物归档
 
 1. RAG-09 / RAG-10 paraphrase regression
 2. RAGAS 集成（faithfulness / context precision / answer relevance）
-3. rerank 模型选型
-4. hybrid search RRF（pgvector + PG FTS）
+3. Step 4.1 Hybrid calibration（keyword query gating / stopword / lexical probe）
+4. rerank 模型选型（Step 4.1 通过后下一候选）
 5. embedding 模型迁移
 6. Codex 对全部 8 个文件改动的 final review
 
@@ -422,9 +512,9 @@ fc49eb4 docs: RAG eval 接力计划 + 历史评测产物归档
 
 下一会话接手时：
 
-1. Read 这份 `PLAN.md` 全文（特别是 §3 D7/D8/D9：Phase A 收口、generalizability 缺口、Phase A.5 实测收口）
-2. 确认 §3 commit 范围是否已落地（`git log --oneline -5` 看 `ec0e4fa` 和 `2877cbc`）
-3. 当前游标：**Step 3 Phase A.5 已收口**。v3 参数 250/109 保留，不继续调 chunker，不触发自写 splitter；下一候选 Step 4 Hybrid Retrieval（PG FTS + pgvector + 应用层 RRF）
+1. Read 这份 `PLAN.md` 全文（特别是 §3 D9/D10：Phase A.5 实测收口、Hybrid + RRF A/B 归因）
+2. 确认 §3 commit 范围是否已落地（`git log --oneline -5` 看 `aee5a75` 和 `f65c365`）
+3. 当前游标：**Step 4 Hybrid + RRF 功能完成，但 A/B 未证明收益**。HYBRID 配置保留；下一候选 Step 4.1 Hybrid calibration。注意 Step 4 后报告里的 `score` 是 RRF score，不再是向量相似度 score。
 4. 如果改 yml / 重启 backend / 重灌向量库后再跑 eval：必须先预热 `POST http://localhost:8099/api/v1/agent/armory_agent` body `{"agentId":"rag_demo"}`（未预热直接打 auto_agent 会 HTTP 500，duration ~5ms，看似 endpoint 死了）
 5. **不要**自行重跑 v1/v2/v3 中任何一轮——Phase A 已锁定参数 250/109，重跑只会消耗 LLM 配额且 score 必然飘动（embedding 不变 score 应稳定，LLM 输出会因 sampling 飘）
 
