@@ -209,7 +209,15 @@ def _append_retrieved_documents(lines: list[str], data: dict[str, Any]) -> None:
             metadata = {}
 
         lines.append(
-            "    - #{idx} score=`{score}`, source=`{source}`, chunk=`{chunk}`, retrievalSource=`{retrieval_source}`, rrfScore=`{rrf_score}`, vectorRank=`{vector_rank}`, vectorScore=`{vector_score}`, keywordRank=`{keyword_rank}`, keywordScore=`{keyword_score}`, keywordSkippedReason=`{keyword_skipped_reason}`".format(
+            (
+                "    - #{idx} score=`{score}`, source=`{source}`, chunk=`{chunk}`, "
+                "retrievalSource=`{retrieval_source}`, rrfScore=`{rrf_score}`, "
+                "vectorRank=`{vector_rank}`, vectorScore=`{vector_score}`, "
+                "keywordRank=`{keyword_rank}`, keywordScore=`{keyword_score}`, "
+                "keywordSkippedReason=`{keyword_skipped_reason}`, "
+                "beforeRerankRank=`{before_rerank_rank}`, rerankRank=`{rerank_rank}`, "
+                "rerankApplied=`{rerank_applied}`, rerankMode=`{rerank_mode}`"
+            ).format(
                 idx=doc_index,
                 score=_fmt_score(document.get("score")),
                 source=md_escape(_metadata_value(metadata, "sourcePath")),
@@ -221,6 +229,10 @@ def _append_retrieved_documents(lines: list[str], data: dict[str, Any]) -> None:
                 keyword_rank=md_escape(_metadata_value(metadata, "keywordRank")),
                 keyword_score=_fmt_score(metadata.get("keywordScore")),
                 keyword_skipped_reason=md_escape(_metadata_value(metadata, "keywordSkippedReason")),
+                before_rerank_rank=md_escape(_metadata_value(metadata, "beforeRerankRank")),
+                rerank_rank=md_escape(_metadata_value(metadata, "rerankRank")),
+                rerank_applied=md_escape(_metadata_value(metadata, "rerankApplied")),
+                rerank_mode=md_escape(_metadata_value(metadata, "rerankMode")),
             )
         )
         preview = _document_preview(document)
@@ -322,6 +334,14 @@ def write_markdown(path: Path, results: list[dict[str, Any]], api_url: str, agen
                     "  - context_chars: actual `{act}` / max `{mx}`".format(
                         act=data.get("qa_context_actual_chars"),
                         mx=data.get("qa_context_max_chars"),
+                    )
+                )
+                lines.append(
+                    "  - rerank: applied `{applied}` / mode `{mode}` / candidates `{cand}` / final `{final}`".format(
+                        applied=str(data.get("qa_rerank_applied")).lower(),
+                        mode=data.get("qa_rerank_mode"),
+                        cand=data.get("qa_rerank_candidate_count"),
+                        final=data.get("qa_rerank_final_count"),
                     )
                 )
                 _append_retrieved_documents(lines, data)

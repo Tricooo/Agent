@@ -57,6 +57,7 @@ public class RagAnswerAdvisor implements BaseAdvisor {
     private final SearchRequest searchRequest;
     private final String userTextAdvisor;
     private final RetrievalOptionsVO retrievalOptions;
+    private final RetrievalTopKPlan retrievalTopKPlan;
 
     private static final int DEFAULT_MAX_CONTEXT_CHARS = 6000;
     private static final String CHUNK_TRUNCATED_NOTICE = "\n...[chunk truncated]...\n";
@@ -75,11 +76,13 @@ public class RagAnswerAdvisor implements BaseAdvisor {
     private static final int MAX_KEYWORD_TERMS = 12;
     private static final int MIN_KEYWORD_LENGTH = 2;
     private static final int MIN_STRONG_KEYWORD_LENGTH = 5;
+    private static final int DEFAULT_CANDIDATE_TOP_K = 20;
     private static final FilterExpressionConverter PG_FILTER_EXPRESSION_CONVERTER = new PgVectorFilterExpressionConverter();
     private static final String RETRIEVAL_MODE_HYBRID = "HYBRID";
     private static final String RETRIEVAL_SOURCE_VECTOR = "VECTOR";
     private static final String RETRIEVAL_SOURCE_KEYWORD = "KEYWORD";
     private static final String RETRIEVAL_SOURCE_VECTOR_KEYWORD = "VECTOR_KEYWORD";
+    private static final String RERANK_MODE_PASSTHROUGH = "PASSTHROUGH";
     private static final String KEYWORD_SKIPPED_REASON_NO_KEYWORD_QUERY = "NO_KEYWORD_QUERY";
     private static final String KEYWORD_SKIPPED_REASON_NO_KEYWORD_RESULTS = "NO_KEYWORD_RESULTS";
 
@@ -92,6 +95,7 @@ public class RagAnswerAdvisor implements BaseAdvisor {
         this.vectorStore = vectorStore;
         this.searchRequest = searchRequest;
         this.retrievalOptions = retrievalOptions == null ? new RetrievalOptionsVO() : retrievalOptions;
+        this.retrievalTopKPlan = buildTopKPlan(searchRequest.getTopK());
         this.userTextAdvisor = """
                 
                 Context information is below, surrounded by ---------------------
@@ -108,6 +112,18 @@ public class RagAnswerAdvisor implements BaseAdvisor {
                 """;
 
     }
+
+    private RetrievalTopKPlan buildTopKPlan(int topK) {
+        int finalTopK = Math.max(topK, 1);
+        int candidateTopK = Math.max(finalTopK, DEFAULT_CANDIDATE_TOP_K);
+        return new RetrievalTopKPlan(
+                finalTopK,
+                candidateTopK,
+                retrievalOptions.effectiveVectorTopK(candidateTopK),
+                retrievalOptions.effectiveKeywordTopK(candidateTopK)
+        );
+    }
+
 
     /**
      * Logic to be executed before the rest of the advisor chain is called.
@@ -126,8 +142,11 @@ public class RagAnswerAdvisor implements BaseAdvisor {
         String advisedUserText = userText + System.lineSeparator() + userTextAdvisor;
 
         SearchRequest request = SearchRequest.from(searchRequest).query(userText)
+                .topK(retrievalTopKPlan.finalTopK())
                 .filterExpression(doGetFilterExpression(context)).build();
+
         List<Document> documents = retrieveDocuments(userText, request);
+
         if (CollectionUtils.isEmpty(documents)) {
             // 空召回不可静默，是 RAG 链路重要状态；同时不能退化成普通聊天，仍要把“无可用上下文”的边界写进 prompt。
             String emptyContext = EMPTY_RETRIEVAL_CONTEXT;
@@ -142,6 +161,10 @@ public class RagAnswerAdvisor implements BaseAdvisor {
             emptyRetrievalContext.put("qa_context_dropped_count", 0);
             emptyRetrievalContext.put("qa_context_truncated", false);
             emptyRetrievalContext.put("qa_similarity_threshold", request.getSimilarityThreshold());
+            emptyRetrievalContext.put("qa_rerank_applied", false);
+            emptyRetrievalContext.put("qa_rerank_mode", RERANK_MODE_PASSTHROUGH);
+            emptyRetrievalContext.put("qa_rerank_candidate_count", 0);
+            emptyRetrievalContext.put("qa_rerank_final_count", 0);
 
             PromptTemplate promptTemplate = new PromptTemplate(advisedUserText);
             String rendered = promptTemplate.render(Map.of("question_answer_context", emptyContext));
@@ -161,12 +184,14 @@ public class RagAnswerAdvisor implements BaseAdvisor {
                     .build();
         }
 
+        List<Document> rerankDocuments = rerankDocuments(userText, documents, retrievalTopKPlan.finalTopK());
+
         //documentContext 很长时要做裁剪/摘要（Top-K、去重、截断），否则可能超长或稀释关键信息
         //编号是建立模型引用的基础，模型可以确定编号，系统也能找到对应的引用---用于解决可溯源
-        RenderedDocumentContext renderedContext = renderDocumentContext(documents, DEFAULT_MAX_CONTEXT_CHARS);
+        RenderedDocumentContext renderedContext = renderDocumentContext(rerankDocuments, DEFAULT_MAX_CONTEXT_CHARS);
         String documentContext = renderedContext.context();
-        Double minScore = minScore(documents);
-        Double maxScore = maxScore(documents);
+        Double minScore = minScore(rerankDocuments);
+        Double maxScore = maxScore(rerankDocuments);
         Map<String, Object> advisedUserParams = new HashMap<>(unmodifiedContext);
         //给LLM看
         advisedUserParams.put("question_answer_context", documentContext);
@@ -178,11 +203,15 @@ public class RagAnswerAdvisor implements BaseAdvisor {
         advisedUserParams.put("qa_similarity_threshold", request.getSimilarityThreshold());
         advisedUserParams.put("qa_min_retrieved_score", minScore);
         advisedUserParams.put("qa_max_retrieved_score", maxScore);
+        advisedUserParams.put("qa_rerank_applied", false);
+        advisedUserParams.put("qa_rerank_mode", RERANK_MODE_PASSTHROUGH);
+        advisedUserParams.put("qa_rerank_candidate_count", documents.size());
+        advisedUserParams.put("qa_rerank_final_count", rerankDocuments.size());
 
 
         //给人看 便于看到引用的文本
-        advisedUserParams.put("qa_retrieved_documents", documents);
-        advisedUserParams.put("qa_retrieved_document_count", documents.size());
+        advisedUserParams.put("qa_retrieved_documents", rerankDocuments);
+        advisedUserParams.put("qa_retrieved_document_count", rerankDocuments.size());
         advisedUserParams.put("qa_retrieval_empty", false);
 
         PromptTemplate promptTemplate = new PromptTemplate(advisedUserText);
@@ -218,15 +247,19 @@ public class RagAnswerAdvisor implements BaseAdvisor {
         }
 
         SearchRequest vectorRequest = SearchRequest.from(request)
-                .topK(retrievalOptions.effectiveVectorTopK(request.getTopK()))
+                .topK(retrievalTopKPlan.vectorTopK())
                 .build();
 
         List<Document> vectorDocuments = vectorStore.similaritySearch(vectorRequest);
         String keywordQuery = buildKeywordQuery(userText);
-        List<Document> keywordDocuments = keywordSearch(keywordQuery, request);
+
+        SearchRequest keywordRequest = SearchRequest.from(request)
+                .topK(retrievalTopKPlan.keywordTopK())
+                .build();
+        List<Document> keywordDocuments = keywordSearch(keywordQuery, keywordRequest);
         String keywordSkippedReason = keywordSkippedReason(keywordQuery, keywordDocuments);
 
-        return rrMerge(vectorDocuments, keywordDocuments, request.getTopK(), keywordSkippedReason);
+        return rrMerge(vectorDocuments, keywordDocuments, retrievalTopKPlan.candidateTopK(), keywordSkippedReason);
     }
 
     private List<Document> rrMerge(List<Document> vectorDocuments, List<Document> keywordDocuments, int topK,
@@ -274,6 +307,28 @@ public class RagAnswerAdvisor implements BaseAdvisor {
             candidate.recordSource(retrievalSource, rank, document.getScore());
         }
     }
+
+    private List<Document> rerankDocuments(String query, List<Document> candidates, int topK) {
+        if (CollectionUtils.isEmpty(candidates) || topK <= 0) {
+            return List.of();
+        }
+        int limit = Math.min(topK, candidates.size());
+        List<Document> rerankedDocuments = new ArrayList<>(limit);
+        for (int i = 0; i < limit; i++) {
+            Document document = candidates.get(i);
+            Map<String, Object> metadata = new HashMap<>(document.getMetadata());
+            int rank = i + 1;
+            metadata.put("beforeRerankRank", rank);
+            metadata.put("rerankRank", rank);
+            metadata.put("rerankApplied", false);
+            metadata.put("rerankMode", RERANK_MODE_PASSTHROUGH);
+            rerankedDocuments.add(document.mutate()
+                    .metadata(metadata)
+                    .build());
+        }
+        return rerankedDocuments;
+    }
+
 
     private Document toRrfDocument(RrfDocumentCandidate candidate, String keywordSkippedReason) {
         Document document = candidate.getDocument();
@@ -336,6 +391,15 @@ public class RagAnswerAdvisor implements BaseAdvisor {
 
         return sourcePathText + "#" + chunkIndexText;
     }
+
+    private record RetrievalTopKPlan(
+            int finalTopK,
+            int candidateTopK,
+            int vectorTopK,
+            int keywordTopK
+    ) {
+    }
+
 
     private static class RrfDocumentCandidate {
         private final Document document;

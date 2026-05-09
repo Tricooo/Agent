@@ -53,11 +53,8 @@ public class AutoAgentRetrievalSseEntity {
      * 检索观测原始数据：仅保留 ChatResponse.metadata 中以 "qa_" 开头的 key，
      * 过滤掉 Spring AI 默认 metadata（usage / id / model 等）。
      *
-     * 当前 11 个 key（来自 RagAnswerAdvisor.after()）：
-     * qa_retrieved_documents / qa_retrieved_document_count / qa_retrieval_empty
-     * qa_context_max_chars / qa_context_actual_chars / qa_context_selected_count
-     * qa_context_dropped_count / qa_context_truncated / qa_similarity_threshold
-     * qa_min_retrieved_score / qa_max_retrieved_score
+     * 当前会透传所有 qa_* key，例如 qa_retrieved_documents、
+     * qa_context_*、qa_rerank_* 等观测字段。
      */
     private Map<String, Object> data;
 
