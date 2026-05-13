@@ -318,6 +318,10 @@ def write_markdown(path: Path, results: list[dict[str, Any]], api_url: str, agen
                 lines.append(f"  - retrieval_empty: `{str(data.get('qa_retrieval_empty')).lower()}`")
                 lines.append(f"  - similarity_threshold: `{_fmt_score(data.get('qa_similarity_threshold'))}`")
                 lines.append(
+                    f"  - candidate_similarity_threshold: "
+                    f"`{_fmt_score(data.get('qa_candidate_similarity_threshold'))}`"
+                )
+                lines.append(
                     "  - score_range: `{lo} .. {hi}`".format(
                         lo=_fmt_score(data.get("qa_min_retrieved_score")),
                         hi=_fmt_score(data.get("qa_max_retrieved_score")),

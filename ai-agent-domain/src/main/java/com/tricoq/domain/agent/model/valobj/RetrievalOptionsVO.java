@@ -34,6 +34,11 @@ public class RetrievalOptionsVO {
      */
     private int rrfK = DEFAULT_RRF_K;
 
+    /**
+     * rerank 前候选池召回阈值；<=0 时沿用 SearchRequest 的最终检索阈值。
+     */
+    private double candidateSimilarityThreshold = 0.0;
+
     private KeyWordPolicy keyWordPolicy = KeyWordPolicy.STRONG;
 
     public static RetrievalOptionsVO from(AiClientAdvisorDTO.RagAnswer ragAnswer, int topK) {
@@ -51,6 +56,7 @@ public class RetrievalOptionsVO {
         options.setVectorTopK(positiveOrDefault(ragAnswer.getVectorTopK(), effectiveTopK));
         options.setKeywordTopK(positiveOrDefault(ragAnswer.getKeywordTopK(), effectiveTopK));
         options.setRrfK(positiveOrDefault(ragAnswer.getRrfK(), DEFAULT_RRF_K));
+        options.setCandidateSimilarityThreshold(ragAnswer.getCandidateSimilarityThreshold());
         if (null != keyWordPolicy) {
             options.setKeyWordPolicy(keyWordPolicy);
         }
@@ -63,6 +69,10 @@ public class RetrievalOptionsVO {
 
     public int effectiveVectorTopK(int topK) {
         return positiveOrDefault(vectorTopK, topK);
+    }
+
+    public double effectiveCandidateSimilarityThreshold(double defaultThreshold) {
+        return candidateSimilarityThreshold > 0 ? candidateSimilarityThreshold : defaultThreshold;
     }
 
     public int effectiveKeywordTopK(int topK) {

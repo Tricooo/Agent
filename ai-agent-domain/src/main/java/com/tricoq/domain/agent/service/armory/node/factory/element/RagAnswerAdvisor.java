@@ -144,6 +144,7 @@ public class RagAnswerAdvisor implements BaseAdvisor {
         SearchRequest request = SearchRequest.from(searchRequest).query(userText)
                 .topK(retrievalTopKPlan.finalTopK())
                 .filterExpression(doGetFilterExpression(context)).build();
+        double candidateSimilarityThreshold = candidateSimilarityThreshold(request);
 
         List<Document> documents = retrieveDocuments(userText, request);
 
@@ -161,6 +162,7 @@ public class RagAnswerAdvisor implements BaseAdvisor {
             emptyRetrievalContext.put("qa_context_dropped_count", 0);
             emptyRetrievalContext.put("qa_context_truncated", false);
             emptyRetrievalContext.put("qa_similarity_threshold", request.getSimilarityThreshold());
+            emptyRetrievalContext.put("qa_candidate_similarity_threshold", candidateSimilarityThreshold);
             emptyRetrievalContext.put("qa_rerank_applied", false);
             emptyRetrievalContext.put("qa_rerank_mode", RERANK_MODE_PASSTHROUGH);
             emptyRetrievalContext.put("qa_rerank_candidate_count", 0);
@@ -201,6 +203,7 @@ public class RagAnswerAdvisor implements BaseAdvisor {
         advisedUserParams.put("qa_context_dropped_count", renderedContext.droppedCount());
         advisedUserParams.put("qa_context_truncated", renderedContext.truncated());
         advisedUserParams.put("qa_similarity_threshold", request.getSimilarityThreshold());
+        advisedUserParams.put("qa_candidate_similarity_threshold", candidateSimilarityThreshold);
         advisedUserParams.put("qa_min_retrieved_score", minScore);
         advisedUserParams.put("qa_max_retrieved_score", maxScore);
         advisedUserParams.put("qa_rerank_applied", false);
@@ -242,13 +245,10 @@ public class RagAnswerAdvisor implements BaseAdvisor {
     }
 
     private List<Document> retrieveDocuments(String userText, SearchRequest request) {
+        SearchRequest vectorRequest = buildVectorCandidateRequest(request);
         if (!retrievalOptions.isHybridMode()) {
-            return vectorStore.similaritySearch(request);
+            return vectorStore.similaritySearch(vectorRequest);
         }
-
-        SearchRequest vectorRequest = SearchRequest.from(request)
-                .topK(retrievalTopKPlan.vectorTopK())
-                .build();
 
         List<Document> vectorDocuments = vectorStore.similaritySearch(vectorRequest);
         String keywordQuery = buildKeywordQuery(userText);
@@ -260,6 +260,17 @@ public class RagAnswerAdvisor implements BaseAdvisor {
         String keywordSkippedReason = keywordSkippedReason(keywordQuery, keywordDocuments);
 
         return rrMerge(vectorDocuments, keywordDocuments, retrievalTopKPlan.candidateTopK(), keywordSkippedReason);
+    }
+
+    private SearchRequest buildVectorCandidateRequest(SearchRequest request) {
+        return SearchRequest.from(request)
+                .topK(retrievalTopKPlan.vectorTopK())
+                .similarityThreshold(candidateSimilarityThreshold(request))
+                .build();
+    }
+
+    private double candidateSimilarityThreshold(SearchRequest request) {
+        return retrievalOptions.effectiveCandidateSimilarityThreshold(request.getSimilarityThreshold());
     }
 
     private List<Document> rrMerge(List<Document> vectorDocuments, List<Document> keywordDocuments, int topK,

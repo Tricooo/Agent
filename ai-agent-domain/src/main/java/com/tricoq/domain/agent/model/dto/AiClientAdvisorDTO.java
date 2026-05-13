@@ -82,6 +82,12 @@ public class AiClientAdvisorDTO {
         private int topK = 4;
         //score判断的阈值
         private double similarityThreshold = 0.0;
+
+        /**
+         * rerank 候选池召回阈值；<=0 时沿用 similarityThreshold。
+         */
+        private double candidateSimilarityThreshold = 0.0;
+
         private String filterExpression;
         /**
          * 检索模式：VECTOR / HYBRID。默认 VECTOR，避免旧 extParam 在升级后行为漂移。
