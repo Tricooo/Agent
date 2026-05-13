@@ -2,6 +2,7 @@ package com.tricoq.domain.agent.service.rag;
 
 import com.tricoq.domain.agent.adapter.repository.IAiClientRagOrderRepository;
 import com.tricoq.domain.agent.model.dto.AiRagOrderDTO;
+import com.tricoq.domain.agent.model.valobj.RagObservationKeys.DocumentMetadata;
 import com.tricoq.domain.agent.service.IRagService;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -59,15 +60,15 @@ public class RagService implements IRagService {
             for (int i = 0; i < totalChunks; i++) {
                 Document doc = documents.get(i);
                 // 文件级 metadata（沿用原 schema，避免破坏既有依赖如评测代码读 file_name）
-                doc.getMetadata().put("knowledge", tag);
-                doc.getMetadata().put("rag_id", ragId);
-                doc.getMetadata().put("file_name", sourcePath);
+                doc.getMetadata().put(DocumentMetadata.KNOWLEDGE, tag);
+                doc.getMetadata().put(DocumentMetadata.RAG_ID, ragId);
+                doc.getMetadata().put(DocumentMetadata.FILE_NAME, sourcePath);
                 // chunk 级 metadata
-                doc.getMetadata().put("chunkIndex", i);
-                doc.getMetadata().put("totalChunks", totalChunks);
-                doc.getMetadata().put("sourcePath", sourcePath);
-                doc.getMetadata().put("parentSection", "");
-                doc.getMetadata().put("headingPath", "");
+                doc.getMetadata().put(DocumentMetadata.CHUNK_INDEX, i);
+                doc.getMetadata().put(DocumentMetadata.TOTAL_CHUNKS, totalChunks);
+                doc.getMetadata().put(DocumentMetadata.SOURCE_PATH, sourcePath);
+                doc.getMetadata().put(DocumentMetadata.PARENT_SECTION, "");
+                doc.getMetadata().put(DocumentMetadata.HEADING_PATH, "");
             }
 
             allDocuments.addAll(documents);

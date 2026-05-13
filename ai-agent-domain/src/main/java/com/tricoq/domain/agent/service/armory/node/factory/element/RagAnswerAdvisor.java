@@ -4,6 +4,10 @@ import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.TypeReference;
 import com.tricoq.domain.agent.model.entity.VectorKeywordEntity;
 import com.tricoq.domain.agent.model.enums.KeyWordPolicy;
+import com.tricoq.domain.agent.model.valobj.RagObservationKeys;
+import com.tricoq.domain.agent.model.valobj.RagObservationKeys.AdvisorContext;
+import com.tricoq.domain.agent.model.valobj.RagObservationKeys.DocumentMetadata;
+import com.tricoq.domain.agent.model.valobj.RagObservationKeys.Qa;
 import com.tricoq.domain.agent.model.valobj.RetrievalOptionsVO;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
@@ -103,13 +107,13 @@ public class RagAnswerAdvisor implements BaseAdvisor {
                 When using context information, prefer mentioning the citation number.
                 
                 ---------------------
-                {question_answer_context}
+                {%s}
                 ---------------------
                 
                 Given the context and provided history information and not prior knowledge,
                 reply to the user comment. If the answer is not in the context, inform
                 the user that you can't answer the question.
-                """;
+                """.formatted(AdvisorContext.QUESTION_ANSWER_CONTEXT);
 
     }
 
@@ -134,7 +138,7 @@ public class RagAnswerAdvisor implements BaseAdvisor {
         //  - prompt — 就是发给 AI 模型的 Prompt 对象，里面包含一组 Message（SystemMessage、UserMessage、AssistantMessage 等）加上可选的
         //  ChatOptions。这是模型实际看到的对话内容。
         //  - context — 一个 Map<String, Object>，是 Advisor 链中各节点之间传递数据的载体。它不会发给模型，而是在 Advisor 链内部流转。比如你代码里往 context
-        //  放 "qa_retrieved_documents" 和 "question_answer_context"，后续的 after() 方法或其他 Advisor 可以从 context 中读取这些数据。
+        //  放 RAG 观测字段和 prompt 上下文字段，后续的 after() 方法或其他 Advisor 可以从 context 中读取这些数据。
         Map<String, Object> unmodifiedContext = Map.copyOf(chatClientRequest.context());
         Map<String, Object> context = new HashMap<>(unmodifiedContext);
 
@@ -152,24 +156,24 @@ public class RagAnswerAdvisor implements BaseAdvisor {
             // 空召回不可静默，是 RAG 链路重要状态；同时不能退化成普通聊天，仍要把“无可用上下文”的边界写进 prompt。
             String emptyContext = EMPTY_RETRIEVAL_CONTEXT;
             HashMap<String, Object> emptyRetrievalContext = new HashMap<>(unmodifiedContext);
-            emptyRetrievalContext.put("qa_retrieved_documents", List.of());
-            emptyRetrievalContext.put("qa_retrieval_empty", true);
-            emptyRetrievalContext.put("question_answer_context", emptyContext);
-            emptyRetrievalContext.put("qa_retrieved_document_count", 0);
-            emptyRetrievalContext.put("qa_context_max_chars", DEFAULT_MAX_CONTEXT_CHARS);
-            emptyRetrievalContext.put("qa_context_actual_chars", emptyContext.length());
-            emptyRetrievalContext.put("qa_context_selected_count", 0);
-            emptyRetrievalContext.put("qa_context_dropped_count", 0);
-            emptyRetrievalContext.put("qa_context_truncated", false);
-            emptyRetrievalContext.put("qa_similarity_threshold", request.getSimilarityThreshold());
-            emptyRetrievalContext.put("qa_candidate_similarity_threshold", candidateSimilarityThreshold);
-            emptyRetrievalContext.put("qa_rerank_applied", false);
-            emptyRetrievalContext.put("qa_rerank_mode", RERANK_MODE_PASSTHROUGH);
-            emptyRetrievalContext.put("qa_rerank_candidate_count", 0);
-            emptyRetrievalContext.put("qa_rerank_final_count", 0);
+            emptyRetrievalContext.put(Qa.RETRIEVED_DOCUMENTS, List.of());
+            emptyRetrievalContext.put(Qa.RETRIEVAL_EMPTY, true);
+            emptyRetrievalContext.put(AdvisorContext.QUESTION_ANSWER_CONTEXT, emptyContext);
+            emptyRetrievalContext.put(Qa.RETRIEVED_DOCUMENT_COUNT, 0);
+            emptyRetrievalContext.put(Qa.CONTEXT_MAX_CHARS, DEFAULT_MAX_CONTEXT_CHARS);
+            emptyRetrievalContext.put(Qa.CONTEXT_ACTUAL_CHARS, emptyContext.length());
+            emptyRetrievalContext.put(Qa.CONTEXT_SELECTED_COUNT, 0);
+            emptyRetrievalContext.put(Qa.CONTEXT_DROPPED_COUNT, 0);
+            emptyRetrievalContext.put(Qa.CONTEXT_TRUNCATED, false);
+            emptyRetrievalContext.put(Qa.SIMILARITY_THRESHOLD, request.getSimilarityThreshold());
+            emptyRetrievalContext.put(Qa.CANDIDATE_SIMILARITY_THRESHOLD, candidateSimilarityThreshold);
+            emptyRetrievalContext.put(Qa.RERANK_APPLIED, false);
+            emptyRetrievalContext.put(Qa.RERANK_MODE, RERANK_MODE_PASSTHROUGH);
+            emptyRetrievalContext.put(Qa.RERANK_CANDIDATE_COUNT, 0);
+            emptyRetrievalContext.put(Qa.RERANK_FINAL_COUNT, 0);
 
             PromptTemplate promptTemplate = new PromptTemplate(advisedUserText);
-            String rendered = promptTemplate.render(Map.of("question_answer_context", emptyContext));
+            String rendered = promptTemplate.render(Map.of(AdvisorContext.QUESTION_ANSWER_CONTEXT, emptyContext));
 
             log.info("RAG检索为空: query={}, filterExpression={}, similarityThreshold={}",
                     userText, request.getFilterExpression(), request.getSimilarityThreshold());
@@ -196,29 +200,29 @@ public class RagAnswerAdvisor implements BaseAdvisor {
         Double maxScore = maxScore(rerankDocuments);
         Map<String, Object> advisedUserParams = new HashMap<>(unmodifiedContext);
         //给LLM看
-        advisedUserParams.put("question_answer_context", documentContext);
-        advisedUserParams.put("qa_context_max_chars", DEFAULT_MAX_CONTEXT_CHARS);
-        advisedUserParams.put("qa_context_actual_chars", documentContext.length());
-        advisedUserParams.put("qa_context_selected_count", renderedContext.selectedCount());
-        advisedUserParams.put("qa_context_dropped_count", renderedContext.droppedCount());
-        advisedUserParams.put("qa_context_truncated", renderedContext.truncated());
-        advisedUserParams.put("qa_similarity_threshold", request.getSimilarityThreshold());
-        advisedUserParams.put("qa_candidate_similarity_threshold", candidateSimilarityThreshold);
-        advisedUserParams.put("qa_min_retrieved_score", minScore);
-        advisedUserParams.put("qa_max_retrieved_score", maxScore);
-        advisedUserParams.put("qa_rerank_applied", false);
-        advisedUserParams.put("qa_rerank_mode", RERANK_MODE_PASSTHROUGH);
-        advisedUserParams.put("qa_rerank_candidate_count", documents.size());
-        advisedUserParams.put("qa_rerank_final_count", rerankDocuments.size());
+        advisedUserParams.put(AdvisorContext.QUESTION_ANSWER_CONTEXT, documentContext);
+        advisedUserParams.put(Qa.CONTEXT_MAX_CHARS, DEFAULT_MAX_CONTEXT_CHARS);
+        advisedUserParams.put(Qa.CONTEXT_ACTUAL_CHARS, documentContext.length());
+        advisedUserParams.put(Qa.CONTEXT_SELECTED_COUNT, renderedContext.selectedCount());
+        advisedUserParams.put(Qa.CONTEXT_DROPPED_COUNT, renderedContext.droppedCount());
+        advisedUserParams.put(Qa.CONTEXT_TRUNCATED, renderedContext.truncated());
+        advisedUserParams.put(Qa.SIMILARITY_THRESHOLD, request.getSimilarityThreshold());
+        advisedUserParams.put(Qa.CANDIDATE_SIMILARITY_THRESHOLD, candidateSimilarityThreshold);
+        advisedUserParams.put(Qa.MIN_RETRIEVED_SCORE, minScore);
+        advisedUserParams.put(Qa.MAX_RETRIEVED_SCORE, maxScore);
+        advisedUserParams.put(Qa.RERANK_APPLIED, false);
+        advisedUserParams.put(Qa.RERANK_MODE, RERANK_MODE_PASSTHROUGH);
+        advisedUserParams.put(Qa.RERANK_CANDIDATE_COUNT, documents.size());
+        advisedUserParams.put(Qa.RERANK_FINAL_COUNT, rerankDocuments.size());
 
 
         //给人看 便于看到引用的文本
-        advisedUserParams.put("qa_retrieved_documents", rerankDocuments);
-        advisedUserParams.put("qa_retrieved_document_count", rerankDocuments.size());
-        advisedUserParams.put("qa_retrieval_empty", false);
+        advisedUserParams.put(Qa.RETRIEVED_DOCUMENTS, rerankDocuments);
+        advisedUserParams.put(Qa.RETRIEVED_DOCUMENT_COUNT, rerankDocuments.size());
+        advisedUserParams.put(Qa.RETRIEVAL_EMPTY, false);
 
         PromptTemplate promptTemplate = new PromptTemplate(advisedUserText);
-        String rendered = promptTemplate.render(Map.of("question_answer_context", documentContext));
+        String rendered = promptTemplate.render(Map.of(AdvisorContext.QUESTION_ANSWER_CONTEXT, documentContext));
 
         log.info("RAG检索结果: query={}, retrieved={}, selected={}, dropped={}, truncated={}, empty={}, similarityThreshold={}, minScore={}, maxScore={}",
                 userText,
@@ -329,10 +333,10 @@ public class RagAnswerAdvisor implements BaseAdvisor {
             Document document = candidates.get(i);
             Map<String, Object> metadata = new HashMap<>(document.getMetadata());
             int rank = i + 1;
-            metadata.put("beforeRerankRank", rank);
-            metadata.put("rerankRank", rank);
-            metadata.put("rerankApplied", false);
-            metadata.put("rerankMode", RERANK_MODE_PASSTHROUGH);
+            metadata.put(DocumentMetadata.BEFORE_RERANK_RANK, rank);
+            metadata.put(DocumentMetadata.RERANK_RANK, rank);
+            metadata.put(DocumentMetadata.RERANK_APPLIED, false);
+            metadata.put(DocumentMetadata.RERANK_MODE, RERANK_MODE_PASSTHROUGH);
             rerankedDocuments.add(document.mutate()
                     .metadata(metadata)
                     .build());
@@ -344,15 +348,15 @@ public class RagAnswerAdvisor implements BaseAdvisor {
     private Document toRrfDocument(RrfDocumentCandidate candidate, String keywordSkippedReason) {
         Document document = candidate.getDocument();
         Map<String, Object> metadata = new HashMap<>(document.getMetadata());
-        metadata.put("retrievalMode", RETRIEVAL_MODE_HYBRID);
-        metadata.put("retrievalSource", candidate.retrievalSource());
-        metadata.put("rrfScore", candidate.getScore());
-        metadata.put("rrfK", retrievalOptions.effectiveRrfK());
-        addMetadataIfPresent(metadata, "keywordSkippedReason", keywordSkippedReason);
-        addMetadataIfPresent(metadata, "vectorRank", candidate.getVectorRank());
-        addMetadataIfPresent(metadata, "vectorScore", candidate.getVectorScore());
-        addMetadataIfPresent(metadata, "keywordRank", candidate.getKeywordRank());
-        addMetadataIfPresent(metadata, "keywordScore", candidate.getKeywordScore());
+        metadata.put(DocumentMetadata.RETRIEVAL_MODE, RETRIEVAL_MODE_HYBRID);
+        metadata.put(DocumentMetadata.RETRIEVAL_SOURCE, candidate.retrievalSource());
+        metadata.put(DocumentMetadata.RRF_SCORE, candidate.getScore());
+        metadata.put(DocumentMetadata.RRF_K, retrievalOptions.effectiveRrfK());
+        addMetadataIfPresent(metadata, DocumentMetadata.KEYWORD_SKIPPED_REASON, keywordSkippedReason);
+        addMetadataIfPresent(metadata, DocumentMetadata.VECTOR_RANK, candidate.getVectorRank());
+        addMetadataIfPresent(metadata, DocumentMetadata.VECTOR_SCORE, candidate.getVectorScore());
+        addMetadataIfPresent(metadata, DocumentMetadata.KEYWORD_RANK, candidate.getKeywordRank());
+        addMetadataIfPresent(metadata, DocumentMetadata.KEYWORD_SCORE, candidate.getKeywordScore());
 
         return document.mutate()
                 .metadata(metadata)
@@ -388,8 +392,8 @@ public class RagAnswerAdvisor implements BaseAdvisor {
             return StringUtils.EMPTY;
         }
 
-        Object sourcePath = metadata.get("sourcePath");
-        Object chunkIndex = metadata.get("chunkIndex");
+        Object sourcePath = metadata.get(DocumentMetadata.SOURCE_PATH);
+        Object chunkIndex = metadata.get(DocumentMetadata.CHUNK_INDEX);
         if (sourcePath == null || chunkIndex == null) {
             return StringUtils.EMPTY;
         }
@@ -490,7 +494,7 @@ public class RagAnswerAdvisor implements BaseAdvisor {
 
         ChatResponse.Builder responseBuilder = ChatResponse.builder().from(chatClientResponse.chatResponse());
         responseContext.forEach((key, value) -> {
-            if (StringUtils.startsWith(key, "qa_") && value != null) {
+            if (StringUtils.startsWith(key, RagObservationKeys.QA_PREFIX) && value != null) {
                 responseBuilder.metadata(key, value);
             }
         });
@@ -518,9 +522,9 @@ public class RagAnswerAdvisor implements BaseAdvisor {
     }
 
     private Filter.Expression doGetFilterExpression(Map<String, Object> context) {
-        return (context.containsKey("qa_filter_expression") &&
-                StringUtils.isNotBlank(context.get("qa_filter_expression").toString()))
-                ? (new FilterExpressionTextParser().parse(context.get("qa_filter_expression").toString()))
+        return (context.containsKey(Qa.FILTER_EXPRESSION) &&
+                StringUtils.isNotBlank(context.get(Qa.FILTER_EXPRESSION).toString()))
+                ? (new FilterExpressionTextParser().parse(context.get(Qa.FILTER_EXPRESSION).toString()))
                 : searchRequest.getFilterExpression();
 
     }
@@ -598,7 +602,7 @@ public class RagAnswerAdvisor implements BaseAdvisor {
      * parentSection / headingPath 在 Phase A 留空（Phase B 自写 splitter 后才填值），渲染时 graceful 跳过。
      */
     private String buildSourceLine(Map<String, Object> metadata) {
-        Object sourcePath = metadata.get("sourcePath");
+        Object sourcePath = metadata.get(DocumentMetadata.SOURCE_PATH);
         if (sourcePath == null || StringUtils.isBlank(sourcePath.toString())) {
             return "";
         }
@@ -606,13 +610,13 @@ public class RagAnswerAdvisor implements BaseAdvisor {
         StringBuilder sb = new StringBuilder("(来自: ");
         sb.append(sourcePath);
 
-        Object chunkIndex = metadata.get("chunkIndex");
-        Object totalChunks = metadata.get("totalChunks");
+        Object chunkIndex = metadata.get(DocumentMetadata.CHUNK_INDEX);
+        Object totalChunks = metadata.get(DocumentMetadata.TOTAL_CHUNKS);
         if (chunkIndex != null && totalChunks != null) {
             sb.append(", chunk ").append(chunkIndex).append("/").append(totalChunks);
         }
 
-        Object parentSection = metadata.get("parentSection");
+        Object parentSection = metadata.get(DocumentMetadata.PARENT_SECTION);
         if (parentSection != null && StringUtils.isNotBlank(parentSection.toString())) {
             sb.append(", 章节: ").append(parentSection);
         }

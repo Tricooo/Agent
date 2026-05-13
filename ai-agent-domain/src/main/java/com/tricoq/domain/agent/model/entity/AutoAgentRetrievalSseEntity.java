@@ -1,5 +1,6 @@
 package com.tricoq.domain.agent.model.entity;
 
+import com.tricoq.domain.agent.model.valobj.RagObservationKeys;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -53,23 +54,9 @@ public class AutoAgentRetrievalSseEntity {
      * 检索观测原始数据：仅保留 ChatResponse.metadata 中以 "qa_" 开头的 key，
      * 过滤掉 Spring AI 默认 metadata（usage / id / model 等）。
      *
-     * 当前会透传所有 qa_* key。字段语义约定：
-     * - qa_retrieved_documents：最终进入上下文的文档列表；
-     * - qa_retrieved_document_count：最终进入上下文的文档数量；
-     * - qa_retrieval_empty：是否空召回；
-     * - qa_similarity_threshold：最终检索安全阈值；
-     * - qa_candidate_similarity_threshold：候选池召回阶段实际使用的阈值；
-     * - qa_min_retrieved_score / qa_max_retrieved_score：最终文档分数范围；
-     * - qa_context_max_chars / qa_context_actual_chars：上下文预算和实际字符数；
-     * - qa_context_selected_count / qa_context_dropped_count：上下文装配保留/丢弃数量；
-     * - qa_context_truncated：上下文是否被截断；
-     * - qa_rerank_applied：是否执行真实 rerank；
-     * - qa_rerank_mode：rerank 模式，例如 PASSTHROUGH；
-     * - qa_rerank_candidate_count：rerank 前候选文档数量；
-     * - qa_rerank_final_count：rerank 后最终文档数量。
-     *
-     * qa_retrieved_documents 内部的 Document.metadata 还会携带 chunk 级归因字段，
-     * 例如 retrievalSource、vectorRank、keywordRank、beforeRerankRank、rerankRank 等。
+     * 当前会透传所有 qa_* key。字段名统一维护在 {@link RagObservationKeys.Qa}；
+     * qa_retrieved_documents 内部的 Document.metadata 归因字段统一维护在
+     * {@link RagObservationKeys.DocumentMetadata}。
      */
     private Map<String, Object> data;
 
@@ -98,7 +85,7 @@ public class AutoAgentRetrievalSseEntity {
         }
         for (Map.Entry<String, Object> entry : metadata.entrySet()) {
             String key = entry.getKey();
-            if (key != null && key.startsWith("qa_")) {
+            if (key != null && key.startsWith(RagObservationKeys.QA_PREFIX)) {
                 filtered.put(key, entry.getValue());
             }
         }

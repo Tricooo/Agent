@@ -21,6 +21,37 @@ from urllib.request import Request, urlopen
 
 DEFAULT_API_URL = "http://localhost:8099/api/v1/agent/auto_agent"
 
+QA_RETRIEVED_DOCUMENTS = "qa_retrieved_documents"
+QA_RETRIEVED_DOCUMENT_COUNT = "qa_retrieved_document_count"
+QA_RETRIEVAL_EMPTY = "qa_retrieval_empty"
+QA_SIMILARITY_THRESHOLD = "qa_similarity_threshold"
+QA_CANDIDATE_SIMILARITY_THRESHOLD = "qa_candidate_similarity_threshold"
+QA_MIN_RETRIEVED_SCORE = "qa_min_retrieved_score"
+QA_MAX_RETRIEVED_SCORE = "qa_max_retrieved_score"
+QA_CONTEXT_MAX_CHARS = "qa_context_max_chars"
+QA_CONTEXT_ACTUAL_CHARS = "qa_context_actual_chars"
+QA_CONTEXT_SELECTED_COUNT = "qa_context_selected_count"
+QA_CONTEXT_DROPPED_COUNT = "qa_context_dropped_count"
+QA_CONTEXT_TRUNCATED = "qa_context_truncated"
+QA_RERANK_APPLIED = "qa_rerank_applied"
+QA_RERANK_MODE = "qa_rerank_mode"
+QA_RERANK_CANDIDATE_COUNT = "qa_rerank_candidate_count"
+QA_RERANK_FINAL_COUNT = "qa_rerank_final_count"
+
+DOC_SOURCE_PATH = "sourcePath"
+DOC_CHUNK_INDEX = "chunkIndex"
+DOC_RETRIEVAL_SOURCE = "retrievalSource"
+DOC_RRF_SCORE = "rrfScore"
+DOC_VECTOR_RANK = "vectorRank"
+DOC_VECTOR_SCORE = "vectorScore"
+DOC_KEYWORD_RANK = "keywordRank"
+DOC_KEYWORD_SCORE = "keywordScore"
+DOC_KEYWORD_SKIPPED_REASON = "keywordSkippedReason"
+DOC_BEFORE_RERANK_RANK = "beforeRerankRank"
+DOC_RERANK_RANK = "rerankRank"
+DOC_RERANK_APPLIED = "rerankApplied"
+DOC_RERANK_MODE = "rerankMode"
+
 
 def load_cases(path: Path) -> list[dict[str, Any]]:
     with path.open("r", encoding="utf-8") as f:
@@ -170,10 +201,10 @@ def _retrieval_summary_cells(retrievals: list[dict[str, Any]]) -> tuple[str, str
     if not retrievals:
         return "—", "—", "—"
     data = retrievals[0].get("data") or {}
-    retrieved = data.get("qa_retrieved_document_count")
-    min_score = data.get("qa_min_retrieved_score")
-    max_score = data.get("qa_max_retrieved_score")
-    empty = data.get("qa_retrieval_empty")
+    retrieved = data.get(QA_RETRIEVED_DOCUMENT_COUNT)
+    min_score = data.get(QA_MIN_RETRIEVED_SCORE)
+    max_score = data.get(QA_MAX_RETRIEVED_SCORE)
+    empty = data.get(QA_RETRIEVAL_EMPTY)
     retrieved_cell = "—" if retrieved is None else str(retrieved)
     if min_score is None and max_score is None:
         score_cell = "—"
@@ -194,7 +225,7 @@ def _document_preview(document: dict[str, Any], limit: int = 180) -> str:
 
 
 def _append_retrieved_documents(lines: list[str], data: dict[str, Any]) -> None:
-    documents = data.get("qa_retrieved_documents") or []
+    documents = data.get(QA_RETRIEVED_DOCUMENTS) or []
     if not documents:
         return
 
@@ -220,19 +251,19 @@ def _append_retrieved_documents(lines: list[str], data: dict[str, Any]) -> None:
             ).format(
                 idx=doc_index,
                 score=_fmt_score(document.get("score")),
-                source=md_escape(_metadata_value(metadata, "sourcePath")),
-                chunk=md_escape(_metadata_value(metadata, "chunkIndex")),
-                retrieval_source=md_escape(_metadata_value(metadata, "retrievalSource")),
-                rrf_score=_fmt_score(metadata.get("rrfScore")),
-                vector_rank=md_escape(_metadata_value(metadata, "vectorRank")),
-                vector_score=_fmt_score(metadata.get("vectorScore")),
-                keyword_rank=md_escape(_metadata_value(metadata, "keywordRank")),
-                keyword_score=_fmt_score(metadata.get("keywordScore")),
-                keyword_skipped_reason=md_escape(_metadata_value(metadata, "keywordSkippedReason")),
-                before_rerank_rank=md_escape(_metadata_value(metadata, "beforeRerankRank")),
-                rerank_rank=md_escape(_metadata_value(metadata, "rerankRank")),
-                rerank_applied=md_escape(_metadata_value(metadata, "rerankApplied")),
-                rerank_mode=md_escape(_metadata_value(metadata, "rerankMode")),
+                source=md_escape(_metadata_value(metadata, DOC_SOURCE_PATH)),
+                chunk=md_escape(_metadata_value(metadata, DOC_CHUNK_INDEX)),
+                retrieval_source=md_escape(_metadata_value(metadata, DOC_RETRIEVAL_SOURCE)),
+                rrf_score=_fmt_score(metadata.get(DOC_RRF_SCORE)),
+                vector_rank=md_escape(_metadata_value(metadata, DOC_VECTOR_RANK)),
+                vector_score=_fmt_score(metadata.get(DOC_VECTOR_SCORE)),
+                keyword_rank=md_escape(_metadata_value(metadata, DOC_KEYWORD_RANK)),
+                keyword_score=_fmt_score(metadata.get(DOC_KEYWORD_SCORE)),
+                keyword_skipped_reason=md_escape(_metadata_value(metadata, DOC_KEYWORD_SKIPPED_REASON)),
+                before_rerank_rank=md_escape(_metadata_value(metadata, DOC_BEFORE_RERANK_RANK)),
+                rerank_rank=md_escape(_metadata_value(metadata, DOC_RERANK_RANK)),
+                rerank_applied=md_escape(_metadata_value(metadata, DOC_RERANK_APPLIED)),
+                rerank_mode=md_escape(_metadata_value(metadata, DOC_RERANK_MODE)),
             )
         )
         preview = _document_preview(document)
@@ -314,38 +345,38 @@ def write_markdown(path: Path, results: list[dict[str, Any]], api_url: str, agen
                 data = retrieval.get("data") or {}
                 header = f"- event #{idx}" + (f" (step={step})" if step is not None else "")
                 lines.append(header)
-                lines.append(f"  - retrieved_document_count: `{data.get('qa_retrieved_document_count')}`")
-                lines.append(f"  - retrieval_empty: `{str(data.get('qa_retrieval_empty')).lower()}`")
-                lines.append(f"  - similarity_threshold: `{_fmt_score(data.get('qa_similarity_threshold'))}`")
+                lines.append(f"  - retrieved_document_count: `{data.get(QA_RETRIEVED_DOCUMENT_COUNT)}`")
+                lines.append(f"  - retrieval_empty: `{str(data.get(QA_RETRIEVAL_EMPTY)).lower()}`")
+                lines.append(f"  - similarity_threshold: `{_fmt_score(data.get(QA_SIMILARITY_THRESHOLD))}`")
                 lines.append(
                     f"  - candidate_similarity_threshold: "
-                    f"`{_fmt_score(data.get('qa_candidate_similarity_threshold'))}`"
+                    f"`{_fmt_score(data.get(QA_CANDIDATE_SIMILARITY_THRESHOLD))}`"
                 )
                 lines.append(
                     "  - score_range: `{lo} .. {hi}`".format(
-                        lo=_fmt_score(data.get("qa_min_retrieved_score")),
-                        hi=_fmt_score(data.get("qa_max_retrieved_score")),
+                        lo=_fmt_score(data.get(QA_MIN_RETRIEVED_SCORE)),
+                        hi=_fmt_score(data.get(QA_MAX_RETRIEVED_SCORE)),
                     )
                 )
                 lines.append(
                     "  - context_selected: `{sel}` / dropped: `{drop}` / truncated: `{trunc}`".format(
-                        sel=data.get("qa_context_selected_count"),
-                        drop=data.get("qa_context_dropped_count"),
-                        trunc=str(data.get("qa_context_truncated")).lower(),
+                        sel=data.get(QA_CONTEXT_SELECTED_COUNT),
+                        drop=data.get(QA_CONTEXT_DROPPED_COUNT),
+                        trunc=str(data.get(QA_CONTEXT_TRUNCATED)).lower(),
                     )
                 )
                 lines.append(
                     "  - context_chars: actual `{act}` / max `{mx}`".format(
-                        act=data.get("qa_context_actual_chars"),
-                        mx=data.get("qa_context_max_chars"),
+                        act=data.get(QA_CONTEXT_ACTUAL_CHARS),
+                        mx=data.get(QA_CONTEXT_MAX_CHARS),
                     )
                 )
                 lines.append(
                     "  - rerank: applied `{applied}` / mode `{mode}` / candidates `{cand}` / final `{final}`".format(
-                        applied=str(data.get("qa_rerank_applied")).lower(),
-                        mode=data.get("qa_rerank_mode"),
-                        cand=data.get("qa_rerank_candidate_count"),
-                        final=data.get("qa_rerank_final_count"),
+                        applied=str(data.get(QA_RERANK_APPLIED)).lower(),
+                        mode=data.get(QA_RERANK_MODE),
+                        cand=data.get(QA_RERANK_CANDIDATE_COUNT),
+                        final=data.get(QA_RERANK_FINAL_COUNT),
                     )
                 )
                 _append_retrieved_documents(lines, data)
