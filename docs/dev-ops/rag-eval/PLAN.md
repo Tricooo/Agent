@@ -1,7 +1,7 @@
 # RAG Eval 自动化 — 计划与状态
 
 > 这份文档是 RAG 评测链路工作的 single source of truth。任何接手会话先读这里。
-> 最后更新：2026-05-08 EDT（D10：Step 4 Hybrid + RRF A/B 归因）
+> 最后更新：2026-05-13（D13：Step 5.1 Rerank 抽象接入完成，准备 Step 5.2 真实 reranker 选型）
 
 ## 目录组织
 
@@ -26,7 +26,10 @@ docs/dev-ops/rag-eval/
     ├── step3-control-v3/         ← low-newline control-only，RAG-11/12/13/14 通过（May 6）
     ├── step3-full-v3-with-control/ ← full 14 regression，原 10 条不退化 + control 通过（May 6）
     ├── step4-hybrid-rrf/         ← Hybrid + RRF full 14 regression + top-K attribution（May 8）
-    └── step4-vector-ablation/    ← 同代码/同数据下 VECTOR 对照组（May 8）
+    ├── step4-vector-ablation/    ← 同代码/同数据下 VECTOR 对照组（May 8）
+    ├── step4.1-hybrid-calibrated/ ← Hybrid keyword gating 校准结果（May 9）
+    ├── step5-rerank-observe/     ← rerank passthrough 观测字段 smoke（May 9）
+    └── step5.1-rerank-abstraction/ ← DocumentReranker 抽象接入 smoke（May 13）
 ```
 
 > 归档原则：按"评测口径是否一致"分。F-fix 是 schema 硬边界——之前的产物没有 `retrieved/score/empty` 三列，永久不可与之后互比 score。
@@ -88,6 +91,28 @@ docs/dev-ops/rag-eval/
   - VECTOR 对照产物：`results/step4-vector-ablation/rag-eval-result-step4-vector-ablation.md`
   - 结果：14/14 completed；RAG-06/RAG-08 仍 empty 拒答；RAG-10 保持既有 literal 表达漂移；A/B 显示当前 Hybrid 没有带来答案指标提升，且 RAG-04 目标 chunk 被 RRF 从向量第 1 降到第 3
   - 详细决策见 §3 D10
+- **Step 4.1 Hybrid calibration — 已收口（May 9）**：
+  - 目标：规避 Step 4 中关键词全文检索引入的负面排序效果，而不是宣称 Hybrid 已经带来稳定指标提升。
+  - 实现：收紧 `buildKeywordQuery` 的泛词过滤 / keyword gating，使 FTS 只在足够强的技术标识符场景下参与。
+  - 验证产物：`results/step4.1-hybrid-calibrated/rag-eval-result-step4.1-hybrid-calibrated.md`
+  - 关键观测：RAG-04 目标 chunk `grafana-mcp-tools-guide.md#5` 回到第 1；RAG-07 不再引入跨文档 keyword-only 噪声。
+  - 详细决策见 §3 D11
+- **Step 5 Rerank observe — 观测地基完成（May 9 / May 13）**：
+  - 现状：已接入 rerank passthrough 占位，不改变最终排序，只写入 rerank 前后观测字段。
+  - document 级 metadata：`beforeRerankRank/rerankRank/rerankApplied/rerankMode`
+  - context / SSE 级 qa metadata：`qa_rerank_applied/qa_rerank_mode/qa_rerank_candidate_count/qa_rerank_final_count`
+  - 候选池阈值：`candidateSimilarityThreshold` 已加入配置、fallback 和 `qa_candidate_similarity_threshold` 观测。
+  - 字段 schema：`RagObservationKeys` 已集中维护 `qa_*` 与 document metadata 字段名。
+  - 验证产物：`results/step5-rerank-observe/rag-eval-result-step5-rerank-observe.md`
+  - 当前边界：还没有真实模型 reranker；下一步是 Step 5.1，先抽象 `DocumentReranker` 接口并接入默认 passthrough 实现。
+  - 详细决策见 §3 D12
+- **Step 5.1 Rerank abstraction — 抽象接入完成（May 13）**：
+  - 实现：新增 `DocumentReranker` 接口、`RerankResult` 结果对象、`PassthroughDocumentReranker` 默认实现。
+  - 接入：`RagAnswerAdvisor` 通过构造器依赖 `DocumentReranker`，保留 2 参数 / 3 参数兼容构造器，默认 fallback 到 passthrough。
+  - 行为边界：当前仍不改变排序；`RerankResult` 只承载排序结果和观测元数据。
+  - 验证产物：`results/step5.1-rerank-abstraction/rag-eval-result-step5.1-rerank-abstraction-smoke.md`
+  - 关键观测：RAG-04 `rerank applied=false`、`mode=PASSTHROUGH`、`candidates=4`、`final=4`，4 个 document 的 `beforeRerankRank == rerankRank`。
+  - 详细决策见 §3 D13
 
 ### 2.2 关键认知（必读，否则会重复踩坑）
 
@@ -454,9 +479,103 @@ RAG-14 是 negative-evidence answerability case（负证据型拒答）。英文
    - 重跑 VECTOR vs HYBRID attribution，要求 RAG-04 目标 chunk 不再被降序，RAG-07 不再引入跨文档 keyword-only 噪声
 4. Step 4.1 通过后再进入 Step 5 Reranker：目标是对已召回 top-K 做二阶段排序，提升最终上下文顺序稳定性。
 
+### D11（已验证 2026-05-09）：Step 4.1 Hybrid calibration 收口，Hybrid 作为受控增强保留
+
+**新增提交**：
+
+- `0314954 test: 补充 Hybrid RAG 归因评测`
+- `a7826bc feat: 收口 Hybrid RAG 校准`
+
+**实现范围**：
+
+- `buildKeywordQuery` 加强强标识符优先和泛词过滤，降低 `PromQL`、`Grafana`、`MCP`、`query` 这类泛词触发 PG FTS 的概率。
+- keyword 分支未参与时，document metadata 写入 `keywordSkippedReason`，runner 报告能直接看到 `NO_KEYWORD_QUERY` / `NO_KEYWORD_RESULTS`。
+
+**验证产物**：
+
+- `docs/dev-ops/rag-eval/results/step4.1-hybrid-calibrated/rag-eval-result-step4.1-hybrid-calibrated.md`
+
+**关键结论**：
+
+| case | Step 4 问题 | Step 4.1 后结果 |
+|---|---|---|
+| RAG-04 | 目标 chunk `grafana-mcp-tools-guide.md#5` 被 RRF 从 VECTOR 第 1 降到第 3 | 目标 chunk 回到第 1，keyword 分支未参与，避免负向排序干扰 |
+| RAG-07 | 引入跨文档 keyword-only 噪声 | 不再引入跨文档 keyword-only 噪声 |
+
+**面试口径**：
+
+Step 4.1 不是证明 Hybrid 已经稳定提升答案质量，而是证明我们识别并控制了 Hybrid 的负面效果：关键词通道只在强词面信号足够明确时参与，避免泛词把弱相关 chunk 提前。
+
+### D12（已验证 2026-05-13）：Step 5 Rerank 观测地基完成，下一步进入抽象接入
+
+**新增提交**：
+
+- `fca43f2 feat: 增加 RAG rerank 占位与评测观测`
+- `555df14 fix: 透传 RAG rerank 观测字段`
+- `a820144 feat: 增加 RAG 候选召回阈值观测`
+- `631ffd2 refactor: 抽取 RAG 观测字段常量`
+
+**实现范围**：
+
+- `RagAnswerAdvisor` 中已有 passthrough rerank 占位，当前不改变排序，只给最终文档补充 rerank 观测字段。
+- context / SSE 级别已经透出 `qa_rerank_applied/qa_rerank_mode/qa_rerank_candidate_count/qa_rerank_final_count`。
+- document metadata 级别已经透出 `beforeRerankRank/rerankRank/rerankApplied/rerankMode`。
+- `candidateSimilarityThreshold` 已进入配置、fallback、向量候选召回和 `qa_candidate_similarity_threshold` 观测。
+- `RagObservationKeys` 集中维护 RAG 观测字段名，避免 `qa_*` 与 document metadata 字符串散落。
+
+**验证产物**：
+
+- `docs/dev-ops/rag-eval/results/step5-rerank-observe/rag-eval-result-step5-rerank-observe.md`
+
+**当前边界**：
+
+- `rerankApplied=false`
+- `rerankMode=PASSTHROUGH`
+- `beforeRerankRank == rerankRank`
+- 还没有接入真实模型 reranker，也没有 rerank 分数。
+
+**下一步 Step 5.1**：
+
+先抽象 `DocumentReranker` / `RerankResult` 并接入默认 `PassthroughDocumentReranker`，让 `RagAnswerAdvisor` 依赖接口而不是私有方法。该步骤应保持行为不变，只为后续真实 reranker 留扩展点。
+
+### D13（已验证 2026-05-13）：Step 5.1 Rerank 抽象接入完成，行为保持 passthrough
+
+**实现范围**：
+
+- 新增 `DocumentReranker`：定义 `rerank(String query, List<Document> candidates, int topK)` 抽象。
+- 新增 `RerankResult`：承载 `documents/applied/mode/candidateCount/finalCount/failureReason`，避免 rerank 行为元数据继续散落在 `RagAnswerAdvisor`。
+- 新增 `PassthroughDocumentReranker`：当前默认实现，按原顺序截断到 `topK`，写入 document 级 rerank metadata。
+- `RagAnswerAdvisor` 改为依赖 `DocumentReranker`，保留旧构造器兼容调用点；外部未传 reranker 时 fallback 到 passthrough。
+
+**验证产物**：
+
+- `docs/dev-ops/rag-eval/results/step5.1-rerank-abstraction/rag-eval-result-step5.1-rerank-abstraction-smoke.md`
+
+**关键观测**：
+
+- 预热 `rag_demo` 成功：`armory_agent` 返回 `装配成功`。
+- RAG-04 live eval：`completed=true`、`retrieved_document_count=4`、`retrieval_empty=false`。
+- rerank event：`applied=false`、`mode=PASSTHROUGH`、`candidates=4`、`final=4`。
+- document attribution：4 个 document 均满足 `beforeRerankRank == rerankRank`，目标 chunk `grafana-mcp-tools-guide.md#5` 仍为第 1。
+
+**当前边界**：
+
+- 还没有真实 reranker 模型，也没有 rerank score。
+- `RerankResult.failureReason` 只是为后续真实模型失败 fallback 预留，当前 passthrough 正常为 `null`。
+
+**下一步 Step 5.2**：
+
+先设计真实 reranker 接入方式：模型/API 选型、配置入口、失败 fallback、耗时和模型名观测字段，以及是否先用 mock reranker 验证排序变化。
+
 ### Commit 范围（已落地）
 
 ```
+631ffd2 refactor: 抽取 RAG 观测字段常量
+a820144 feat: 增加 RAG 候选召回阈值观测
+555df14 fix: 透传 RAG rerank 观测字段
+fca43f2 feat: 增加 RAG rerank 占位与评测观测
+a7826bc feat: 收口 Hybrid RAG 校准
+0314954 test: 补充 Hybrid RAG 归因评测
 f65c365 feat: expose hybrid retrieval metadata
 aee5a75 feat: add hybrid RAG retrieval
 2877cbc test(rag): add low-newline control eval cases
@@ -480,10 +599,9 @@ fc49eb4 docs: RAG eval 接力计划 + 历史评测产物归档
 
 1. RAG-09 / RAG-10 paraphrase regression
 2. RAGAS 集成（faithfulness / context precision / answer relevance）
-3. Step 4.1 Hybrid calibration（keyword query gating / stopword / lexical probe）
-4. rerank 模型选型（Step 4.1 通过后下一候选）
-5. embedding 模型迁移
-6. Codex 对全部 8 个文件改动的 final review
+3. rerank 模型选型与真实 reranker 接入（Step 5.2）
+4. embedding 模型迁移
+5. Codex 对全部 8 个文件改动的 final review
 
 **触发原则**：等用户点哪个就做哪个，不批量推进。
 
@@ -512,9 +630,9 @@ fc49eb4 docs: RAG eval 接力计划 + 历史评测产物归档
 
 下一会话接手时：
 
-1. Read 这份 `PLAN.md` 全文（特别是 §3 D9/D10：Phase A.5 实测收口、Hybrid + RRF A/B 归因）
-2. 确认 §3 commit 范围是否已落地（`git log --oneline -5` 看 `aee5a75` 和 `f65c365`）
-3. 当前游标：**Step 4 Hybrid + RRF 功能完成，但 A/B 未证明收益**。HYBRID 配置保留；下一候选 Step 4.1 Hybrid calibration。注意 Step 4 后报告里的 `score` 是 RRF score，不再是向量相似度 score。
+1. Read 这份 `PLAN.md` 全文（特别是 §3 D10/D11/D12/D13：Hybrid + RRF 归因、Hybrid calibration、Rerank 观测地基、Rerank 抽象接入）
+2. 确认 §3 commit 范围是否已落地（`git log --oneline -10` 看 `631ffd2`、`a820144`、`a7826bc` 以及 Step 5.1 抽象接入提交）
+3. 当前游标：**Step 5.1 Rerank abstraction 已完成，下一步 Step 5.2 真实 reranker 选型 / 接入设计**。当前仍是 `PASSTHROUGH` 行为；还没有真实模型 reranker。
 4. 如果改 yml / 重启 backend / 重灌向量库后再跑 eval：必须先预热 `POST http://localhost:8099/api/v1/agent/armory_agent` body `{"agentId":"rag_demo"}`（未预热直接打 auto_agent 会 HTTP 500，duration ~5ms，看似 endpoint 死了）
 5. **不要**自行重跑 v1/v2/v3 中任何一轮——Phase A 已锁定参数 250/109，重跑只会消耗 LLM 配额且 score 必然飘动（embedding 不变 score 应稳定，LLM 输出会因 sampling 飘）
 

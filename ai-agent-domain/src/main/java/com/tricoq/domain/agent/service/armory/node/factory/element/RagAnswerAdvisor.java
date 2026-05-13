@@ -2,6 +2,7 @@ package com.tricoq.domain.agent.service.armory.node.factory.element;
 
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.TypeReference;
+import com.tricoq.domain.agent.model.dto.RerankResult;
 import com.tricoq.domain.agent.model.entity.VectorKeywordEntity;
 import com.tricoq.domain.agent.model.enums.KeyWordPolicy;
 import com.tricoq.domain.agent.model.valobj.RagObservationKeys;
@@ -9,6 +10,8 @@ import com.tricoq.domain.agent.model.valobj.RagObservationKeys.AdvisorContext;
 import com.tricoq.domain.agent.model.valobj.RagObservationKeys.DocumentMetadata;
 import com.tricoq.domain.agent.model.valobj.RagObservationKeys.Qa;
 import com.tricoq.domain.agent.model.valobj.RetrievalOptionsVO;
+import com.tricoq.domain.agent.service.rag.rerank.DocumentReranker;
+import com.tricoq.domain.agent.service.rag.rerank.PassthroughDocumentReranker;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.collections4.MapUtils;
@@ -62,6 +65,7 @@ public class RagAnswerAdvisor implements BaseAdvisor {
     private final String userTextAdvisor;
     private final RetrievalOptionsVO retrievalOptions;
     private final RetrievalTopKPlan retrievalTopKPlan;
+    private final DocumentReranker documentReranker;
 
     private static final int DEFAULT_MAX_CONTEXT_CHARS = 6000;
     private static final String CHUNK_TRUNCATED_NOTICE = "\n...[chunk truncated]...\n";
@@ -92,13 +96,20 @@ public class RagAnswerAdvisor implements BaseAdvisor {
 
 
     public RagAnswerAdvisor(VectorStore vectorStore, SearchRequest searchRequest) {
-        this(vectorStore, searchRequest, new RetrievalOptionsVO());
+        this(vectorStore, searchRequest, new RetrievalOptionsVO(), new PassthroughDocumentReranker());
     }
 
-    public RagAnswerAdvisor(VectorStore vectorStore, SearchRequest searchRequest, RetrievalOptionsVO retrievalOptions) {
+    public RagAnswerAdvisor(VectorStore vectorStore, SearchRequest searchRequest,
+                            RetrievalOptionsVO retrievalOptions) {
+        this(vectorStore, searchRequest, retrievalOptions, new PassthroughDocumentReranker());
+    }
+
+    public RagAnswerAdvisor(VectorStore vectorStore, SearchRequest searchRequest,
+                            RetrievalOptionsVO retrievalOptions, DocumentReranker documentReranker) {
         this.vectorStore = vectorStore;
         this.searchRequest = searchRequest;
         this.retrievalOptions = retrievalOptions == null ? new RetrievalOptionsVO() : retrievalOptions;
+        this.documentReranker = documentReranker == null ? new PassthroughDocumentReranker() : documentReranker;
         this.retrievalTopKPlan = buildTopKPlan(searchRequest.getTopK());
         this.userTextAdvisor = """
                 
@@ -190,7 +201,8 @@ public class RagAnswerAdvisor implements BaseAdvisor {
                     .build();
         }
 
-        List<Document> rerankDocuments = rerankDocuments(userText, documents, retrievalTopKPlan.finalTopK());
+        RerankResult rerankResult = rerankDocuments(userText, documents, retrievalTopKPlan.finalTopK());
+        List<Document> rerankDocuments = rerankResult.getDocuments();
 
         //documentContext 很长时要做裁剪/摘要（Top-K、去重、截断），否则可能超长或稀释关键信息
         //编号是建立模型引用的基础，模型可以确定编号，系统也能找到对应的引用---用于解决可溯源
@@ -210,10 +222,10 @@ public class RagAnswerAdvisor implements BaseAdvisor {
         advisedUserParams.put(Qa.CANDIDATE_SIMILARITY_THRESHOLD, candidateSimilarityThreshold);
         advisedUserParams.put(Qa.MIN_RETRIEVED_SCORE, minScore);
         advisedUserParams.put(Qa.MAX_RETRIEVED_SCORE, maxScore);
-        advisedUserParams.put(Qa.RERANK_APPLIED, false);
-        advisedUserParams.put(Qa.RERANK_MODE, RERANK_MODE_PASSTHROUGH);
-        advisedUserParams.put(Qa.RERANK_CANDIDATE_COUNT, documents.size());
-        advisedUserParams.put(Qa.RERANK_FINAL_COUNT, rerankDocuments.size());
+        advisedUserParams.put(Qa.RERANK_APPLIED, rerankResult.isApplied());
+        advisedUserParams.put(Qa.RERANK_MODE, rerankResult.getMode());
+        advisedUserParams.put(Qa.RERANK_CANDIDATE_COUNT, rerankResult.getCandidateCount());
+        advisedUserParams.put(Qa.RERANK_FINAL_COUNT, rerankResult.getFinalCount());
 
 
         //给人看 便于看到引用的文本
@@ -323,25 +335,8 @@ public class RagAnswerAdvisor implements BaseAdvisor {
         }
     }
 
-    private List<Document> rerankDocuments(String query, List<Document> candidates, int topK) {
-        if (CollectionUtils.isEmpty(candidates) || topK <= 0) {
-            return List.of();
-        }
-        int limit = Math.min(topK, candidates.size());
-        List<Document> rerankedDocuments = new ArrayList<>(limit);
-        for (int i = 0; i < limit; i++) {
-            Document document = candidates.get(i);
-            Map<String, Object> metadata = new HashMap<>(document.getMetadata());
-            int rank = i + 1;
-            metadata.put(DocumentMetadata.BEFORE_RERANK_RANK, rank);
-            metadata.put(DocumentMetadata.RERANK_RANK, rank);
-            metadata.put(DocumentMetadata.RERANK_APPLIED, false);
-            metadata.put(DocumentMetadata.RERANK_MODE, RERANK_MODE_PASSTHROUGH);
-            rerankedDocuments.add(document.mutate()
-                    .metadata(metadata)
-                    .build());
-        }
-        return rerankedDocuments;
+    private RerankResult rerankDocuments(String query, List<Document> candidates, int topK) {
+        return documentReranker.rerank(query, candidates, topK);
     }
 
 
