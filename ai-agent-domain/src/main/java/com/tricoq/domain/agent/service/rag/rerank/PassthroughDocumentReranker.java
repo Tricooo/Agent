@@ -2,6 +2,7 @@ package com.tricoq.domain.agent.service.rag.rerank;
 
 import com.tricoq.domain.agent.model.dto.RerankResult;
 import com.tricoq.domain.agent.model.valobj.RagObservationKeys;
+import com.tricoq.domain.agent.service.rag.rerank.enums.RerankPolicy;
 import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.ai.document.Document;
 import org.springframework.stereotype.Component;
@@ -19,15 +20,13 @@ import java.util.Map;
 @Component
 public class PassthroughDocumentReranker implements DocumentReranker {
 
-    private static final String RERANK_MODE_PASSTHROUGH = "PASSTHROUGH";
-
     @Override
     public RerankResult rerank(String query, List<Document> candidates, int topK) {
         int candidateCount = candidates == null ? 0 : candidates.size();
         if (CollectionUtils.isEmpty(candidates) || topK <= 0) {
             return RerankResult.builder().documents(List.of())
                     .applied(false)
-                    .mode(RERANK_MODE_PASSTHROUGH)
+                    .mode(RerankPolicy.PASSTHROUGH.getPolicyName())
                     .candidateCount(candidateCount)
                     .finalCount(0)
                     .failureReason(null)
@@ -43,14 +42,14 @@ public class PassthroughDocumentReranker implements DocumentReranker {
             metadata.put(RagObservationKeys.DocumentMetadata.BEFORE_RERANK_RANK, rank);
             metadata.put(RagObservationKeys.DocumentMetadata.RERANK_RANK, rank);
             metadata.put(RagObservationKeys.DocumentMetadata.RERANK_APPLIED, false);
-            metadata.put(RagObservationKeys.DocumentMetadata.RERANK_MODE, RERANK_MODE_PASSTHROUGH);
+            metadata.put(RagObservationKeys.DocumentMetadata.RERANK_MODE, RerankPolicy.PASSTHROUGH.getPolicyName());
             rerankedDocuments.add(document.mutate()
                     .metadata(metadata)
                     .build());
         }
         return RerankResult.builder().documents(new ArrayList<>(rerankedDocuments))
                 .applied(false)
-                .mode(RERANK_MODE_PASSTHROUGH)
+                .mode(RerankPolicy.PASSTHROUGH.getPolicyName())
                 .candidateCount(candidateCount)
                 .finalCount(limit)
                 .failureReason(null)

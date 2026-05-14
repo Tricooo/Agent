@@ -225,6 +225,11 @@ public final class RagObservationKeys {
          */
         public static final String RERANK_MODE = "rerankMode";
 
+        /**
+         * rerank 模型对当前文档和查询相关性的打分。
+         */
+        public static final String RERANK_SCORE = "rerankScore";
+
         private DocumentMetadata() {
         }
     }

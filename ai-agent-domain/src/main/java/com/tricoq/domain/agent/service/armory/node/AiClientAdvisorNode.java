@@ -1,11 +1,13 @@
 package com.tricoq.domain.agent.service.armory.node;
 
 import com.alibaba.fastjson.JSON;
+import com.tricoq.domain.agent.model.dto.AiClientAdvisorDTO;
 import com.tricoq.domain.agent.model.entity.ArmoryCommandEntity;
 import com.tricoq.domain.agent.model.enums.AiAgentEnumVO;
 import com.tricoq.domain.agent.model.enums.AiClientAdvisorTypeEnumVO;
-import com.tricoq.domain.agent.model.dto.AiClientAdvisorDTO;
 import com.tricoq.domain.agent.service.armory.node.factory.DefaultArmoryStrategyFactory;
+import com.tricoq.domain.agent.service.rag.rerank.DocumentReranker;
+import com.tricoq.domain.agent.service.rag.rerank.factory.DocumentRerankerFactory;
 import com.tricoq.types.framework.chain.StrategyHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +30,8 @@ public class AiClientAdvisorNode extends AbstractArmorySupport {
     private final AiClientNode clientNode;
 
     private final VectorStore vectorStore;
+
+    protected final DocumentRerankerFactory documentRerankerFactory;
 
     /**
      * 节点自身处理逻辑
@@ -55,10 +59,17 @@ public class AiClientAdvisorNode extends AbstractArmorySupport {
     }
 
     private Advisor createClientAdvisor(AiClientAdvisorDTO advisorVO) {
-        String advisorType = advisorVO.getAdvisorType();
-        AiClientAdvisorTypeEnumVO vo = AiClientAdvisorTypeEnumVO.getByCode(advisorType);
-        return vo.createAdvisor(advisorVO, vectorStore);
+        AiClientAdvisorTypeEnumVO vo = AiClientAdvisorTypeEnumVO.getByCode(advisorVO.getAdvisorType());
+        if (vo != AiClientAdvisorTypeEnumVO.RAG_ANSWER || advisorVO.getRagAnswer() == null) {
+            return vo.createAdvisor(advisorVO, vectorStore);
+        }
+
+        DocumentReranker reranker = documentRerankerFactory.getDocumentReranker(
+                advisorVO.getRagAnswer().getRerankPolicy()
+        );
+        return vo.createAdvisor(advisorVO, vectorStore, reranker);
     }
+
 
     @Override
     public StrategyHandler<ArmoryCommandEntity, DefaultArmoryStrategyFactory.DynamicContext, String> get(ArmoryCommandEntity requestParam, DefaultArmoryStrategyFactory.DynamicContext dynamicContext) {

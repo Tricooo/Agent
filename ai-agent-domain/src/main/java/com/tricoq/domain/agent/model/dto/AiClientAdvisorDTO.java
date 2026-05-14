@@ -105,6 +105,8 @@ public class AiClientAdvisorDTO {
          * Reciprocal Rank Fusion 的平滑常量，常用默认值 60。
          */
         private int rrfK = 60;
+
+        private String rerankPolicy;
     }
 
 }

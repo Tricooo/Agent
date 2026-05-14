@@ -1,7 +1,7 @@
 # RAG Eval 自动化 — 计划与状态
 
 > 这份文档是 RAG 评测链路工作的 single source of truth。任何接手会话先读这里。
-> 最后更新：2026-05-13（D13：Step 5.1 Rerank 抽象接入完成，准备 Step 5.2 真实 reranker 选型）
+> 最后更新：2026-05-14（D14：Step 5.2 本地 bge reranker HTTP 接入完成）
 
 ## 目录组织
 
@@ -29,7 +29,8 @@ docs/dev-ops/rag-eval/
     ├── step4-vector-ablation/    ← 同代码/同数据下 VECTOR 对照组（May 8）
     ├── step4.1-hybrid-calibrated/ ← Hybrid keyword gating 校准结果（May 9）
     ├── step5-rerank-observe/     ← rerank passthrough 观测字段 smoke（May 9）
-    └── step5.1-rerank-abstraction/ ← DocumentReranker 抽象接入 smoke（May 13）
+    ├── step5.1-rerank-abstraction/ ← DocumentReranker 抽象接入 smoke（May 13）
+    └── step5.2-http-rerank-live/   ← 本地 bge reranker HTTP 接入 smoke（May 14）
 ```
 
 > 归档原则：按"评测口径是否一致"分。F-fix 是 schema 硬边界——之前的产物没有 `retrieved/score/empty` 三列，永久不可与之后互比 score。
@@ -113,6 +114,15 @@ docs/dev-ops/rag-eval/
   - 验证产物：`results/step5.1-rerank-abstraction/rag-eval-result-step5.1-rerank-abstraction-smoke.md`
   - 关键观测：RAG-04 `rerank applied=false`、`mode=PASSTHROUGH`、`candidates=4`、`final=4`，4 个 document 的 `beforeRerankRank == rerankRank`。
   - 详细决策见 §3 D13
+- **Step 5.2 HTTP reranker — 本地 bge reranker 接入完成（May 14）**：
+  - 实现：新增 `HttpDocumentReranker`，通过本地 Python FastAPI 服务 `127.0.0.1:18080/rerank` 调用 `bge-reranker-v2-m3`。
+  - 策略入口：新增 `RerankPolicy` 与 `DocumentRerankerFactory`，`AiClientAdvisorDTO.RagAnswer.rerankPolicy` 从数据库 `ext_param` 进入 advisor 装配，空值 / 未知值默认 fallback 到 `PASSTHROUGH`。
+  - 失败兜底：HTTP 异常、非 2xx、空 body、响应解析失败、空 results、非法 index 均回退 passthrough，并通过 `RerankResult.failureReason` 保留原因。
+  - 观测字段：runner 展示 `rerankScore`，document attribution 可同时看到 `beforeRerankRank/rerankRank/rerankScore/rerankMode`。
+  - 验证产物：`results/step5.2-http-rerank-live/rag-eval-result-step5.2-factory-rag04.md` / `rag-eval-result-step5.2-factory-rag07.md`
+  - 关键观测：RAG-04 `literal_hit=3/3`，`rerank applied=true`、`mode=LOCAL_BGE`，目标 chunk #5 保持第 1；RAG-07 仍保持拒答方向。
+  - 当前边界：Python rerank 服务需独立启动；HTTP URL 仍硬编码为本地 POC 地址。
+  - 详细决策见 §3 D14
 
 ### 2.2 关键认知（必读，否则会重复踩坑）
 
@@ -566,6 +576,40 @@ Step 4.1 不是证明 Hybrid 已经稳定提升答案质量，而是证明我们
 **下一步 Step 5.2**：
 
 先设计真实 reranker 接入方式：模型/API 选型、配置入口、失败 fallback、耗时和模型名观测字段，以及是否先用 mock reranker 验证排序变化。
+
+### D14（已验证 2026-05-14）：Step 5.2 本地 bge reranker HTTP 接入完成
+
+**实现范围**：
+
+- 新增 `HttpDocumentReranker`：把 query 和候选 chunk 通过 HTTP POST 传给本地 Python rerank 服务。
+- 新增 `RerankPolicy`：当前支持 `LOCAL_BGE` 与 `PASSTHROUGH`，空值或未知值默认 `PASSTHROUGH`，避免 rerank 配置错误阻断主链路。
+- 新增 `DocumentRerankerFactory`：用 Spring Bean map 按策略名选择 `DocumentReranker` 实现。
+- `AiClientAdvisorNode` 在创建 RAG advisor 时读取 `AiClientAdvisorDTO.RagAnswer.rerankPolicy`，把 factory 返回的 reranker 传入 `RagAnswerAdvisor`。
+- `HttpDocumentReranker` 所有异常/无效响应路径 fallback 到 passthrough，并写入 `RerankResult.failureReason`。
+- `rag_eval_runner.py` 在 document attribution 中展示 `rerankScore`。
+
+**运行配置**：
+
+- Python 服务：`/Users/qianghaixin/rerank/rerank_service.py`
+- 模型路径：`/Users/qianghaixin/models/huggingface/bge-reranker-v2-m3`
+- 服务地址：`http://127.0.0.1:18080/rerank`
+- 数据库配置：`ai_client_advisor.rag_advisor_grafana.ext_param` 中 `rerankPolicy=LOCAL_BGE`
+
+**验证产物**：
+
+- `docs/dev-ops/rag-eval/results/step5.2-http-rerank-live/rag-eval-result-step5.2-factory-rag04.md`
+- `docs/dev-ops/rag-eval/results/step5.2-http-rerank-live/rag-eval-result-step5.2-factory-rag07.md`
+
+**关键观测**：
+
+- RAG-04：`completed=true`、`literal_hit=3/3`、`rerank applied=true`、`mode=LOCAL_BGE`，目标 chunk `grafana-mcp-tools-guide.md#5` 保持第 1，`rerankScore=0.1935`。
+- RAG-07：`completed=true`、`should_answer=false`，仍输出“知识库没有 dashboard 变量模板配置相关信息”的拒答方向，rerank 运行态同样为 `LOCAL_BGE`。
+
+**当前边界**：
+
+- 本地 Python rerank 服务需要独立启动，当前不是 Java 进程生命周期的一部分。
+- `HttpDocumentReranker` 的 URL/timeout 仍是本地 POC 常量，后续若要生产化，应迁入配置。
+- 当前只跑 RAG-04/RAG-07 最小回归；完整 14 条回归可在 Step 5.2 收口后补跑。
 
 ### Commit 范围（已落地）
 

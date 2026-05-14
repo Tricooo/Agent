@@ -49,6 +49,7 @@ DOC_KEYWORD_SCORE = "keywordScore"
 DOC_KEYWORD_SKIPPED_REASON = "keywordSkippedReason"
 DOC_BEFORE_RERANK_RANK = "beforeRerankRank"
 DOC_RERANK_RANK = "rerankRank"
+DOC_RERANK_SCORE = "rerankScore"
 DOC_RERANK_APPLIED = "rerankApplied"
 DOC_RERANK_MODE = "rerankMode"
 
@@ -247,7 +248,8 @@ def _append_retrieved_documents(lines: list[str], data: dict[str, Any]) -> None:
                 "keywordRank=`{keyword_rank}`, keywordScore=`{keyword_score}`, "
                 "keywordSkippedReason=`{keyword_skipped_reason}`, "
                 "beforeRerankRank=`{before_rerank_rank}`, rerankRank=`{rerank_rank}`, "
-                "rerankApplied=`{rerank_applied}`, rerankMode=`{rerank_mode}`"
+                "rerankScore=`{rerank_score}`, rerankApplied=`{rerank_applied}`, "
+                "rerankMode=`{rerank_mode}`"
             ).format(
                 idx=doc_index,
                 score=_fmt_score(document.get("score")),
@@ -262,6 +264,7 @@ def _append_retrieved_documents(lines: list[str], data: dict[str, Any]) -> None:
                 keyword_skipped_reason=md_escape(_metadata_value(metadata, DOC_KEYWORD_SKIPPED_REASON)),
                 before_rerank_rank=md_escape(_metadata_value(metadata, DOC_BEFORE_RERANK_RANK)),
                 rerank_rank=md_escape(_metadata_value(metadata, DOC_RERANK_RANK)),
+                rerank_score=_fmt_score(metadata.get(DOC_RERANK_SCORE)),
                 rerank_applied=md_escape(_metadata_value(metadata, DOC_RERANK_APPLIED)),
                 rerank_mode=md_escape(_metadata_value(metadata, DOC_RERANK_MODE)),
             )
@@ -286,7 +289,7 @@ def write_markdown(path: Path, results: list[dict[str, Any]], api_url: str, agen
     lines.append(">")
     lines.append("> `retrieved` / `score` / `empty` 三列的 `—` 表示**没拿到成功的 ChatResponse metadata**，不等价于\"无检索\"。当前实现把 retrieval SSE 帧放在 `.call().chatResponse()` 返回之后才发，所以 LLM 调用失败时（即使 RAG 检索本身成功）三列都会是 `—`。要区分\"检索失败\"和\"生成失败\"，对照 `error` 列 / details 区 / backend log。")
     lines.append(">")
-    lines.append("> Details 区的 `documents` 会展开 top-K chunk attribution；HYBRID 模式下 `score` 是 RRF score，原始向量分与关键词分分别看 `vectorScore` / `keywordScore`；keyword 分支未参与时看 `keywordSkippedReason`。")
+    lines.append("> Details 区的 `documents` 会展开 top-K chunk attribution；HYBRID 模式下 `score` 是 RRF score，原始向量分与关键词分分别看 `vectorScore` / `keywordScore`；真实 rerank 分数看 `rerankScore`；keyword 分支未参与时看 `keywordSkippedReason`。")
     lines.append("")
     lines.append("| id | type | completed | duration_ms | should_answer | retrieved | score | empty | literal_hit | missed_points | answer_preview | manual_pass |")
     lines.append("|---|---|---:|---:|---:|---:|---|---:|---:|---|---|---|")

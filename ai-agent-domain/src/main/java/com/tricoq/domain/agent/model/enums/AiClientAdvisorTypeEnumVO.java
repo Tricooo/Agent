@@ -4,6 +4,7 @@ import com.tricoq.domain.agent.model.dto.AiClientAdvisorDTO;
 import com.tricoq.domain.agent.model.dto.AiClientRuntimeProfile;
 import com.tricoq.domain.agent.model.valobj.RetrievalOptionsVO;
 import com.tricoq.domain.agent.service.armory.node.factory.element.RagAnswerAdvisor;
+import com.tricoq.domain.agent.service.rag.rerank.DocumentReranker;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import org.apache.commons.lang3.StringUtils;
@@ -46,6 +47,12 @@ public enum AiClientAdvisorTypeEnumVO {
     RAG_ANSWER("RagAnswer", "知识库") {
         @Override
         public Advisor createAdvisor(AiClientAdvisorDTO aiClientAdvisorVO, VectorStore vectorStore) {
+            return createAdvisor(aiClientAdvisorVO, vectorStore, null);
+        }
+
+        @Override
+        public Advisor createAdvisor(AiClientAdvisorDTO aiClientAdvisorVO, VectorStore vectorStore,
+                                     DocumentReranker documentReranker) {
             AiClientAdvisorDTO.RagAnswer ragAnswer = aiClientAdvisorVO.getRagAnswer();
             if (ragAnswer == null) {
                 return null;
@@ -57,6 +64,9 @@ public enum AiClientAdvisorTypeEnumVO {
                     .similarityThreshold(safeSimilarityThreshold(ragAnswer.getSimilarityThreshold()))
                     .build();
             RetrievalOptionsVO options = RetrievalOptionsVO.from(ragAnswer, topK);
+            if (documentReranker != null) {
+                return new RagAnswerAdvisor(vectorStore, searchRequest, options, documentReranker);
+            }
             return new RagAnswerAdvisor(vectorStore, searchRequest, options);
         }
 
@@ -80,6 +90,11 @@ public enum AiClientAdvisorTypeEnumVO {
      * @return 顾问对象
      */
     public abstract Advisor createAdvisor(AiClientAdvisorDTO aiClientAdvisorVO, VectorStore vectorStore);
+
+    public Advisor createAdvisor(AiClientAdvisorDTO aiClientAdvisorVO, VectorStore vectorStore,
+                                 DocumentReranker documentReranker) {
+        return createAdvisor(aiClientAdvisorVO, vectorStore);
+    }
 
     public abstract void enrichRuntimeProfile(AiClientRuntimeProfile.AiClientRuntimeProfileBuilder profileBuilder,
                                               AiClientAdvisorDTO advisorConfig);
