@@ -1,7 +1,7 @@
 # RAG Eval 自动化 — 计划与状态
 
 > 这份文档是 RAG 评测链路工作的 single source of truth。任何接手会话先读这里。
-> 最后更新：2026-05-14（D14：Step 5.2 本地 bge reranker HTTP 接入完成）
+> 最后更新：2026-05-14（D15：Step 5.3 Rerank A/B 评测完成）
 
 ## 目录组织
 
@@ -30,7 +30,8 @@ docs/dev-ops/rag-eval/
     ├── step4.1-hybrid-calibrated/ ← Hybrid keyword gating 校准结果（May 9）
     ├── step5-rerank-observe/     ← rerank passthrough 观测字段 smoke（May 9）
     ├── step5.1-rerank-abstraction/ ← DocumentReranker 抽象接入 smoke（May 13）
-    └── step5.2-http-rerank-live/   ← 本地 bge reranker HTTP 接入 smoke（May 14）
+    ├── step5.2-http-rerank-live/   ← 本地 bge reranker HTTP 接入 smoke（May 14）
+    └── step5.3-rerank-ab/          ← PASSTHROUGH vs LOCAL_BGE 全量 A/B（May 14）
 ```
 
 > 归档原则：按"评测口径是否一致"分。F-fix 是 schema 硬边界——之前的产物没有 `retrieved/score/empty` 三列，永久不可与之后互比 score。
@@ -123,6 +124,14 @@ docs/dev-ops/rag-eval/
   - 关键观测：RAG-04 `literal_hit=3/3`，`rerank applied=true`、`mode=LOCAL_BGE`，目标 chunk #5 保持第 1；RAG-07 仍保持拒答方向。
   - 当前边界：Python rerank 服务需独立启动；HTTP URL 仍硬编码为本地 POC 地址。
   - 详细决策见 §3 D14
+- **Step 5.3 Rerank A/B — 全量归因完成（May 14）**：
+  - 对照组：DB `rerankPolicy=PASSTHROUGH`，armory 重装配后跑 14 条 case。
+  - 实验组：DB `rerankPolicy=LOCAL_BGE`，本地 Python rerank 服务健康后跑同一批 14 条 case。
+  - 验证产物：`results/step5.3-rerank-ab/rag-eval-result-step5.3-passthrough.md` / `rag-eval-result-step5.3-local-bge.md`
+  - 关键结论：答案指标未进一步提升也未退化；`LOCAL_BGE` 改变 12/14 条的 chunk 顺序，说明二阶段排序链路真实生效。
+  - 正向价值：RAG-05、RAG-07、RAG-13、RAG-14 等 case 中，rerank 能把更贴近 query 的 chunk 前移，给面试讲解提供了“向量/RRF 初排 + query-chunk 交互重排”的可观测证据。
+  - 边界：RAG-10 仍是 2/5，说明 rerank 只能重排已召回候选，不能弥补候选池本身没有覆盖完整答案、或生成阶段没有展开细节的问题。
+  - 详细决策见 §3 D15
 
 ### 2.2 关键认知（必读，否则会重复踩坑）
 
@@ -611,9 +620,56 @@ Step 4.1 不是证明 Hybrid 已经稳定提升答案质量，而是证明我们
 - `HttpDocumentReranker` 的 URL/timeout 仍是本地 POC 常量，后续若要生产化，应迁入配置。
 - 当前只跑 RAG-04/RAG-07 最小回归；完整 14 条回归可在 Step 5.2 收口后补跑。
 
+### D15（已验证 2026-05-14）：Step 5.3 Rerank A/B 完成，rerank 有排序收益但没有整体答案指标提升
+
+**前置修复**：
+
+- 复现：将 DB `rerankPolicy` 从 `LOCAL_BGE` 切到 `PASSTHROUGH` 并调用 armory 后，RAG-04 报告仍显示 `LOCAL_BGE`。
+- 根因：动态注册同名 Bean 时只移除 `BeanDefinition`，没有销毁已经实例化的 singleton，旧 advisor / client 实例仍可能被执行链路拿到。
+- 修复：`AbstractArmorySupport.registerBean` 在重新注册前先 `destroySingleton(beanName)`，再 `removeBeanDefinition(beanName)`。
+- 验证：后端重启后，MySQL 与 admin 查询接口均为 `PASSTHROUGH`，armory 装配后 RAG-04 报告显示 `rerank applied=false / mode=PASSTHROUGH`。
+
+**验证产物**：
+
+- `docs/dev-ops/rag-eval/results/step5.3-rerank-ab/rag-eval-result-step5.3-passthrough.md`
+- `docs/dev-ops/rag-eval/results/step5.3-rerank-ab/rag-eval-result-step5.3-local-bge.md`
+
+**A/B 关键数据**：
+
+| 指标 | PASSTHROUGH | LOCAL_BGE | 结论 |
+|---|---:|---:|---|
+| completed | 14/14 | 14/14 | 主链路稳定 |
+| empty 拒答 | RAG-06 / RAG-08 | RAG-06 / RAG-08 | 无退化 |
+| literal cases | RAG-02 4/4、RAG-03 3/3、RAG-04 3/3、RAG-05 5/5、RAG-10 2/5、RAG-11 2/2、RAG-13 2/2 | 同左 | 答案指标未提升也未退化 |
+| top-1 改变 | — | RAG-02 / RAG-05 / RAG-07 / RAG-13 / RAG-14 等 | rerank 确实改变排序 |
+| 平均 duration | 8880.4ms | 8874.3ms | 单次样本下无可证明额外延迟，LLM 波动大于 rerank 差异 |
+
+**典型排序归因**：
+
+- RAG-04：目标 chunk `grafana-mcp-tools-guide.md#5` 在两组都保持第 1，`LOCAL_BGE` 给它 `rerankScore=0.1935`，同时把原第 2 的 query_prometheus 参数 chunk 降到第 4。
+- RAG-05：`LOCAL_BGE` 把报告模板开头 chunk `#6` 从第 2 提到第 1，比原第 1 的模板后半段 `#7` 更适合作为回答入口。
+- RAG-07：弱相关 case 仍拒答；`LOCAL_BGE` 只是把“CPU 分析示例”chunk 提到第 1，没有把系统推向幻觉回答。
+- RAG-13：答案仍 2/2；`LOCAL_BGE` 把长英文控制组开头 chunk `#0` 提到第 1，但直接包含 fallback queue / retry budget 的 `#4` 仍在第 2，所以最终答案不退化。
+- RAG-14：仍拒答 cloud provider；rerank 排序变化没有破坏“文档未指定”的边界。
+
+**可讲结论**：
+
+- rerank 的价值不是“增加新文档”或“提高召回数量”，而是在候选池已经召回后，用 query + chunk 的交互相关性重新排序。
+- 这批样本中，Hybrid + gating 后的候选池已经足够覆盖核心答案，所以 LOCAL_BGE 没有把 pass rate 从 14/14 再往上拉。
+- 它的正向作用体现在 attribution：能解释为什么某些 chunk 应该前移 / 后移，并为后续更大候选池、更复杂 query、长文档场景提供安全扩展点。
+- 它的边界也很清楚：RAG-10 仍缺 3 个 literal points，说明 rerank 不解决“候选池没有完整覆盖”或“生成阶段没有展开所有细节”的问题。
+
+**下一步候选**：
+
+1. 先提交本轮 singleton 刷新修复与 Step 5.3 评测证据。
+2. 若继续工程化 rerank：把 `HttpDocumentReranker` 的 URL / timeout / enabled 配置化，并考虑 Python 服务生命周期管理。
+3. 若继续 RAG 效果优化：进入 Step 6 Query rewrite，用 multi-query / RAG-fusion / HyDE 解决“原 query 候选池覆盖不足”的问题。
+
 ### Commit 范围（已落地）
 
 ```
+176abc5 feat: 接入本地 RAG rerank 模型服务
+c95aabd feat: 完成 RAG rerank 抽象接入
 631ffd2 refactor: 抽取 RAG 观测字段常量
 a820144 feat: 增加 RAG 候选召回阈值观测
 555df14 fix: 透传 RAG rerank 观测字段

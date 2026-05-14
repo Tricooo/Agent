@@ -48,13 +48,13 @@ public abstract class AbstractArmorySupport
         AbstractBeanDefinition rawBeanDefinition = builder.getRawBeanDefinition();
         rawBeanDefinition.setScope(BeanDefinition.SCOPE_SINGLETON);
 
+        if (factory.containsSingleton(beanName)) {
+            factory.destroySingleton(beanName);
+        }
+
         if (factory.containsBeanDefinition(beanName)) {
             factory.removeBeanDefinition(beanName);
         }
-
-//        if (factory.containsSingleton(beanName)) {
-//            factory.destroySingleton(beanName);
-//        }
 
         factory.registerBeanDefinition(beanName, rawBeanDefinition);
 
