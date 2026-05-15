@@ -1,0 +1,1161 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>RAG Eval Viewer · rag_demo</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root {
+    --bg: #0f1115;
+    --bg-elev: #161922;
+    --bg-elev2: #1d2230;
+    --border: #2a2f3d;
+    --text: #e6e8ec;
+    --text-dim: #a0a6b4;
+    --text-faint: #6b7280;
+    --accent: #7aa2f7;
+    --accent-dim: #4060a8;
+    --ok: #4ade80;
+    --warn: #fbbf24;
+    --bad: #f87171;
+    --manual: #60a5fa;
+    --empty: #4b5563;
+    --code-bg: #1a1d28;
+  }
+  [data-theme="light"] {
+    --bg: #f7f8fa;
+    --bg-elev: #ffffff;
+    --bg-elev2: #f0f2f7;
+    --border: #d8dce3;
+    --text: #1a1d24;
+    --text-dim: #4b5563;
+    --text-faint: #94a3b8;
+    --accent: #2563eb;
+    --accent-dim: #93c5fd;
+    --ok: #16a34a;
+    --warn: #d97706;
+    --bad: #dc2626;
+    --manual: #2563eb;
+    --empty: #cbd5e1;
+    --code-bg: #f3f4f6;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  header.topbar {
+    position: sticky; top: 0; z-index: 100;
+    display: flex; align-items: center; gap: 12px;
+    background: var(--bg-elev);
+    border-bottom: 1px solid var(--border);
+    padding: 8px 16px;
+  }
+  header h1 { font-size: 14px; margin: 0; font-weight: 600; letter-spacing: 0.3px; }
+  header .subtitle { color: var(--text-dim); font-size: 11px; }
+  header .spacer { flex: 1; }
+  .tabbar { display: flex; gap: 4px; }
+  .tab {
+    cursor: pointer;
+    padding: 6px 12px;
+    border-radius: 6px;
+    color: var(--text-dim);
+    border: 1px solid transparent;
+    user-select: none;
+    font-size: 12px;
+  }
+  .tab:hover { background: var(--bg-elev2); color: var(--text); }
+  .tab.active { background: var(--bg-elev2); color: var(--accent); border-color: var(--border); }
+  .icon-btn {
+    cursor: pointer; padding: 4px 8px; border-radius: 4px;
+    border: 1px solid var(--border); background: transparent;
+    color: var(--text-dim); font-size: 11px;
+  }
+  .icon-btn:hover { color: var(--text); }
+
+  main.layout {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    height: calc(100vh - 41px);
+  }
+  aside.sidebar {
+    overflow-y: auto;
+    border-right: 1px solid var(--border);
+    background: var(--bg-elev);
+    padding: 12px;
+  }
+  aside h3 {
+    margin: 16px 0 8px 0;
+    font-size: 11px;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    letter-spacing: 1px;
+  }
+  aside h3:first-child { margin-top: 0; }
+  .filter-row { display: flex; gap: 6px; margin-bottom: 8px; }
+  .filter-row input, .filter-row select {
+    flex: 1; background: var(--bg-elev2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 4px;
+    padding: 4px 6px; font-size: 11px;
+  }
+  .phase-block { margin-bottom: 6px; }
+  .phase-title {
+    cursor: pointer; user-select: none;
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11px; color: var(--text-dim);
+    padding: 3px 0;
+  }
+  .phase-title:hover { color: var(--text); }
+  .phase-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .run-list { margin-left: 14px; }
+  .run-item {
+    display: flex; align-items: center; gap: 6px;
+    padding: 2px 0; cursor: pointer;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+  .run-item:hover { color: var(--text); }
+  .run-item input[type="checkbox"] { margin: 0; }
+  .run-item .run-meta { color: var(--text-faint); font-size: 10px; margin-left: 4px; }
+
+  section.content {
+    overflow: auto;
+    padding: 16px;
+  }
+  .view { display: none; }
+  .view.active { display: block; }
+
+  /* Matrix */
+  .matrix-wrap { overflow: auto; max-width: 100%; }
+  table.matrix {
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 11px;
+  }
+  table.matrix th, table.matrix td {
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    padding: 6px 8px;
+    min-width: 110px;
+    max-width: 160px;
+    vertical-align: middle;
+    text-align: center;
+  }
+  table.matrix th.case-col, table.matrix td.case-col {
+    position: sticky; left: 0; z-index: 2;
+    background: var(--bg-elev);
+    min-width: 130px;
+    text-align: left;
+    border-right: 2px solid var(--border);
+  }
+  table.matrix thead th {
+    position: sticky; top: 0; z-index: 3;
+    background: var(--bg-elev2);
+    font-weight: 500;
+    text-align: left;
+    vertical-align: top;
+    padding-top: 10px;
+  }
+  table.matrix thead th.case-col {
+    z-index: 4;
+    background: var(--bg-elev2);
+  }
+  .run-header {
+    display: flex; flex-direction: column; gap: 2px;
+    white-space: normal;
+    color: var(--text);
+  }
+  .run-header .rh-phase {
+    font-size: 9px; text-transform: uppercase; letter-spacing: 0.6px;
+    color: var(--text-faint);
+    border-left: 3px solid var(--phase-color, var(--accent));
+    padding-left: 6px;
+  }
+  .run-header .rh-name { font-weight: 600; font-size: 11px; }
+  .run-header .rh-hint { font-size: 10px; color: var(--text-dim); font-weight: normal; }
+  .run-header .rh-time { font-size: 9px; color: var(--text-faint); }
+  .case-label {
+    display: flex; flex-direction: column;
+    gap: 2px;
+  }
+  .case-label .cl-id { font-weight: 600; color: var(--text); }
+  .case-label .cl-type { font-size: 10px; color: var(--text-faint); }
+
+  .cell {
+    cursor: pointer;
+    border-radius: 0;
+    transition: filter 0.1s, transform 0.1s;
+    display: flex; flex-direction: column; gap: 2px;
+    line-height: 1.25;
+  }
+  .cell:hover { filter: brightness(1.15); }
+  .cell .c-top {
+    display: flex; justify-content: space-between; align-items: center;
+    font-weight: 600; font-size: 11px;
+  }
+  .cell .c-mid {
+    display: flex; justify-content: space-between;
+    font-size: 10px; color: var(--text-dim);
+  }
+  .cell .c-bot {
+    font-size: 9px; color: var(--text-faint);
+  }
+  .cell-empty {
+    background: repeating-linear-gradient(45deg,
+      var(--bg-elev) 0 6px,
+      var(--bg-elev2) 6px 12px);
+    color: var(--text-faint);
+    font-style: italic;
+    font-size: 10px;
+    padding: 6px 8px;
+  }
+  .cell-pass { background: rgba(74, 222, 128, 0.18); color: var(--ok); }
+  .cell-pass .c-top { color: var(--ok); }
+  .cell-partial { background: rgba(251, 191, 36, 0.18); color: var(--warn); }
+  .cell-partial .c-top { color: var(--warn); }
+  .cell-fail { background: rgba(248, 113, 113, 0.18); color: var(--bad); }
+  .cell-fail .c-top { color: var(--bad); }
+  .cell-manual { background: rgba(96, 165, 250, 0.14); color: var(--manual); }
+  .cell-manual .c-top { color: var(--manual); }
+  .cell-error { background: rgba(248, 113, 113, 0.3); color: var(--bad); border-left: 3px solid var(--bad); }
+
+  /* Modal */
+  .modal-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    z-index: 200;
+    display: none;
+    align-items: center; justify-content: center;
+  }
+  .modal-backdrop.show { display: flex; }
+  .modal {
+    background: var(--bg-elev);
+    color: var(--text);
+    width: min(1100px, 96vw);
+    max-height: 92vh;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .modal-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 12px;
+  }
+  .modal-header h2 { margin: 0; font-size: 15px; }
+  .modal-header .subtitle { color: var(--text-dim); font-size: 11px; }
+  .modal-close { margin-left: auto; cursor: pointer; padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border); }
+  .modal-body { padding: 16px; overflow-y: auto; flex: 1; }
+  .kv-grid { display: grid; grid-template-columns: 140px 1fr; gap: 4px 12px; margin-bottom: 12px; font-size: 12px; }
+  .kv-grid dt { color: var(--text-faint); }
+  .kv-grid dd { margin: 0; color: var(--text); }
+  .section-title {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--accent); margin: 14px 0 6px 0; font-weight: 600;
+  }
+  .pill {
+    display: inline-block; padding: 1px 7px; border-radius: 10px;
+    font-size: 10px; border: 1px solid var(--border);
+    color: var(--text-dim);
+    background: var(--bg-elev2);
+  }
+  .pill.ok { color: var(--ok); border-color: var(--ok); }
+  .pill.bad { color: var(--bad); border-color: var(--bad); }
+  .pill.warn { color: var(--warn); border-color: var(--warn); }
+  .pill.dim { color: var(--text-faint); }
+  table.docs {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+    margin-top: 4px;
+  }
+  table.docs th, table.docs td {
+    border: 1px solid var(--border);
+    padding: 4px 6px;
+    text-align: left;
+    vertical-align: top;
+  }
+  table.docs th { background: var(--bg-elev2); color: var(--text-dim); font-weight: 500; }
+  table.docs td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  table.docs .preview { color: var(--text-dim); font-size: 10.5px; max-width: 360px; }
+  table.docs tr.rank-up td { background: rgba(74, 222, 128, 0.06); }
+  pre.answer {
+    white-space: pre-wrap;
+    background: var(--code-bg);
+    padding: 10px 12px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--text);
+    max-height: 360px;
+    overflow: auto;
+    margin: 0;
+  }
+
+  /* Compare */
+  .compare-controls { display: flex; gap: 12px; align-items: flex-end; margin-bottom: 12px; }
+  .compare-controls .ctrl { display: flex; flex-direction: column; gap: 4px; min-width: 220px; }
+  .compare-controls label { font-size: 11px; color: var(--text-dim); }
+  .compare-controls select {
+    background: var(--bg-elev); color: var(--text); border: 1px solid var(--border);
+    padding: 5px 8px; border-radius: 4px; min-width: 220px; font-size: 12px;
+  }
+  .compare-controls .swap { cursor: pointer; padding: 5px 12px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-elev); color: var(--text); font-size: 12px; }
+
+  table.compare {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+  }
+  table.compare th, table.compare td {
+    border: 1px solid var(--border);
+    padding: 6px 8px;
+    vertical-align: top;
+  }
+  table.compare th {
+    background: var(--bg-elev2);
+    color: var(--text-dim);
+    font-weight: 500;
+    position: sticky; top: 0;
+  }
+  table.compare td.case-col { background: var(--bg-elev); position: sticky; left: 0; }
+  table.compare td.diff-up { color: var(--ok); font-weight: 600; }
+  table.compare td.diff-down { color: var(--bad); font-weight: 600; }
+  table.compare td.diff-eq { color: var(--text-faint); }
+  table.compare td.diff-neq { color: var(--warn); font-weight: 600; }
+  table.compare .badge {
+    display: inline-block; padding: 1px 6px; border-radius: 3px;
+    font-size: 10px; margin-right: 4px;
+  }
+  table.compare .badge.A { background: rgba(96, 165, 250, 0.2); color: var(--manual); }
+  table.compare .badge.B { background: rgba(74, 222, 128, 0.2); color: var(--ok); }
+
+  /* Stats */
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+  .stat-card {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px;
+  }
+  .stat-card h4 { margin: 0 0 4px 0; font-size: 12px; }
+  .stat-card .stat-phase { font-size: 10px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 6px; }
+  .stat-card .stat-hint { font-size: 11px; color: var(--text-dim); margin-bottom: 6px; min-height: 16px; }
+  .stat-bar { height: 6px; background: var(--bg-elev2); border-radius: 3px; overflow: hidden; margin: 4px 0; }
+  .stat-bar div { height: 100%; background: var(--ok); transition: width 0.3s; }
+  .stat-row { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-dim); }
+  .stat-row span:last-child { color: var(--text); font-variant-numeric: tabular-nums; }
+
+  /* About */
+  .about p { color: var(--text-dim); max-width: 720px; }
+  .about code { background: var(--code-bg); padding: 1px 5px; border-radius: 3px; font-size: 11px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 12px; margin: 12px 0; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-dim); }
+  .legend-swatch { width: 18px; height: 18px; border-radius: 3px; }
+
+  /* Misc */
+  .muted { color: var(--text-faint); }
+  .truncate { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
+  .scroll-h { overflow-x: auto; }
+  details { margin-top: 6px; }
+  details > summary { cursor: pointer; color: var(--text-dim); font-size: 11px; }
+  details[open] > summary { color: var(--text); }
+  .err-text { color: var(--bad); font-size: 11px; font-family: monospace; }
+
+  #loading {
+    text-align: center; padding: 80px 20px; color: var(--text-dim);
+    font-size: 14px;
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <h1>RAG Eval Viewer</h1>
+  <span class="subtitle" id="header-stats"></span>
+  <span class="spacer"></span>
+  <div class="tabbar">
+    <div class="tab active" data-view="matrix">矩阵</div>
+    <div class="tab" data-view="compare">AB 对比</div>
+    <div class="tab" data-view="stats">汇总统计</div>
+    <div class="tab" data-view="about">说明</div>
+  </div>
+  <button class="icon-btn" id="theme-toggle">浅色</button>
+</header>
+
+<main class="layout">
+  <aside class="sidebar">
+    <h3>Run 过滤</h3>
+    <div class="filter-row">
+      <input id="run-search" type="text" placeholder="搜索 run id..." />
+    </div>
+    <div class="filter-row">
+      <button class="icon-btn" id="run-select-all">全选</button>
+      <button class="icon-btn" id="run-clear">清空</button>
+      <button class="icon-btn" id="run-recent">最近 6 个</button>
+    </div>
+    <div id="run-tree"></div>
+
+    <h3>Case 过滤</h3>
+    <div class="filter-row">
+      <button class="icon-btn" id="case-all">全部</button>
+      <button class="icon-btn" id="case-rag1-10">RAG 1-10</button>
+      <button class="icon-btn" id="case-rag11-14">RAG 11-14 control</button>
+    </div>
+    <div id="case-tree"></div>
+
+    <h3>Schema</h3>
+    <div id="schema-tree"></div>
+  </aside>
+
+  <section class="content">
+    <div id="loading">加载中...</div>
+
+    <div class="view" data-view="matrix">
+      <div class="matrix-wrap">
+        <table class="matrix" id="matrix-table"></table>
+      </div>
+    </div>
+
+    <div class="view" data-view="compare">
+      <div class="compare-controls">
+        <div class="ctrl">
+          <label>Run A</label>
+          <select id="cmp-a"></select>
+        </div>
+        <button class="swap" id="cmp-swap">⇄</button>
+        <div class="ctrl">
+          <label>Run B</label>
+          <select id="cmp-b"></select>
+        </div>
+        <div class="ctrl" style="min-width:120px">
+          <label>只显示差异</label>
+          <label style="display:flex;gap:4px;align-items:center;">
+            <input type="checkbox" id="cmp-diff-only" /> 差异行
+          </label>
+        </div>
+      </div>
+      <div class="scroll-h">
+        <table class="compare" id="compare-table"></table>
+      </div>
+    </div>
+
+    <div class="view" data-view="stats">
+      <div class="stats-grid" id="stats-grid"></div>
+    </div>
+
+    <div class="view" data-view="about">
+      <div class="about">
+        <h3>关于</h3>
+        <p>这是 <code>docs/dev-ops/rag-eval/results/</code> 下全部评测报告的可视化视图。源文件保持只读，
+        所有展示数据来自 <code>data/dataset.js</code>，由 <code>build_dataset.py</code> 从 markdown 报告抽取生成。</p>
+
+        <h3>颜色编码（矩阵 / 单元格）</h3>
+        <div class="legend">
+          <div class="legend-item"><span class="legend-swatch cell-pass"></span> literal 100% 命中 或 manual_pass=true</div>
+          <div class="legend-item"><span class="legend-swatch cell-partial"></span> literal 部分命中（如 2/3）</div>
+          <div class="legend-item"><span class="legend-swatch cell-fail"></span> literal 全 miss 或 should_answer 但拒答</div>
+          <div class="legend-item"><span class="legend-swatch cell-manual"></span> manual 评分 case（拒答 / 改写 / 概念题），待人评</div>
+          <div class="legend-item"><span class="legend-swatch cell-empty"></span> 该 run 没跑这个 case</div>
+          <div class="legend-item"><span class="legend-swatch cell-error"></span> 流程错误（completed=false 或带 error 帧）</div>
+        </div>
+
+        <h3>视图</h3>
+        <ul style="color:var(--text-dim);font-size:12px;line-height:1.7">
+          <li><b>矩阵</b>：行=14 个 RAG case，列=过滤后的 run。点单元格弹出该 case 的完整检索 + documents + answer。</li>
+          <li><b>AB 对比</b>：选 A/B 两个 run，对每个 case 并排列出 literal_hit / retrieved / score_max / top-1 source 等指标的差异。</li>
+          <li><b>汇总统计</b>：每个 run 的通过率 / 平均时长 / 字段覆盖度。</li>
+        </ul>
+
+        <h3>重新生成数据</h3>
+        <p>新增报告后在 <code>viewer/</code> 目录跑：<br>
+        <code>python3 build_dataset.py</code></p>
+
+        <h3>schema 注意</h3>
+        <p>F-fix（May 1）之前的报告没有 <code>retrieved/score/empty</code> 三列，矩阵里这些 cell 只显示 literal_hit。
+        早期 chunker 报告也没有 documents attribution；HYBRID 后才有 <code>rrfScore</code>，rerank 后才有 <code>rerankScore</code>。</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="modal-backdrop" id="modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="modal-title"></h2>
+      <span class="subtitle" id="modal-subtitle"></span>
+      <button class="modal-close" id="modal-close">关闭 ✕</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<script src="data/dataset.js"></script>
+<script>
+(function() {
+  const D = window.RAG_EVAL_DATASET;
+  if (!D) {
+    document.getElementById('loading').textContent =
+      'ERROR: data/dataset.js 未加载。请先运行 python3 build_dataset.py';
+    return;
+  }
+  document.getElementById('loading').style.display = 'none';
+  document.querySelector('.view[data-view="matrix"]').classList.add('active');
+
+  // State
+  const state = {
+    selectedRuns: new Set(D.runs.map(r => r.run_id)),
+    selectedCases: new Set(D.cases.map(c => c.id)),
+    selectedSchemas: new Set(['legacy', 'triangle', 'new']),
+    activeView: 'matrix',
+  };
+
+  // ----- header stats -----
+  document.getElementById('header-stats').textContent =
+    `${D.stats.run_count} runs · ${D.stats.case_count} cases · ${D.stats.total_summary_rows} 行汇总数据`;
+
+  // ----- theme -----
+  const themeBtn = document.getElementById('theme-toggle');
+  function setTheme(t) {
+    document.documentElement.setAttribute('data-theme', t);
+    themeBtn.textContent = t === 'dark' ? '浅色' : '深色';
+    localStorage.setItem('rag-eval-viewer-theme', t);
+  }
+  setTheme(localStorage.getItem('rag-eval-viewer-theme') || 'dark');
+  themeBtn.addEventListener('click', () => {
+    const t = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    setTheme(t);
+    render();
+  });
+
+  // ----- tabs -----
+  document.querySelectorAll('.tab').forEach(el => {
+    el.addEventListener('click', () => {
+      const v = el.dataset.view;
+      document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t === el));
+      document.querySelectorAll('.view').forEach(view =>
+        view.classList.toggle('active', view.dataset.view === v));
+      state.activeView = v;
+      render();
+    });
+  });
+
+  // ----- sidebar: run tree (grouped by phase) -----
+  function buildRunTree() {
+    const root = document.getElementById('run-tree');
+    const byPhase = new Map();
+    D.runs.forEach(r => {
+      if (!byPhase.has(r.group_phase)) byPhase.set(r.group_phase, []);
+      byPhase.get(r.group_phase).push(r);
+    });
+    root.innerHTML = '';
+    [...byPhase.entries()].forEach(([phase, runs]) => {
+      const block = document.createElement('div');
+      block.className = 'phase-block';
+      const title = document.createElement('div');
+      title.className = 'phase-title';
+      const dot = document.createElement('span');
+      dot.className = 'phase-dot';
+      dot.style.background = runs[0].group_color;
+      title.append(dot);
+      const titleText = document.createElement('span');
+      titleText.textContent = `${phase} (${runs.length})`;
+      title.append(titleText);
+      block.append(title);
+      const list = document.createElement('div');
+      list.className = 'run-list';
+      runs.forEach(r => {
+        const row = document.createElement('label');
+        row.className = 'run-item';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = state.selectedRuns.has(r.run_id);
+        cb.dataset.runId = r.run_id;
+        cb.addEventListener('change', () => {
+          if (cb.checked) state.selectedRuns.add(r.run_id);
+          else state.selectedRuns.delete(r.run_id);
+          render();
+        });
+        row.append(cb);
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = r.file_label;
+        nameSpan.title = `${r.run_id}\n${r.generated_at}\n${r.config_hint}`;
+        row.append(nameSpan);
+        const meta = document.createElement('span');
+        meta.className = 'run-meta';
+        meta.textContent = `[${r.case_count}]`;
+        row.append(meta);
+        list.append(row);
+      });
+      block.append(list);
+      root.append(block);
+    });
+  }
+
+  function buildCaseTree() {
+    const root = document.getElementById('case-tree');
+    root.innerHTML = '';
+    D.cases.forEach(c => {
+      const row = document.createElement('label');
+      row.className = 'run-item';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = state.selectedCases.has(c.id);
+      cb.dataset.caseId = c.id;
+      cb.addEventListener('change', () => {
+        if (cb.checked) state.selectedCases.add(c.id);
+        else state.selectedCases.delete(c.id);
+        render();
+      });
+      row.append(cb);
+      const text = document.createElement('span');
+      text.textContent = `${c.id} · ${c.case_type}`;
+      text.title = c.question;
+      row.append(text);
+      root.append(row);
+    });
+  }
+
+  function buildSchemaTree() {
+    const root = document.getElementById('schema-tree');
+    root.innerHTML = '';
+    ['new', 'triangle', 'legacy'].forEach(s => {
+      const count = D.runs.filter(r => r.schema_era === s).length;
+      if (!count) return;
+      const row = document.createElement('label');
+      row.className = 'run-item';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = state.selectedSchemas.has(s);
+      cb.addEventListener('change', () => {
+        if (cb.checked) state.selectedSchemas.add(s);
+        else state.selectedSchemas.delete(s);
+        render();
+      });
+      row.append(cb);
+      const text = document.createElement('span');
+      const labels = { new: 'new (retrieved/score/empty)', triangle: 'triangle (literal_hit only)', legacy: 'legacy (matched_points)' };
+      text.textContent = `${labels[s]} (${count})`;
+      row.append(text);
+      root.append(row);
+    });
+  }
+
+  // search/select-all/clear
+  document.getElementById('run-search').addEventListener('input', e => {
+    const q = e.target.value.toLowerCase();
+    document.querySelectorAll('#run-tree .run-item').forEach(el => {
+      const text = el.textContent.toLowerCase();
+      el.style.display = text.includes(q) ? '' : 'none';
+    });
+  });
+  document.getElementById('run-select-all').addEventListener('click', () => {
+    D.runs.forEach(r => state.selectedRuns.add(r.run_id));
+    buildRunTree();
+    render();
+  });
+  document.getElementById('run-clear').addEventListener('click', () => {
+    state.selectedRuns.clear();
+    buildRunTree();
+    render();
+  });
+  document.getElementById('run-recent').addEventListener('click', () => {
+    state.selectedRuns.clear();
+    D.runs.slice(-6).forEach(r => state.selectedRuns.add(r.run_id));
+    buildRunTree();
+    render();
+  });
+  document.getElementById('case-all').addEventListener('click', () => {
+    D.cases.forEach(c => state.selectedCases.add(c.id));
+    buildCaseTree();
+    render();
+  });
+  document.getElementById('case-rag1-10').addEventListener('click', () => {
+    state.selectedCases.clear();
+    D.cases.forEach(c => {
+      const num = parseInt(c.id.replace('RAG-', ''), 10);
+      if (num >= 1 && num <= 10) state.selectedCases.add(c.id);
+    });
+    buildCaseTree();
+    render();
+  });
+  document.getElementById('case-rag11-14').addEventListener('click', () => {
+    state.selectedCases.clear();
+    D.cases.forEach(c => {
+      const num = parseInt(c.id.replace('RAG-', ''), 10);
+      if (num >= 11 && num <= 14) state.selectedCases.add(c.id);
+    });
+    buildCaseTree();
+    render();
+  });
+
+  // ----- cell classification -----
+  function classifyCell(summary, detail) {
+    if (!summary) return { cls: 'empty', label: '—' };
+    if (summary.completed === false) return { cls: 'error', label: 'fail' };
+    if (detail && detail.error) return { cls: 'error', label: 'err' };
+    const ratio = summary.literal_hit_ratio;
+    const lit = summary.literal_hit || '';
+    if (lit === 'manual' || lit === '—') {
+      if (summary.manual_pass && summary.manual_pass.toLowerCase() === 'true')
+        return { cls: 'pass', label: 'manual ✓' };
+      return { cls: 'manual', label: lit || 'manual' };
+    }
+    if (ratio === null || ratio === undefined) return { cls: 'manual', label: lit || '—' };
+    if (ratio >= 0.999) return { cls: 'pass', label: lit };
+    if (ratio > 0) return { cls: 'partial', label: lit };
+    return { cls: 'fail', label: lit || '0/?' };
+  }
+
+  // ----- matrix -----
+  function renderMatrix() {
+    const table = document.getElementById('matrix-table');
+    const runs = D.runs.filter(r =>
+      state.selectedRuns.has(r.run_id) && state.selectedSchemas.has(r.schema_era));
+    const cases = D.cases.filter(c => state.selectedCases.has(c.id));
+
+    let html = '<thead><tr><th class="case-col">Case</th>';
+    runs.forEach(r => {
+      html += `<th style="--phase-color:${r.group_color}"><div class="run-header">
+        <span class="rh-phase">${escapeHtml(r.group_phase)}</span>
+        <span class="rh-name" title="${escapeHtml(r.run_id)}">${escapeHtml(r.file_label)}</span>
+        ${r.config_hint ? `<span class="rh-hint">${escapeHtml(r.config_hint)}</span>` : ''}
+        <span class="rh-time">${escapeHtml(r.generated_at || '')}</span>
+      </div></th>`;
+    });
+    html += '</tr></thead><tbody>';
+
+    cases.forEach(c => {
+      html += `<tr><td class="case-col">
+        <div class="case-label">
+          <span class="cl-id">${escapeHtml(c.id)}</span>
+          <span class="cl-type">${escapeHtml(c.case_type)}</span>
+          <span class="cl-type muted" title="${escapeHtml(c.question)}">${escapeHtml((c.question || '').slice(0, 30))}…</span>
+        </div>
+      </td>`;
+      runs.forEach(r => {
+        const s = r.summary[c.id];
+        const det = r.details[c.id];
+        const cls = classifyCell(s, det);
+        if (!s) {
+          html += `<td class="cell-empty">—</td>`;
+        } else {
+          const score = s.score_range && s.score_range !== '—' ? s.score_range :
+                        (s.score_max !== null && s.score_max !== undefined ? s.score_max : '—');
+          const dur = s.duration_ms ? `${(s.duration_ms / 1000).toFixed(1)}s` : '—';
+          html += `<td class="cell cell-${cls.cls}" data-run-id="${escapeHtml(r.run_id)}" data-case-id="${c.id}" title="${buildCellTooltip(r, c, s, det)}">
+            <div class="c-top"><span>${escapeHtml(cls.label)}</span><span>${escapeHtml(s.retrieved !== null && s.retrieved !== undefined ? `R${s.retrieved}` : '')}</span></div>
+            <div class="c-mid"><span class="truncate">${escapeHtml(score)}</span><span>${escapeHtml(dur)}</span></div>
+            ${s.missed_points ? `<div class="c-bot truncate" title="${escapeHtml(s.missed_points)}">✕ ${escapeHtml(s.missed_points)}</div>` : ''}
+          </td>`;
+        }
+      });
+      html += '</tr>';
+    });
+
+    html += '</tbody>';
+    table.innerHTML = html;
+
+    table.querySelectorAll('td.cell').forEach(td => {
+      td.addEventListener('click', () => openDrilldown(td.dataset.runId, td.dataset.caseId));
+    });
+  }
+
+  function buildCellTooltip(run, c, s, det) {
+    const parts = [
+      `${run.file_label} · ${c.id}`,
+      `phase: ${run.group_phase}`,
+      `generated_at: ${run.generated_at}`,
+      `config: ${run.config_hint || '—'}`,
+      `completed: ${s.completed}`,
+      `duration: ${s.duration_ms} ms`,
+      `retrieved: ${s.retrieved}`,
+      `score: ${s.score_range || '—'}`,
+      `empty: ${s.empty}`,
+      `literal_hit: ${s.literal_hit}`,
+      `missed: ${s.missed_points || '—'}`,
+      `should_answer: ${s.should_answer}`,
+    ];
+    return parts.join('\n').replace(/"/g, '&quot;');
+  }
+
+  // ----- drilldown modal -----
+  function openDrilldown(runId, caseId) {
+    const run = D.runs.find(r => r.run_id === runId);
+    const c = D.cases.find(x => x.id === caseId);
+    const s = run.summary[caseId];
+    const det = run.details[caseId];
+    if (!s) return;
+
+    document.getElementById('modal-title').textContent = `${caseId} · ${c.case_type}`;
+    document.getElementById('modal-subtitle').textContent =
+      `${run.file_label}  ·  ${run.group_phase}  ·  ${run.generated_at}`;
+
+    let body = '';
+    body += `<dl class="kv-grid">
+      <dt>question</dt><dd>${escapeHtml(c.question || '')}</dd>
+      <dt>should_answer</dt><dd>${pill(s.should_answer === true ? 'true' : s.should_answer === false ? 'false' : '—', s.should_answer ? 'ok' : 'dim')}</dd>
+      <dt>expected_section</dt><dd>${escapeHtml(c.expected_source_section || '—')}</dd>
+      <dt>score_mode</dt><dd>${pill(c.score_mode || '—', 'dim')}</dd>
+      <dt>expected_points</dt><dd>${(c.expected_points || []).map(p => {
+        const matched = (det && det.expected_points || []).find(ep => ep.point === p);
+        return pill(p, matched && matched.matched ? 'ok' : 'bad');
+      }).join(' ')}</dd>
+    </dl>`;
+
+    body += `<dl class="kv-grid">
+      <dt>completed</dt><dd>${pill(String(s.completed), s.completed ? 'ok' : 'bad')}</dd>
+      <dt>duration</dt><dd>${s.duration_ms ? `${s.duration_ms} ms (${(s.duration_ms/1000).toFixed(2)}s)` : '—'}</dd>
+      <dt>retrieved</dt><dd>${s.retrieved ?? '—'}</dd>
+      <dt>score range</dt><dd>${escapeHtml(s.score_range || '—')}</dd>
+      <dt>empty</dt><dd>${pill(String(s.empty), s.empty ? 'warn' : 'dim')}</dd>
+      <dt>literal_hit</dt><dd>${escapeHtml(s.literal_hit || '—')}${s.literal_hit_ratio !== null ? ` <span class="muted">(${(s.literal_hit_ratio*100).toFixed(0)}%)</span>` : ''}</dd>
+      <dt>missed</dt><dd>${escapeHtml(s.missed_points || '—')}</dd>
+      <dt>manual_pass</dt><dd>${escapeHtml(s.manual_pass || '—')}</dd>
+    </dl>`;
+
+    if (det && det.error) {
+      body += `<div class="section-title">Error</div><div class="err-text">${escapeHtml(det.error)}</div>`;
+    }
+
+    const evs = (det && det.retrieval_events) || [];
+    if (evs.length === 0) {
+      body += `<div class="section-title">Retrieval</div><div class="muted">本报告未输出 retrieval 详情（schema 早期 / LLM 调用失败）。</div>`;
+    } else {
+      evs.forEach((ev, idx) => {
+        body += `<div class="section-title">Retrieval event #${idx + 1}</div>`;
+        body += `<dl class="kv-grid">
+          <dt>retrieved_count</dt><dd>${ev.retrieved_document_count ?? '—'}</dd>
+          <dt>empty</dt><dd>${pill(String(ev.retrieval_empty), ev.retrieval_empty ? 'warn' : 'dim')}</dd>
+          <dt>similarity_threshold</dt><dd>${ev.similarity_threshold ?? '—'}</dd>
+          ${ev.candidate_similarity_threshold !== null && ev.candidate_similarity_threshold !== undefined ? `<dt>candidate_threshold</dt><dd>${ev.candidate_similarity_threshold}</dd>` : ''}
+          <dt>score_range</dt><dd>${escapeHtml(ev.score_range || '—')}</dd>
+          <dt>context</dt><dd>selected=${ev.context_selected ?? '—'} / dropped=${ev.context_dropped ?? '—'} / truncated=${ev.context_truncated ?? '—'} · ${ev.context_chars_actual ?? '—'}/${ev.context_chars_max ?? '—'} chars</dd>
+          ${ev.rerank_mode ? `<dt>rerank</dt><dd>applied=${pill(String(ev.rerank_applied), ev.rerank_applied ? 'ok' : 'dim')} mode=${pill(ev.rerank_mode, 'dim')} candidates=${ev.rerank_candidates} → final=${ev.rerank_final}</dd>` : ''}
+          ${ev.rerank_runtime_model ? `<dt>rerank runtime</dt><dd>model=<code>${escapeHtml(ev.rerank_runtime_model)}</code> · endpoint=<code>${escapeHtml(ev.rerank_runtime_endpoint||'')}</code>${ev.rerank_runtime_failure_reason ? ` · failure: <span class="err-text">${escapeHtml(ev.rerank_runtime_failure_reason)}</span>`:''}</dd>` : ''}
+        </dl>`;
+        if (ev.documents && ev.documents.length) {
+          body += renderDocsTable(ev.documents);
+        }
+      });
+    }
+
+    if (det && det.answer) {
+      body += `<div class="section-title">Answer</div><pre class="answer">${escapeHtml(det.answer)}</pre>`;
+    } else if (s.answer_preview) {
+      body += `<div class="section-title">Answer (preview)</div><pre class="answer">${escapeHtml(s.answer_preview)}</pre>`;
+    }
+
+    document.getElementById('modal-body').innerHTML = body;
+    document.getElementById('modal').classList.add('show');
+  }
+
+  function renderDocsTable(docs) {
+    // Core columns (kept visible in the first horizontal screen),
+    // followed by secondary columns, then any unknown extras, and
+    // preview is always forced last.
+    const core = [
+      'rank', 'source', 'chunk', 'retrievalSource',
+      'score', 'vectorRank', 'keywordRank', 'rrfScore',
+      'beforeRerankRank', 'rerankRank', 'rerankScore', 'rerankMode'
+    ];
+    const secondary = ['vectorScore', 'keywordScore', 'keywordSkippedReason', 'rerankApplied'];
+    const seen = new Set(core.concat(secondary).concat(['preview']));
+    const extras = [];
+    docs.forEach(d => Object.keys(d).forEach(k => {
+      if (!seen.has(k)) { seen.add(k); extras.push(k); }
+    }));
+    const ordered = core.concat(secondary).concat(extras).concat(['preview']);
+    const numericCols = new Set([
+      'rank','chunk','score','rrfScore',
+      'vectorRank','vectorScore','keywordRank','keywordScore',
+      'beforeRerankRank','rerankRank','rerankScore'
+    ]);
+    const isEmpty = v => v === undefined || v === null || v === '' || v === '—';
+    const hasCol = ordered.filter(col => docs.some(d => !isEmpty(d[col])));
+    let html = '<table class="docs"><thead><tr>';
+    hasCol.forEach(col => html += `<th>${escapeHtml(col)}</th>`);
+    html += '</tr></thead><tbody>';
+    docs.forEach(d => {
+      const moved = (d.beforeRerankRank !== undefined && d.rerankRank !== undefined &&
+        Number(d.rerankRank) < Number(d.beforeRerankRank));
+      html += `<tr${moved ? ' class="rank-up"' : ''}>`;
+      hasCol.forEach(col => {
+        let v = d[col];
+        if (v === undefined || v === null) v = '';
+        const isNum = numericCols.has(col);
+        if (typeof v === 'number') {
+          v = isNum && col.toLowerCase().includes('score') ? v.toFixed(4) : v;
+        } else if (typeof v === 'boolean') {
+          v = v ? 'true' : 'false';
+        }
+        if (col === 'preview') html += `<td class="preview">${escapeHtml(String(v).slice(0, 200))}</td>`;
+        else html += `<td class="${isNum ? 'num' : ''}">${escapeHtml(String(v))}</td>`;
+      });
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+    return html;
+  }
+
+  document.getElementById('modal-close').addEventListener('click', () => {
+    document.getElementById('modal').classList.remove('show');
+  });
+  document.getElementById('modal').addEventListener('click', e => {
+    if (e.target.id === 'modal') document.getElementById('modal').classList.remove('show');
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') document.getElementById('modal').classList.remove('show');
+  });
+
+  // ----- compare -----
+  function fillCompareSelectors() {
+    const a = document.getElementById('cmp-a');
+    const b = document.getElementById('cmp-b');
+    a.innerHTML = '';
+    b.innerHTML = '';
+    D.runs.forEach(r => {
+      const opt1 = new Option(`[${r.group_phase}] ${r.file_label}`, r.run_id);
+      const opt2 = new Option(`[${r.group_phase}] ${r.file_label}`, r.run_id);
+      a.add(opt1);
+      b.add(opt2);
+    });
+    // default: prefer the two most recent 14-case full runs (most informative);
+    // single-case probes are skipped here. Fallback to last two of any size.
+    const full = D.runs.filter(r => (r.case_count || 0) >= 14);
+    const pickFrom = full.length >= 2 ? full : D.runs;
+    if (pickFrom.length >= 2) {
+      a.value = pickFrom[pickFrom.length - 2].run_id;
+      b.value = pickFrom[pickFrom.length - 1].run_id;
+    }
+    a.addEventListener('change', renderCompare);
+    b.addEventListener('change', renderCompare);
+    document.getElementById('cmp-diff-only').addEventListener('change', renderCompare);
+    document.getElementById('cmp-swap').addEventListener('click', () => {
+      const tmp = a.value;
+      a.value = b.value;
+      b.value = tmp;
+      renderCompare();
+    });
+  }
+
+  function renderCompare() {
+    const aId = document.getElementById('cmp-a').value;
+    const bId = document.getElementById('cmp-b').value;
+    const A = D.runs.find(r => r.run_id === aId);
+    const B = D.runs.find(r => r.run_id === bId);
+    const diffOnly = document.getElementById('cmp-diff-only').checked;
+    const table = document.getElementById('compare-table');
+    if (!A || !B) { table.innerHTML = ''; return; }
+
+    let html = `<thead><tr>
+      <th>case</th>
+      <th>metric</th>
+      <th><span class="badge A">A</span>${escapeHtml(A.file_label)}</th>
+      <th>Δ</th>
+      <th><span class="badge B">B</span>${escapeHtml(B.file_label)}</th>
+    </tr></thead><tbody>`;
+
+    const caseIds = D.cases.map(c => c.id).filter(id =>
+      state.selectedCases.has(id) && (A.summary[id] || B.summary[id]));
+    caseIds.forEach(cid => {
+      const sA = A.summary[cid];
+      const sB = B.summary[cid];
+      const dA = A.details[cid];
+      const dB = B.details[cid];
+      const rows = [
+        ['completed', sA?.completed, sB?.completed, eqBool],
+        ['literal_hit', sA?.literal_hit, sB?.literal_hit, eqStr],
+        ['retrieved', sA?.retrieved, sB?.retrieved, eqNum],
+        ['score_max', sA?.score_max, sB?.score_max, eqNumScore],
+        ['empty', sA?.empty, sB?.empty, eqBool],
+        ['duration_ms', sA?.duration_ms, sB?.duration_ms, eqDur],
+        ['missed', sA?.missed_points, sB?.missed_points, eqStr],
+        ['top1_source', getTopSource(dA), getTopSource(dB), eqStr],
+        ['top1_chunk', getTopChunk(dA), getTopChunk(dB), eqStr],
+      ];
+
+      const decorated = rows.map(r => {
+        const [, va, vb, eqfn] = r;
+        return { row: r, cmp: eqfn(va, vb) };
+      });
+      const diffMetrics = decorated.filter(d => d.cmp !== 'eq');
+      const ansA = dA?.answer || sA?.answer_preview || '';
+      const ansB = dB?.answer || sB?.answer_preview || '';
+      const ansChanged = ansA !== ansB;
+      if (diffOnly && diffMetrics.length === 0 && !ansChanged) return;
+
+      const visible = diffOnly ? diffMetrics : decorated;
+      const caseHeaderHtml = (() => {
+        const c = D.cases.find(x => x.id === cid);
+        return `<strong>${escapeHtml(cid)}</strong><br>
+            <span class="muted">${escapeHtml(c?.case_type || '')}</span><br>
+            <span class="muted" style="font-size:10px">${escapeHtml((c?.question || '').slice(0, 60))}</span>`;
+      })();
+
+      if (visible.length === 0) {
+        // diffOnly + only answer changed: emit a single placeholder row
+        // so the case label still has something to attach to.
+        html += `<tr>
+          <td class="case-col" rowspan="1">${caseHeaderHtml}</td>
+          <td class="muted" colspan="4">仅 answer 文本不同</td>
+        </tr>`;
+      } else {
+        const span = visible.length;
+        visible.forEach((d, idx) => {
+          const [metric, va, vb] = d.row;
+          const cmp = d.cmp;
+          html += '<tr>';
+          if (idx === 0) {
+            html += `<td class="case-col" rowspan="${span}">${caseHeaderHtml}</td>`;
+          }
+          const cssClass = cmp === 'up' ? 'diff-up'
+            : cmp === 'down' ? 'diff-down'
+            : cmp === 'neq' ? 'diff-neq'
+            : 'diff-eq';
+          const arrow = cmp === 'up' ? '↑'
+            : cmp === 'down' ? '↓'
+            : cmp === 'neq' ? '≠'
+            : '=';
+          html += `<td>${escapeHtml(metric)}</td>`;
+          html += `<td>${escapeHtml(formatVal(va))}</td>`;
+          html += `<td class="${cssClass}">${arrow}</td>`;
+          html += `<td>${escapeHtml(formatVal(vb))}</td>`;
+          html += '</tr>';
+        });
+      }
+
+      // Answer row: in diffOnly mode only show when content actually differs.
+      if ((ansA || ansB) && (!diffOnly || ansChanged)) {
+        html += `<tr><td colspan="5"><details><summary class="muted">展开 answer (A vs B)${diffOnly && ansChanged ? ' · 文本不同' : ''}</summary>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px;">
+            <pre class="answer">${escapeHtml(ansA)}</pre>
+            <pre class="answer">${escapeHtml(ansB)}</pre>
+          </div></details></td></tr>`;
+      }
+    });
+
+    html += '</tbody>';
+    table.innerHTML = html;
+  }
+
+  function getTopSource(det) {
+    if (!det || !det.retrieval_events || !det.retrieval_events.length) return '';
+    const docs = det.retrieval_events[0].documents || [];
+    if (!docs.length) return '';
+    return docs[0].source || '';
+  }
+  function getTopChunk(det) {
+    if (!det || !det.retrieval_events || !det.retrieval_events.length) return '';
+    const docs = det.retrieval_events[0].documents || [];
+    if (!docs.length) return '';
+    return String(docs[0].chunk ?? '');
+  }
+  function formatVal(v) {
+    if (v === null || v === undefined || v === '') return '—';
+    if (typeof v === 'number') return Number.isInteger(v) ? String(v) : v.toFixed(4);
+    return String(v);
+  }
+  function eqBool(a, b) { return a === b ? 'eq' : 'neq'; }
+  function eqStr(a, b) { return (a || '') === (b || '') ? 'eq' : 'neq'; }
+  function eqNum(a, b) {
+    if (a === b) return 'eq';
+    if (a === null || a === undefined) return 'up';
+    if (b === null || b === undefined) return 'down';
+    return Number(b) > Number(a) ? 'up' : 'down';
+  }
+  function eqNumScore(a, b) {
+    if (a === null && b === null) return 'eq';
+    if (a === b) return 'eq';
+    if (a === null) return 'up';
+    if (b === null) return 'down';
+    if (Math.abs(Number(a) - Number(b)) < 1e-4) return 'eq';
+    return Number(b) > Number(a) ? 'up' : 'down';
+  }
+  function eqDur(a, b) {
+    if (a === b) return 'eq';
+    if (!a) return 'up';
+    if (!b) return 'down';
+    if (Math.abs(a - b) < a * 0.05) return 'eq';
+    // lower duration is "up" (better)
+    return b < a ? 'up' : 'down';
+  }
+
+  // ----- stats -----
+  function renderStats() {
+    const grid = document.getElementById('stats-grid');
+    const runs = D.runs.filter(r =>
+      state.selectedRuns.has(r.run_id) && state.selectedSchemas.has(r.schema_era));
+    let html = '';
+    runs.forEach(r => {
+      const summaries = Object.values(r.summary);
+      const total = summaries.length;
+      const passed = summaries.filter(s => {
+        if (s.completed === false) return false;
+        if (s.literal_hit_ratio !== null && s.literal_hit_ratio !== undefined) return s.literal_hit_ratio >= 0.999;
+        if (s.manual_pass && s.manual_pass.toLowerCase() === 'true') return true;
+        return false;
+      }).length;
+      const partial = summaries.filter(s => {
+        const r = s.literal_hit_ratio;
+        return r !== null && r !== undefined && r > 0 && r < 0.999;
+      }).length;
+      const fail = summaries.filter(s => {
+        if (s.completed === false) return true;
+        if (s.literal_hit_ratio === 0) return true;
+        return false;
+      }).length;
+      const completed = summaries.filter(s => s.completed === true).length;
+      const avgDur = summaries.filter(s => s.duration_ms).reduce((a, s) => a + s.duration_ms, 0) /
+                     (summaries.filter(s => s.duration_ms).length || 1);
+      const passRate = total ? (passed / total * 100) : 0;
+      html += `<div class="stat-card" style="border-left:3px solid ${r.group_color}">
+        <div class="stat-phase">${escapeHtml(r.group_phase)}</div>
+        <h4>${escapeHtml(r.file_label)}</h4>
+        <div class="stat-hint">${escapeHtml(r.config_hint || '—')}</div>
+        <div class="stat-row"><span>cases</span><span>${total}</span></div>
+        <div class="stat-row"><span>completed</span><span>${completed} / ${total}</span></div>
+        <div class="stat-row"><span>literal pass</span><span>${passed} (${passRate.toFixed(0)}%)</span></div>
+        <div class="stat-bar"><div style="width:${passRate}%"></div></div>
+        <div class="stat-row"><span>partial</span><span>${partial}</span></div>
+        <div class="stat-row"><span>fail / err</span><span>${fail}</span></div>
+        <div class="stat-row"><span>avg duration</span><span>${avgDur.toFixed(0)} ms</span></div>
+        <div class="stat-row"><span>generated</span><span style="font-size:10px">${escapeHtml(r.generated_at)}</span></div>
+        <div class="stat-row"><span>schema</span><span>${escapeHtml(r.schema_era)}</span></div>
+      </div>`;
+    });
+    grid.innerHTML = html || '<div class="muted">没有选中任何 run。</div>';
+  }
+
+  // ----- helpers -----
+  function escapeHtml(s) {
+    if (s === null || s === undefined) return '';
+    return String(s).replace(/[&<>"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]));
+  }
+  function pill(text, cls) {
+    return `<span class="pill ${cls || ''}">${escapeHtml(text)}</span>`;
+  }
+
+  function render() {
+    if (state.activeView === 'matrix') renderMatrix();
+    else if (state.activeView === 'compare') renderCompare();
+    else if (state.activeView === 'stats') renderStats();
+  }
+
+  // init
+  buildRunTree();
+  buildCaseTree();
+  buildSchemaTree();
+  fillCompareSelectors();
+  render();
+})();
+</script>
+</body>
+</html>

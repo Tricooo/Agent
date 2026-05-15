@@ -1,0 +1,2114 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RAG Eval · 实验对比看板</title>
+<script src="data/dataset.js"></script>
+<style>
+/* ---------- tokens ---------- */
+:root{
+  --bg:#F4F1E8;
+  --card:#FBF9F2;
+  --card-2:#FFFFFF;
+  --ink:#1F1D1A;
+  --ink-2:#5C5950;
+  --ink-3:#7A7568;
+  --ink-4:#A39E8E;
+  --rule:#E4DFCF;
+  --rule-2:#D7D0BC;
+  --hover:#EDE8D6;
+  --accent:#B85C3D;
+  --accent-soft:#EBD6CB;
+  --ok:#5C7C5C;
+  --ok-soft:#DCE6DB;
+  --bad:#A85C52;
+  --bad-soft:#EFD7D2;
+  --warn:#9C7642;
+  --warn-soft:#ECDFC8;
+  --na:#C9C4B2;
+
+  --serif:'Iowan Old Style','Charter','Source Serif Pro','Georgia',serif;
+  --sans:-apple-system,'Segoe UI','Helvetica Neue',system-ui,sans-serif;
+  --mono:ui-monospace,'SF Mono','JetBrains Mono',Menlo,monospace;
+
+  --shadow:0 1px 2px rgba(31,29,26,.04),0 1px 1px rgba(31,29,26,.03);
+  --shadow-lift:0 8px 24px rgba(31,29,26,.08),0 2px 6px rgba(31,29,26,.04);
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--sans);
+  font-size:14px;
+  line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+::selection{background:var(--accent-soft);color:var(--ink)}
+
+/* scrollbar */
+*::-webkit-scrollbar{width:10px;height:10px}
+*::-webkit-scrollbar-thumb{background:var(--rule-2);border-radius:6px;border:2px solid var(--bg)}
+*::-webkit-scrollbar-track{background:transparent}
+*::-webkit-scrollbar-thumb:hover{background:#BFB89F}
+
+/* ---------- top bar ---------- */
+.topbar{
+  position:sticky;top:0;z-index:30;
+  background:rgba(244,241,232,.92);
+  backdrop-filter:saturate(140%) blur(8px);
+  -webkit-backdrop-filter:saturate(140%) blur(8px);
+  border-bottom:1px solid var(--rule);
+}
+.topbar-inner{
+  max-width:1400px;margin:0 auto;
+  padding:14px 32px;
+  display:flex;align-items:center;gap:32px;
+}
+.brand{display:flex;align-items:center;gap:12px;color:var(--ink);text-decoration:none}
+.brand .mark{width:22px;height:22px;flex:0 0 22px}
+.brand .name{font-family:var(--serif);font-size:18px;letter-spacing:.01em}
+.brand .sep{color:var(--ink-3);font-size:13px}
+.brand .sub{color:var(--ink-2);font-size:13px}
+
+.tabs{display:flex;gap:4px;margin-left:auto}
+.tab{
+  appearance:none;background:transparent;border:0;
+  font-family:var(--sans);font-size:13px;color:var(--ink-2);
+  padding:10px 14px 12px;
+  cursor:pointer;position:relative;
+  letter-spacing:.01em;
+  transition:color 150ms ease;
+}
+.tab:hover{color:var(--ink)}
+.tab.active{color:var(--ink);font-weight:500}
+.tab.active::after{
+  content:"";position:absolute;left:14px;right:14px;bottom:-1px;height:2px;background:var(--accent);
+  border-radius:1px;
+}
+.meta-right{color:var(--ink-3);font-family:var(--mono);font-size:11px;margin-left:8px}
+
+/* ---------- layout ---------- */
+.page{max-width:1400px;margin:0 auto;padding:48px 32px 96px}
+.section-head{margin-bottom:28px}
+.eyebrow{
+  font-family:var(--mono);font-size:11px;color:var(--ink-3);
+  text-transform:uppercase;letter-spacing:.12em;margin-bottom:10px;
+}
+h1.title{
+  font-family:var(--serif);font-weight:500;
+  font-size:34px;line-height:1.15;letter-spacing:-.01em;
+  margin:0 0 10px;
+}
+.lede{color:var(--ink-2);max-width:62ch;margin:0;font-size:15px;line-height:1.6}
+.divider{height:1px;background:var(--rule);margin:0;border:0}
+
+/* ---------- toolbar ---------- */
+.toolbar{
+  display:flex;align-items:center;gap:16px;
+  margin:32px 0 20px;
+  flex-wrap:wrap;
+}
+.toolbar .grow{flex:1}
+.field{
+  display:inline-flex;align-items:center;gap:8px;
+  font-size:12px;color:var(--ink-2);
+}
+.field label{font-family:var(--mono);text-transform:uppercase;letter-spacing:.08em;font-size:11px;color:var(--ink-3)}
+.select{
+  appearance:none;-webkit-appearance:none;
+  background:var(--card-2) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%236C685F' stroke-width='1.4' stroke-linecap='round'/></svg>") no-repeat right 10px center;
+  border:1px solid var(--rule-2);
+  border-radius:6px;
+  padding:7px 28px 7px 12px;
+  font-family:var(--sans);font-size:13px;color:var(--ink);
+  min-width:200px;
+  cursor:pointer;
+  transition:border-color 150ms ease,background-color 150ms ease;
+}
+.select:hover{border-color:#BFB89F}
+.select:focus{outline:none;border-color:var(--accent)}
+
+.btn{
+  appearance:none;cursor:pointer;
+  background:var(--card-2);color:var(--ink);
+  border:1px solid var(--rule-2);
+  border-radius:6px;
+  padding:7px 14px;
+  font-family:var(--sans);font-size:13px;
+  transition:border-color 150ms ease,background-color 150ms ease,color 150ms ease;
+}
+.btn:hover{border-color:#BFB89F;background:var(--hover)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#FBF9F2}
+.btn.primary:hover{background:#A4533A;border-color:#A4533A}
+
+.toggle{
+  display:inline-flex;align-items:center;gap:10px;
+  font-size:13px;color:var(--ink-2);cursor:pointer;
+  user-select:none;
+}
+.toggle input{position:absolute;opacity:0;pointer-events:none}
+.toggle .track{
+  width:32px;height:18px;border-radius:10px;
+  background:#D7D0BC;position:relative;transition:background 150ms ease;
+}
+.toggle .track::after{
+  content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;
+  background:#FBF9F2;transition:transform 150ms ease;
+  box-shadow:0 1px 2px rgba(31,29,26,.15);
+}
+.toggle input:checked + .track{background:var(--accent)}
+.toggle input:checked + .track::after{transform:translateX(14px)}
+
+/* ---------- view container ---------- */
+.view{display:none}
+.view.active{display:block}
+
+/* ---------- MATRIX ---------- */
+.matrix-wrap{
+  background:var(--card);
+  border:1px solid var(--rule);
+  border-radius:8px;
+  overflow:hidden;
+}
+.matrix-scroll{
+  overflow:auto;
+  max-height:calc(100vh - 280px);
+}
+table.matrix{
+  border-collapse:separate;border-spacing:0;
+  font-size:12px;
+  width:max-content;
+}
+.matrix thead th{
+  position:sticky;top:0;z-index:3;
+  background:var(--card);
+  vertical-align:bottom;
+  text-align:left;
+  font-weight:500;
+  border-bottom:1px solid var(--rule);
+  padding:12px 10px 10px;
+  white-space:nowrap;
+}
+.matrix thead th.corner{
+  left:0;z-index:5;min-width:260px;
+  font-family:var(--mono);
+  font-size:11px;color:var(--ink-3);
+  text-transform:uppercase;letter-spacing:.1em;
+}
+.matrix thead th.runhead{
+  min-width:118px;max-width:140px;
+  border-left:1px solid var(--rule);
+  cursor:default;
+  vertical-align:top;
+  padding:14px 10px 12px;
+}
+.matrix thead th.runhead .runlabel{
+  font-family:var(--mono);font-size:11px;color:var(--ink);
+  display:block;line-height:1.35;
+  white-space:normal;
+  word-break:break-all;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+  max-width:120px;
+}
+.matrix thead th.runhead .runhint{
+  font-size:10px;color:var(--ink-3);
+  font-family:var(--mono);
+  margin-top:6px;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+  white-space:normal;
+  max-width:120px;
+  line-height:1.4;
+}
+.matrix thead th.runhead .runera{
+  display:inline-block;
+  font-size:9px;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--ink-3);
+  margin-top:6px;
+  padding:1px 5px;border:1px solid var(--rule-2);border-radius:3px;
+}
+.matrix thead th.runhead .runprobe{
+  display:inline-block;margin-left:4px;
+  font-size:9px;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--warn);background:var(--warn-soft);
+  padding:1px 5px;border-radius:3px;
+}
+
+.matrix tbody td.caselabel{
+  position:sticky;left:0;z-index:2;
+  background:var(--card);
+  border-bottom:1px solid var(--rule);
+  border-right:1px solid var(--rule);
+  padding:10px 14px;
+  min-width:260px;max-width:260px;
+}
+.matrix tbody tr:hover td.caselabel{background:var(--hover)}
+.caselabel .cid{
+  font-family:var(--mono);font-size:10px;color:var(--ink-3);
+  text-transform:uppercase;letter-spacing:.08em;
+}
+.caselabel .ctype{
+  font-size:12px;color:var(--ink-2);margin-top:2px;
+}
+.caselabel .cq{
+  font-size:13px;color:var(--ink);margin-top:4px;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+  line-height:1.4;
+}
+
+.matrix tbody td.cell{
+  border-bottom:1px solid var(--rule);
+  border-left:1px solid var(--rule);
+  padding:0;text-align:center;
+  vertical-align:middle;
+  min-width:72px;height:56px;
+  cursor:pointer;
+  transition:background-color 120ms ease,box-shadow 120ms ease;
+  position:relative;
+  outline:none;
+}
+.matrix tbody td.cell:hover{background:var(--hover) !important}
+.matrix tbody td.cell.kbd-focus{
+  box-shadow:inset 0 0 0 2px var(--accent);
+  z-index:1;
+}
+.matrix tbody td.cell.kbd-focus::after{
+  content:"";position:absolute;inset:0;
+  border-radius:2px;pointer-events:none;
+}
+.cell .inner{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:2px;height:100%;
+  font-family:var(--mono);
+}
+.cell .stat{
+  font-size:11px;letter-spacing:.06em;text-transform:uppercase;
+}
+.cell .num{
+  font-size:11px;color:var(--ink-2);
+}
+.cell.pass{background:var(--ok-soft)}
+.cell.pass .stat{color:var(--ok)}
+.cell.partial{background:var(--warn-soft)}
+.cell.partial .stat{color:var(--warn)}
+.cell.fail{background:var(--bad-soft)}
+.cell.fail .stat{color:var(--bad)}
+/* MANUAL = waiting-on-human, not a result. Visually demoted via stripe + muted text */
+.cell.na{
+  background:
+    repeating-linear-gradient(135deg,
+      transparent 0,
+      transparent 5px,
+      rgba(122,117,104,0.07) 5px,
+      rgba(122,117,104,0.07) 6px);
+}
+.cell.na .stat{color:var(--ink-4);font-weight:400}
+.cell.na .num{color:var(--ink-4);opacity:.7}
+.cell.skip{background:transparent}
+.cell.skip .stat{color:var(--ink-4)}
+.cell.empty{background:transparent}
+.cell.empty .stat{color:var(--ink-4);opacity:.55}
+.cell.empty .stat::before{content:"·";font-size:14px}
+.cell.empty .stat span{display:none}
+
+/* legend */
+.matrix-legend{
+  display:flex;gap:20px;align-items:center;flex-wrap:wrap;
+  padding:14px 18px;border-top:1px solid var(--rule);
+  background:var(--card);
+  font-size:12px;color:var(--ink-2);
+}
+.matrix-legend .swatch{
+  display:inline-flex;align-items:center;gap:8px;
+}
+.matrix-legend .sw{
+  width:14px;height:14px;border-radius:3px;border:1px solid var(--rule-2);
+}
+.matrix-legend .sw.pass{background:var(--ok-soft);border-color:#C6D3C4}
+.matrix-legend .sw.mixed{background:var(--warn-soft);border-color:#E2D2B0}
+.matrix-legend .sw.fail{background:var(--bad-soft);border-color:#E0C3BE}
+.matrix-legend .sw.manual{background:repeating-linear-gradient(135deg,transparent 0,transparent 4px,rgba(122,117,104,0.18) 4px,rgba(122,117,104,0.18) 5px);border-color:var(--rule-2)}
+.matrix-legend .sw.empty{background:var(--bg);border-style:dashed}
+.matrix-legend .hint{margin-left:auto;color:var(--ink-3);font-family:var(--mono);font-size:11px}
+
+/* ---------- COMPARE ---------- */
+.compare-head{
+  display:grid;grid-template-columns:1fr 32px 1fr;
+  gap:16px;align-items:start;
+  margin-bottom:24px;
+}
+.run-picker{
+  background:var(--card);
+  border:1px solid var(--rule);
+  border-radius:8px;
+  padding:18px 20px;
+}
+.run-picker .picker-label{
+  font-family:var(--mono);font-size:10px;text-transform:uppercase;
+  letter-spacing:.12em;color:var(--ink-3);margin-bottom:8px;
+}
+.run-picker .picker-select{width:100%}
+.run-picker .picker-meta{
+  margin-top:14px;font-size:12px;color:var(--ink-2);
+  display:flex;gap:14px;flex-wrap:wrap;
+  font-family:var(--mono);
+}
+.run-picker .picker-meta b{color:var(--ink);font-weight:500}
+.compare-vs{
+  align-self:center;text-align:center;
+  font-family:var(--serif);font-size:18px;color:var(--ink-3);
+  font-style:italic;
+  padding-top:48px;
+}
+
+/* ---- Compare global summary bar ---- */
+.compare-summary{
+  background:var(--card);
+  border:1px solid var(--rule);
+  border-radius:8px;
+  padding:18px 22px 16px;
+  margin-bottom:18px;
+}
+.cs-head{
+  display:flex;align-items:baseline;justify-content:space-between;gap:16px;
+  margin-bottom:10px;
+}
+.cs-head .cs-title{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-3)}
+.cs-head .cs-count{font-size:13px;color:var(--ink-2);font-family:var(--sans)}
+.cs-head .cs-count b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+.cs-bar{
+  display:flex;height:6px;border-radius:3px;overflow:hidden;
+  background:var(--rule);margin-bottom:10px;
+}
+.cs-bar > span{display:block;height:100%}
+.cs-bar .seg-up{background:var(--ok)}
+.cs-bar .seg-down{background:var(--bad)}
+.cs-bar .seg-diff{background:var(--warn)}
+.cs-bar .seg-same{background:var(--rule-2)}
+.cs-legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--ink-2);align-items:center}
+.cs-legend .swatch-tiny{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:6px;vertical-align:middle}
+.cs-legend .ti-up{background:var(--ok)}
+.cs-legend .ti-down{background:var(--bad)}
+.cs-legend .ti-diff{background:var(--warn)}
+.cs-legend .ti-same{background:var(--rule-2)}
+.cs-legend b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+.cs-changes{
+  margin-top:14px;padding-top:14px;border-top:1px dashed var(--rule);
+  font-size:13px;color:var(--ink-2);line-height:1.7;
+}
+.cs-changes .ch-row{display:flex;gap:10px;flex-wrap:wrap;align-items:baseline}
+.cs-changes .ch-row + .ch-row{margin-top:4px}
+.cs-changes .ch-k{
+  font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.06em;
+  color:var(--ink-3);min-width:120px;
+}
+.cs-changes .ch-v{font-family:var(--mono);font-size:12px;color:var(--ink)}
+.cs-changes .ch-empty{color:var(--ink-3);font-style:italic;font-family:var(--sans)}
+.cs-jump{margin-top:14px;display:flex;gap:18px;flex-wrap:wrap;font-size:13px}
+.cs-jump a{
+  color:var(--accent);text-decoration:none;cursor:pointer;
+  font-family:var(--sans);
+  border-bottom:1px dashed transparent;
+  transition:border-color 150ms ease;
+}
+.cs-jump a:hover{border-bottom-color:var(--accent)}
+.cs-jump a.disabled{color:var(--ink-3);pointer-events:none}
+
+.compare-table{
+  background:var(--card);
+  border:1px solid var(--rule);
+  border-radius:8px;
+  overflow:hidden;
+}
+.cmp-case{
+  border-top:1px solid var(--rule);
+}
+.cmp-case:first-child{border-top:0}
+.cmp-case-head{
+  display:flex;align-items:center;gap:14px;
+  padding:14px 20px;
+  cursor:pointer;
+  user-select:none;
+}
+.cmp-case-head:hover{background:var(--hover)}
+.cmp-case-head:hover .chev{color:var(--ink)}
+.cmp-case-head .cid{
+  font-family:var(--mono);font-size:11px;color:var(--ink-3);
+  text-transform:uppercase;letter-spacing:.08em;
+  min-width:60px;
+}
+.cmp-case-head .ctype{
+  font-size:11px;color:var(--ink-2);
+  padding:2px 8px;border:1px solid var(--rule-2);border-radius:10px;
+  flex-shrink:0;
+}
+.cmp-case-head .cq{
+  font-size:13px;color:var(--ink);flex:1;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.cmp-case-head .chev{
+  width:14px;height:14px;color:var(--ink-3);
+  transition:transform 150ms ease;
+}
+.cmp-case.open .chev{transform:rotate(90deg)}
+.cmp-case-head .diffcount{
+  font-family:var(--mono);font-size:11px;color:var(--ink-3);
+  padding:2px 8px;border-radius:10px;
+  background:transparent;border:1px solid transparent;
+  transition:border-color 150ms ease,background-color 150ms ease;
+}
+.cmp-case-head:hover .diffcount{border-color:var(--rule-2);background:var(--card-2)}
+.cmp-case-head .diffcount.has-diff{color:var(--warn)}
+.cmp-case-head .diffcount.no-diff{color:var(--ink-3)}
+
+.cmp-metrics{
+  display:none;
+  padding:0 20px 18px;
+}
+.cmp-case.open .cmp-metrics{display:block}
+.cmp-metric{
+  display:grid;grid-template-columns:160px 1fr 32px 1fr;
+  align-items:center;gap:16px;
+  padding:8px 0;
+  border-top:1px dashed var(--rule);
+  font-size:13px;
+}
+.cmp-metric:first-child{border-top:0}
+.cmp-metric .mname{
+  font-family:var(--mono);font-size:11px;color:var(--ink-3);
+  text-transform:uppercase;letter-spacing:.08em;
+}
+.cmp-metric .mval{
+  font-family:var(--mono);font-size:12px;color:var(--ink);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.cmp-metric .mval.muted{color:var(--ink-3)}
+.cmp-metric .delta{
+  text-align:center;font-family:var(--mono);font-size:12px;
+}
+.delta.up{color:var(--ok)}
+.delta.down{color:var(--bad)}
+.delta.diff{color:var(--warn)}
+.delta.same{color:var(--ink-3)}
+
+.cmp-answer{
+  margin-top:14px;padding-top:14px;border-top:1px dashed var(--rule);
+  display:grid;grid-template-columns:1fr 1fr;gap:20px;
+}
+.cmp-answer .panel{
+  background:var(--card-2);border:1px solid var(--rule);border-radius:6px;
+  padding:14px 16px;
+  font-family:var(--sans);font-size:13px;line-height:1.7;color:var(--ink);
+  max-height:280px;overflow:auto;
+  white-space:pre-wrap;
+  word-break:break-word;
+}
+.cmp-answer .panel .ptitle{
+  font-family:var(--mono);font-size:10px;color:var(--ink-3);
+  text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;
+  padding-bottom:8px;border-bottom:1px dashed var(--rule);
+}
+.cmp-answer .panel code{
+  font-family:var(--mono);font-size:12px;
+  background:var(--bg);padding:1px 5px;border-radius:3px;
+}
+/* LCS line-level diff: same lines muted, changed lines normal */
+.cmp-answer .panel .ln{display:block;padding:1px 0;border-radius:2px}
+.cmp-answer .panel .ln-same{color:var(--ink-4)}
+.cmp-answer .panel .ln-diff{color:var(--ink);background:rgba(184,92,61,0.04)}
+.cmp-answer .panel .ln-diff::before{
+  content:"│";display:inline-block;width:10px;
+  color:var(--accent);opacity:.7;margin-right:4px;
+}
+.cmp-answer .panel .ln-same::before{
+  content:" ";display:inline-block;width:10px;margin-right:4px;
+}
+
+/* ---------- STATS ---------- */
+.stats-group{margin-top:8px}
+.stats-group + .stats-group{margin-top:48px}
+.stats-group-head{
+  display:flex;align-items:baseline;gap:14px;
+  margin-bottom:18px;padding-bottom:10px;
+  border-bottom:1px solid var(--rule);
+}
+.stats-group-head h2{
+  font-family:var(--serif);font-size:20px;font-weight:500;
+  margin:0;color:var(--ink);letter-spacing:-.005em;
+}
+.stats-group-head .gcount{
+  font-family:var(--mono);font-size:11px;color:var(--ink-3);
+  text-transform:uppercase;letter-spacing:.08em;
+}
+.stats-group-head .gnote{
+  margin-left:auto;font-size:12px;color:var(--ink-3);font-family:var(--sans);
+}
+.stats-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
+  gap:18px;
+}
+/* compact list for probe runs (case_count < full) */
+.stats-list{
+  background:var(--card);border:1px solid var(--rule);border-radius:8px;
+  overflow:hidden;
+}
+.stats-list-row{
+  display:grid;
+  grid-template-columns:1fr 80px 90px 90px 1.4fr 130px;
+  align-items:center;gap:16px;
+  padding:12px 18px;
+  border-top:1px solid var(--rule);
+  font-size:13px;color:var(--ink-2);
+  transition:background-color 150ms ease;
+  cursor:default;
+}
+.stats-list-row:first-child{border-top:0}
+.stats-list-row:hover{background:var(--hover)}
+.stats-list-row .runid{
+  font-family:var(--mono);font-size:12px;color:var(--ink);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.stats-list-row .pr{
+  font-family:var(--mono);font-size:13px;color:var(--ink);
+  font-variant-numeric:tabular-nums;
+}
+.stats-list-row .pr.pass{color:var(--ok)}
+.stats-list-row .pr.fail{color:var(--bad)}
+.stats-list-row .pr.muted{color:var(--ink-3)}
+.stats-list-row .dur,
+.stats-list-row .cc{
+  font-family:var(--mono);font-size:12px;color:var(--ink-2);
+  font-variant-numeric:tabular-nums;
+}
+.stats-list-row .cfg{
+  font-family:var(--mono);font-size:11px;color:var(--ink-2);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.stats-list-row .when{
+  font-family:var(--mono);font-size:11px;color:var(--ink-3);
+  text-align:right;
+}
+
+/* density-toggle: segmented control */
+.seg{
+  display:inline-flex;border:1px solid var(--rule-2);border-radius:6px;
+  overflow:hidden;background:var(--card-2);
+}
+.seg button{
+  appearance:none;border:0;background:transparent;
+  padding:6px 12px;cursor:pointer;
+  font-family:var(--sans);font-size:12px;color:var(--ink-2);
+  border-right:1px solid var(--rule-2);
+  transition:background-color 150ms ease,color 150ms ease;
+}
+.seg button:last-child{border-right:0}
+.seg button:hover{background:var(--hover);color:var(--ink)}
+.seg button.active{background:var(--hover);color:var(--ink);font-weight:500}
+.stat-card{
+  background:var(--card);
+  border:1px solid var(--rule);
+  border-radius:8px;
+  padding:22px 22px 18px;
+  display:flex;flex-direction:column;gap:14px;
+  transition:border-color 150ms ease,background-color 150ms ease;
+}
+.stat-card:hover{border-color:var(--rule-2);background:var(--card-2)}
+.stat-card .scard-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.stat-card .scard-label{
+  font-family:var(--mono);font-size:11px;color:var(--ink-2);
+  letter-spacing:.04em;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  flex:1;
+}
+.stat-card .scard-era{
+  font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-3);
+  padding:2px 6px;border:1px solid var(--rule-2);border-radius:3px;
+}
+.stat-card .scard-rate{
+  display:flex;align-items:baseline;gap:6px;
+}
+.stat-card .scard-rate .num{
+  font-family:var(--serif);font-size:42px;line-height:1;letter-spacing:-.02em;
+  color:var(--ink);font-weight:500;
+}
+.stat-card .scard-rate .pct{color:var(--ink-2);font-size:18px;font-family:var(--serif)}
+.stat-card .scard-rate .kind{
+  font-size:11px;color:var(--ink-3);margin-left:8px;
+  font-family:var(--mono);text-transform:uppercase;letter-spacing:.08em;
+}
+.stat-card .scard-rate.muted .num{color:var(--ink-3)}
+.stat-card.no-data{opacity:.78}
+.stat-card.no-data .scard-bar .fill{background:var(--rule-2)}
+.stat-card .scard-status{
+  font-family:var(--mono);font-size:10px;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--ink-3);
+  display:inline-block;padding:2px 6px;
+  border:1px dashed var(--rule-2);border-radius:3px;
+  margin-left:8px;
+}
+.stat-card .scard-bar{
+  height:3px;background:var(--rule);border-radius:2px;overflow:hidden;
+}
+.stat-card .scard-bar .fill{height:100%;background:var(--accent);transition:width 300ms ease}
+.stat-card .scard-meta{
+  display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;
+  font-size:12px;color:var(--ink-2);
+}
+.stat-card .scard-meta .k{
+  font-family:var(--mono);font-size:10px;color:var(--ink-3);
+  text-transform:uppercase;letter-spacing:.08em;
+}
+.stat-card .scard-meta .v{
+  font-family:var(--mono);color:var(--ink);font-size:12px;
+}
+.stat-card .scard-config{
+  font-family:var(--mono);font-size:11px;color:var(--ink-2);
+  padding-top:10px;border-top:1px dashed var(--rule);
+  word-break:break-word;line-height:1.5;
+}
+
+/* ---------- MODAL ---------- */
+.modal-backdrop{
+  position:fixed;inset:0;z-index:60;
+  background:rgba(31,29,26,.32);
+  opacity:0;pointer-events:none;
+  transition:opacity 120ms ease;
+  display:flex;align-items:flex-start;justify-content:center;
+  padding:48px 24px;overflow-y:auto;
+}
+.modal-backdrop.open{opacity:1;pointer-events:auto}
+.modal{
+  background:var(--card);
+  border:1px solid var(--rule);
+  border-radius:10px;
+  max-width:960px;width:100%;
+  box-shadow:var(--shadow-lift);
+  margin:auto 0;
+  max-height:calc(100vh - 48px);
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+}
+.modal-head{
+  padding:24px 28px 18px;
+  border-bottom:1px solid var(--rule);
+  display:flex;align-items:flex-start;gap:16px;
+  flex:0 0 auto;
+}
+.modal-nav{
+  display:flex;gap:6px;align-items:center;flex-shrink:0;
+}
+.modal-nav button{
+  appearance:none;border:1px solid var(--rule-2);background:var(--card-2);
+  width:30px;height:30px;border-radius:6px;
+  display:inline-flex;align-items:center;justify-content:center;
+  cursor:pointer;color:var(--ink-2);
+  transition:background-color 150ms ease,border-color 150ms ease,color 150ms ease;
+}
+.modal-nav button:hover:not(:disabled){background:var(--hover);color:var(--ink);border-color:#BFB89F}
+.modal-nav button:disabled{opacity:.4;cursor:not-allowed}
+.modal-nav .label{
+  font-family:var(--mono);font-size:10px;color:var(--ink-3);
+  text-transform:uppercase;letter-spacing:.08em;
+  margin:0 4px;font-variant-numeric:tabular-nums;
+}
+.modal-head .htext{flex:1;min-width:0}
+.modal-head .eyebrow{margin-bottom:6px}
+.modal-head h2{
+  font-family:var(--serif);font-weight:500;
+  font-size:22px;letter-spacing:-.005em;
+  margin:0 0 6px;line-height:1.25;
+}
+.modal-head .hsub{
+  font-size:12px;color:var(--ink-2);font-family:var(--mono);
+}
+.modal-close{
+  appearance:none;border:0;background:transparent;
+  width:32px;height:32px;border-radius:6px;
+  display:inline-flex;align-items:center;justify-content:center;
+  cursor:pointer;color:var(--ink-2);
+  transition:background-color 150ms ease;
+}
+.modal-close:hover{background:var(--hover)}
+.modal-body{
+  padding:24px 28px 28px;
+  overflow:auto;
+  min-height:0;
+}
+.modal-section{margin-bottom:28px}
+.modal-section:last-child{margin-bottom:0}
+.modal-section h3{
+  font-family:var(--mono);font-size:11px;text-transform:uppercase;
+  letter-spacing:.1em;color:var(--ink-3);
+  margin:0 0 12px;font-weight:500;
+}
+
+.stat-row{
+  display:grid;grid-template-columns:repeat(4,1fr);gap:14px;
+  margin-bottom:24px;
+}
+.stat-tile{
+  background:var(--card-2);border:1px solid var(--rule);border-radius:6px;
+  padding:12px 14px;
+}
+.stat-tile .k{
+  font-family:var(--mono);font-size:10px;color:var(--ink-3);
+  text-transform:uppercase;letter-spacing:.08em;
+}
+.stat-tile .v{
+  font-family:var(--mono);font-size:14px;color:var(--ink);margin-top:4px;
+}
+.stat-tile.pass .v{color:var(--ok)}
+.stat-tile.fail .v{color:var(--bad)}
+
+.answer-box{
+  background:var(--card-2);border:1px solid var(--rule);border-radius:6px;
+  padding:16px 20px;
+  font-family:var(--sans);font-size:14px;line-height:1.75;color:var(--ink);
+  white-space:pre-wrap;
+  word-break:break-word;
+  max-height:360px;overflow:auto;
+}
+.answer-box code{
+  font-family:var(--mono);font-size:13px;
+  background:var(--bg);padding:1px 5px;border-radius:3px;
+}
+
+.docs-table{
+  width:100%;border-collapse:collapse;font-size:12px;
+}
+.docs-table th{
+  font-family:var(--mono);font-size:10px;text-transform:uppercase;
+  letter-spacing:.08em;color:var(--ink-3);
+  text-align:left;padding:8px 10px;
+  border-bottom:1px solid var(--rule);font-weight:500;
+}
+.docs-table td{
+  padding:10px;border-bottom:1px solid var(--rule);
+  vertical-align:top;
+  font-family:var(--mono);font-size:11px;color:var(--ink-2);
+}
+.docs-table tr:last-child td{border-bottom:0}
+.docs-table tr:hover td{background:var(--hover)}
+.docs-table .rk{color:var(--ink);font-size:12px;width:32px}
+.docs-table .src{color:var(--ink);max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.docs-table .prev{color:var(--ink-2);max-width:340px;line-height:1.5;font-family:var(--sans);font-size:12px}
+.docs-table .sc{text-align:right;font-variant-numeric:tabular-nums;color:var(--ink)}
+.tag{
+  display:inline-block;
+  font-family:var(--mono);font-size:10px;
+  padding:1px 6px;border-radius:3px;
+  background:var(--card);border:1px solid var(--rule-2);color:var(--ink-2);
+  letter-spacing:.04em;text-transform:uppercase;
+}
+.tag.vector{color:#5C5C7C;border-color:#D2D0E2;background:#E5E3F0}
+.tag.keyword{color:#7C6A5C;border-color:#DBD2C5;background:#EFE7DB}
+.tag.hybrid,
+.tag.vector-keyword{color:#5C7C73;border-color:#C9D8D3;background:#DDE9E5}
+
+.missed-list{
+  list-style:none;margin:0;padding:0;
+  display:flex;flex-direction:column;gap:6px;
+}
+.missed-list li{
+  background:var(--bad-soft);
+  color:var(--ink);
+  padding:8px 12px;border-radius:4px;
+  font-size:12px;
+  border-left:2px solid var(--bad);
+}
+.missed-list.empty li{background:var(--ok-soft);border-color:var(--ok);color:var(--ink-2)}
+
+/* ---------- tooltip ---------- */
+.tt{
+  position:fixed;z-index:80;
+  background:var(--ink);color:var(--card);
+  font-family:var(--mono);font-size:11px;line-height:1.5;
+  padding:8px 10px;border-radius:6px;
+  pointer-events:none;
+  opacity:0;transition:opacity 100ms ease;
+  max-width:280px;white-space:pre-wrap;
+}
+.tt.show{opacity:1}
+
+/* responsive */
+@media (max-width:880px){
+  .page{padding:32px 20px 64px}
+  .topbar-inner{padding:12px 20px;gap:16px}
+  .modal-backdrop{padding:20px 12px}
+  .modal{max-height:calc(100vh - 40px)}
+  .modal-head{padding:18px 18px 14px;gap:12px}
+  .modal-body{padding:18px}
+  .stat-row{grid-template-columns:repeat(2,1fr)}
+  .compare-head{grid-template-columns:1fr;}
+  .compare-vs{padding-top:0;margin:-8px 0}
+  .cmp-metric{grid-template-columns:120px 1fr 28px 1fr;gap:10px}
+  .cmp-answer{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="#">
+      <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="9.5" fill="none" stroke="#1F1D1A" stroke-width="1.4"/>
+        <circle cx="12" cy="12" r="3.2" fill="#B85C3D"/>
+      </svg>
+      <span class="name">RAG Eval</span>
+      <span class="sep">·</span>
+      <span class="sub">实验对比看板</span>
+    </a>
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-view="matrix" role="tab">矩阵</button>
+      <button class="tab" data-view="compare" role="tab">对比</button>
+      <button class="tab" data-view="stats" role="tab">统计</button>
+    </nav>
+    <span class="meta-right" id="meta-right"></span>
+  </div>
+</header>
+
+<main class="page">
+
+  <!-- ============ MATRIX ============ -->
+  <section class="view active" id="view-matrix" data-screen-label="01 Matrix">
+    <div class="section-head">
+      <div class="eyebrow">Matrix · 横向命中对照</div>
+      <h1 class="title">14 个 case × <span id="matrix-runcount">—</span> 次实验</h1>
+      <p class="lede">每列代表一次实验运行，每行代表一个固定 case。单元格显示命中状态与检索量；点击任意 cell 打开完整明细。</p>
+    </div>
+
+    <div class="toolbar">
+      <div class="field">
+        <label>排序</label>
+        <select class="select" id="matrix-sort">
+          <option value="time-desc">时间·新 → 旧</option>
+          <option value="time-asc">时间·旧 → 新</option>
+          <option value="rate-desc">通过率·高 → 低</option>
+          <option value="rate-asc">通过率·低 → 高</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>范围</label>
+        <select class="select" id="matrix-scope">
+          <option value="full">完整实验</option>
+          <option value="all">全部实验</option>
+          <option value="probe">仅 probe</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>状态</label>
+        <span style="font-size:12px;color:var(--ink-2)">
+          <span style="color:var(--ok);font-family:var(--mono)">pass</span> · <span style="color:var(--warn);font-family:var(--mono)">mixed</span> · <span style="color:var(--bad);font-family:var(--mono)">fail</span> · <span style="color:var(--ink-3);font-family:var(--mono)">manual</span>
+        </span>
+      </div>
+      <div class="grow"></div>
+      <div class="field"><span style="font-family:var(--mono);font-size:11px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.08em">提示</span><span style="color:var(--ink-2);font-size:12px">点击任意 cell 查看下钻明细</span></div>
+    </div>
+
+    <div class="matrix-wrap">
+      <div class="matrix-scroll">
+        <table class="matrix" id="matrix-table"></table>
+      </div>
+      <div class="matrix-legend">
+        <span class="swatch"><span class="sw pass"></span>pass</span>
+        <span class="swatch"><span class="sw mixed"></span>mixed</span>
+        <span class="swatch"><span class="sw fail"></span>fail</span>
+        <span class="swatch"><span class="sw manual"></span>manual (待人工判定)</span>
+        <span class="swatch"><span class="sw empty"></span>未包含</span>
+        <span class="hint" id="matrix-num-hint">数字 = retrieved · score_max (new schema only)</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ COMPARE ============ -->
+  <section class="view" id="view-compare" data-screen-label="02 Compare">
+    <div class="section-head">
+      <div class="eyebrow">Compare · 配对差分</div>
+      <h1 class="title">A 与 B 之间，到底变了什么？</h1>
+      <p class="lede">逐 case 对比 8 项核心指标。绿色 ↑ 表示 A 优于 B；红色 ↓ 表示 A 劣于 B；橙色 ≠ 表示字面不同但无好坏顺序。</p>
+    </div>
+
+    <div class="compare-head">
+      <div class="run-picker" id="picker-a"></div>
+      <div class="compare-vs">vs</div>
+      <div class="run-picker" id="picker-b"></div>
+    </div>
+
+    <div class="compare-summary" id="compare-summary"></div>
+
+    <div class="toolbar">
+      <label class="toggle">
+        <input type="checkbox" id="diff-only" checked>
+        <span class="track"></span>
+        <span>仅显示差异</span>
+      </label>
+      <label class="toggle" style="margin-left:8px">
+        <input type="checkbox" id="lcs-diff" checked>
+        <span class="track"></span>
+        <span>Answer 高亮差异行</span>
+      </label>
+      <div class="grow"></div>
+      <span style="font-family:var(--mono);font-size:11px;color:var(--ink-3)">点击 case 展开 / 折叠</span>
+    </div>
+
+    <div class="compare-table" id="compare-table"></div>
+  </section>
+
+  <!-- ============ STATS ============ -->
+  <section class="view" id="view-stats" data-screen-label="03 Stats">
+    <div class="section-head">
+      <div class="eyebrow">Stats · 汇总</div>
+      <h1 class="title">每次实验，一张卡片</h1>
+      <p class="lede">通过率为主，时长与配置为辅。卡片按 generated_at 倒序排列。</p>
+    </div>
+
+    <div class="toolbar">
+      <div class="field">
+        <label>口径</label>
+        <span style="font-size:12px;color:var(--ink-2)"><span style="font-family:var(--mono)">literal_hit_ratio</span>（&ge;1 视为 pass，0&lt;r&lt;1 视为 mixed）</span>
+      </div>
+      <div class="grow"></div>
+      <div class="field">
+        <label>密度</label>
+        <div class="seg" id="stats-density">
+          <button data-density="auto" class="active" title="全量卡片 + 探针列表（默认）">默认</button>
+          <button data-density="cards" title="全部用卡片">卡片</button>
+          <button data-density="list" title="全部用列表行">列表</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="stats-content"></div>
+  </section>
+
+</main>
+
+<!-- modal -->
+<div class="modal-backdrop" id="modal-backdrop" role="dialog" aria-modal="true">
+  <div class="modal" id="modal"></div>
+</div>
+
+<div class="tt" id="tt"></div>
+
+<script>
+/* relies on data/dataset.js — fail loudly when absent */
+if (!window.RAG_EVAL_DATASET) {
+  document.body.innerHTML = `<div style="max-width:680px;margin:120px auto;padding:32px;font-family:Georgia,serif;color:#1F1D1A;background:#FBF9F2;border:1px solid #E4DFCF;border-radius:8px"><h1 style="font-weight:500;font-size:24px;margin:0 0 12px">数据未加载</h1><p style="color:#6C685F;line-height:1.6;font-family:-apple-system,system-ui,sans-serif;font-size:14px">未检测到 <code>window.RAG_EVAL_DATASET</code>。请先运行 <code style="background:#F4F1E8;padding:2px 6px;border-radius:3px">python3 build_dataset.py</code> 生成 <code>data/dataset.js</code>。</p></div>`;
+  throw new Error("RAG_EVAL_DATASET not loaded");
+}
+
+/* ===========================================================
+   APP
+   =========================================================== */
+const DATA = window.RAG_EVAL_DATASET;
+const $  = (s,r=document)=>r.querySelector(s);
+const $$ = (s,r=document)=>[...r.querySelectorAll(s)];
+const fmtPct = x => x==null ? '—' : (x*100).toFixed(1)+'%';
+const fmtMs  = x => x==null ? '—' : (x<1000 ? `${x}ms` : `${(x/1000).toFixed(2)}s`);
+const fmtDT  = iso => {
+  if (!iso) return '—';
+  const d=new Date(iso); const p=n=>String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+};
+const eraLabel = e => ({legacy:'legacy',triangle:'triangle',new:'new'})[e] || e;
+
+/* ---- adapter: normalize build_dataset.py output into design-friendly shape ---- */
+function shortLabel(run_id){
+  return String(run_id||'')
+    .replace(/^_archive\//,'')
+    .replace(/\/rag-eval-result-/,' / ')
+    .replace(/^rag-eval-result-/,'');
+}
+function stateFromRatio(s){
+  if (!s || s.completed===false) return 'skip';
+  const r = s.literal_hit_ratio;
+  if (r==null) return 'na';
+  if (r >= 1) return 'pass';
+  if (r > 0)  return 'partial';
+  return 'fail';
+}
+(function normalize(){
+  DATA.runs.forEach(run=>{
+    run.label = shortLabel(run.run_id);
+    // flatten documents across retrieval_events and inject runtime fields onto details
+    Object.entries(run.details || {}).forEach(([cid, det])=>{
+      const events = det.retrieval_events || [];
+      const docs = [];
+      let rerankMode = null, rerankApplied = null;
+      events.forEach(ev=>{
+        if (ev.rerank_mode && !rerankMode) rerankMode = ev.rerank_mode;
+        if (ev.rerank_applied!=null && rerankApplied==null) rerankApplied = ev.rerank_applied;
+        (ev.documents||[]).forEach(d => docs.push(d));
+      });
+      det.documents = docs;
+      det.top1_source = docs[0]?.source || null;
+      det.top1_chunk  = docs[0]?.chunk != null ? String(docs[0].chunk) : null;
+      det.rerank_mode = rerankMode;
+      det.rerank_applied = rerankApplied;
+      // mirror summary-level facts onto details for the drilldown tiles
+      const s = (run.summary||{})[cid];
+      if (s){
+        det.retrieved   = s.retrieved;
+        det.score_max   = s.score_max;
+        det.score_min   = s.score_min;
+        det.score_range = s.score_range;
+        det.empty       = s.empty;
+        det.duration_ms = s.duration_ms ?? det.duration_ms;
+        det.missed_points_text = s.missed_points;
+        det.literal_hit = s.literal_hit;
+        det.literal_hit_ratio = s.literal_hit_ratio;
+      }
+    });
+    // derive run-level rates / avg duration from summary rows
+    const rows = Object.values(run.summary || {});
+    const completed = rows.filter(r=>r.completed);
+    const ratioRows = rows.filter(r=>r.literal_hit_ratio!=null);
+    run.pass_rate_literal = ratioRows.length
+      ? ratioRows.filter(r=>r.literal_hit_ratio>=1).length / ratioRows.length
+      : null;
+    run.pass_rate_manual = null; // dataset 中无 manual_pass 判定
+    const durs = completed.map(r=>r.duration_ms).filter(x=>typeof x==='number' && x>0);
+    run.avg_duration_ms = durs.length ? Math.round(durs.reduce((a,b)=>a+b,0)/durs.length) : null;
+    run.state_by_case = {};
+    Object.entries(run.summary || {}).forEach(([cid, s])=>{
+      run.state_by_case[cid] = stateFromRatio(s);
+    });
+  });
+})();
+
+const STATE = {
+  view:'matrix',
+  matrixSort:'time-desc',
+  matrixScope:'full',
+  matrixMetric:'literal',
+  statsMetric:'literal',
+  statsDensity:'auto',     // auto | cards | list
+  diffOnly:true,
+  lcsDiff:true,            // highlight changed answer lines
+  runA:null, runB:null,
+  pairKey:null,            // tracks last A|B so we can re-seed openCases on change
+  openCases:new Set(),
+  drill:null,              // {caseIdx, runId} for modal nav
+  matrixCursor:null        // {rowIdx, colIdx} for keyboard nav
+};
+
+/* What counts as a "full sweep" — used by Stats grouping & probe tagging. */
+const FULL_CASE_COUNT = (function(){
+  const counts = DATA.runs.map(r=>r.case_count||0);
+  return counts.length ? Math.max(...counts) : DATA.cases.length;
+})();
+const isProbeRun = r => (r.case_count||0) < FULL_CASE_COUNT;
+const runTime = r => {
+  const t = Date.parse(r.generated_at || '');
+  return Number.isFinite(t) ? t : -Infinity;
+};
+const runStableLabel = r => `${r.label || ''}\u0000${r.run_id || ''}`;
+
+/* ---- top meta ---- */
+{
+  const latest = DATA.runs.map(r=>r.generated_at).filter(Boolean).sort().slice(-1)[0];
+  $('#meta-right').textContent = `${DATA.runs.length} runs · ${DATA.cases.length} cases · latest ${fmtDT(latest)}`;
+}
+
+/* ---- tabs ---- */
+$$('.tab').forEach(t=>{
+  t.addEventListener('click',()=>setView(t.dataset.view));
+});
+function setView(v){
+  $$('.tab').forEach(x=>x.classList.toggle('active', x.dataset.view===v));
+  $$('.view').forEach(s=>s.classList.toggle('active', s.id==='view-'+v));
+  STATE.view=v;
+  if (v==='compare') renderCompare();
+  if (v==='stats') renderStats();
+  if (v==='matrix') renderMatrix();
+  writeHash();
+}
+
+/* ---- toolbar listeners ---- */
+$('#matrix-sort').addEventListener('change',e=>{STATE.matrixSort=e.target.value; renderMatrix(); writeHash();});
+$('#matrix-scope').addEventListener('change',e=>{STATE.matrixScope=e.target.value; STATE.matrixCursor=null; renderMatrix(); writeHash();});
+$('#diff-only').addEventListener('change',e=>{STATE.diffOnly=e.target.checked; renderCompare();});
+const $lcs = $('#lcs-diff');
+if ($lcs) $lcs.addEventListener('change',e=>{STATE.lcsDiff=e.target.checked; renderCompare();});
+$('#stats-density').addEventListener('click', e=>{
+  const b = e.target.closest('button[data-density]');
+  if (!b) return;
+  STATE.statsDensity = b.dataset.density;
+  $$('#stats-density button').forEach(x=>x.classList.toggle('active', x===b));
+  renderStats();
+  writeHash();
+});
+
+/* ===========================================================
+   MATRIX
+   =========================================================== */
+function sortedRuns(){
+  const scoped = DATA.runs.filter(r=>{
+    if (STATE.matrixScope==='full') return !isProbeRun(r);
+    if (STATE.matrixScope==='probe') return isProbeRun(r);
+    return true;
+  });
+  const withIndex = scoped.map((run,idx)=>({run,idx}));
+  const rate = r => r.pass_rate_literal==null ? -1 : r.pass_rate_literal;
+  const compare = (a,b) => {
+    if (STATE.matrixSort==='time-desc') return runTime(b.run)-runTime(a.run);
+    if (STATE.matrixSort==='time-asc')  return runTime(a.run)-runTime(b.run);
+    if (STATE.matrixSort==='rate-desc') return rate(b.run)-rate(a.run);
+    if (STATE.matrixSort==='rate-asc')  return rate(a.run)-rate(b.run);
+    return 0;
+  };
+  withIndex.sort((a,b)=>{
+    const primary = compare(a,b);
+    if (Number.isFinite(primary) && primary !== 0) return primary;
+    const named = runStableLabel(a.run).localeCompare(runStableLabel(b.run));
+    return named || a.idx-b.idx;
+  });
+  return withIndex.map(x=>x.run);
+}
+
+function renderMatrix(){
+  const runs = sortedRuns();
+  $('#matrix-runcount').textContent = runs.length;
+  const probeCount = DATA.runs.filter(isProbeRun).length;
+  const fullCount = DATA.runs.length - probeCount;
+  const scopeHint = STATE.matrixScope==='full'
+    ? `当前显示 ${fullCount} 个完整实验，隐藏 ${probeCount} 个 probe`
+    : STATE.matrixScope==='probe'
+      ? `当前仅显示 ${probeCount} 个 probe`
+      : `当前显示全部 ${DATA.runs.length} 个实验`;
+  $('#matrix-num-hint').textContent = `${scopeHint} · 数字 = retrieved · score_max`;
+  const t = $('#matrix-table');
+  // expose runs in current display order for keyboard nav
+  STATE._matrixRuns = runs;
+
+  const thead = document.createElement('thead');
+  const trh = document.createElement('tr');
+  trh.appendChild(el('th','corner','Case'));
+  runs.forEach(r=>{
+    const th = el('th','runhead');
+    th.innerHTML = `
+      <span class="runlabel">${escapeHTML(r.label)}</span>
+      <span class="runhint" title="${escapeHTML(r.config_hint)}">${escapeHTML(r.config_hint)}</span>
+      <span class="runera">${eraLabel(r.schema_era)}</span>${isProbeRun(r)?`<span class="runprobe" title="探针实验：仅 ${r.case_count} 个 case">probe</span>`:''}
+    `;
+    th.dataset.tt = `${r.run_id}\n${r.config_hint}\n${fmtDT(r.generated_at)} · ${r.case_count} cases\nliteral ${fmtPct(r.pass_rate_literal)}`;
+    bindTT(th);
+    trh.appendChild(th);
+  });
+  thead.appendChild(trh);
+
+  const tbody = document.createElement('tbody');
+  DATA.cases.forEach(c=>{
+    const tr=document.createElement('tr');
+    const td=el('td','caselabel');
+    td.innerHTML = `
+      <div class="cid">${escapeHTML(c.id)} · ${escapeHTML(c.case_type)}</div>
+      <div class="cq">${escapeHTML(c.question)}</div>
+    `;
+    tr.appendChild(td);
+
+    runs.forEach(r=>{
+      const s = r.summary[c.id];
+      const det = r.details[c.id];
+      const cell = el('td','cell');
+      if (!s){
+        cell.classList.add('empty');
+        cell.innerHTML = `<div class="inner"><span class="stat">n.a.</span></div>`;
+      } else {
+        const state = r.state_by_case[c.id] || 'na';
+        cell.classList.add(state);
+        const labelMap = {pass:'pass', partial:'mixed', fail:'fail', na:'manual', skip:'skip'};
+        const label = labelMap[state] || 'n.a.';
+        const ratio = s.literal_hit_ratio;
+        const ratioPct = (ratio!=null) ? ` ${Math.round(ratio*100)}%` : (s.literal_hit && s.literal_hit!=='manual' ? ` ${s.literal_hit}` : '');
+        const retrieved = s.retrieved;
+        const num = (retrieved!=null)
+          ? (r.schema_era==='legacy' ? `r=${retrieved}` : `${retrieved} · ${s.score_max!=null?Number(s.score_max).toFixed(2):'—'}`)
+          : '';
+        cell.innerHTML = `<div class="inner"><span class="stat">${label}${ratioPct}</span>${num?`<span class="num">${num}</span>`:''}</div>`;
+      }
+      cell.dataset.tt = s
+        ? `${c.id} × ${r.label}\nliteral_hit = ${s.literal_hit ?? '—'}${s.literal_hit_ratio!=null?` (${Math.round(s.literal_hit_ratio*100)}%)`:''}\nretrieved = ${s.retrieved ?? '—'} · score_max = ${s.score_max!=null?Number(s.score_max).toFixed(3):'—'}\nduration ${s.duration_ms?fmtMs(s.duration_ms):'—'}\ntop1: ${det?.top1_source ?? '—'}`
+        : `${c.id} × ${r.label}\n(此 run 未包含该 case)`;
+      bindTT(cell);
+      if (s){
+        cell.addEventListener('click',()=>openDrill(c,r));
+        cell.setAttribute('tabindex','0');
+        cell.setAttribute('role','button');
+        cell.dataset.row = String(DATA.cases.indexOf(c));
+        cell.dataset.col = String(runs.indexOf(r));
+        cell.addEventListener('focus',()=>{
+          STATE.matrixCursor = {rowIdx: DATA.cases.indexOf(c), colIdx: runs.indexOf(r)};
+          $$('.matrix .cell.kbd-focus').forEach(x=>x.classList.remove('kbd-focus'));
+          cell.classList.add('kbd-focus');
+        });
+      }
+      tr.appendChild(cell);
+    });
+    tbody.appendChild(tr);
+  });
+
+  t.replaceChildren(thead, tbody);
+
+  // restore kbd focus if we had one
+  if (STATE.matrixCursor){
+    const {rowIdx, colIdx} = STATE.matrixCursor;
+    focusMatrixCell(rowIdx, colIdx);
+  }
+}
+
+/* ---- matrix keyboard navigation ---- */
+function focusMatrixCell(rowIdx, colIdx){
+  const runs = STATE._matrixRuns || [];
+  const rows = DATA.cases.length;
+  const cols = runs.length;
+  if (!rows || !cols) return;
+  rowIdx = Math.max(0, Math.min(rows-1, rowIdx));
+  colIdx = Math.max(0, Math.min(cols-1, colIdx));
+  const sel = `td.cell[data-row="${rowIdx}"][data-col="${colIdx}"]`;
+  const cell = document.querySelector(sel);
+  if (cell){
+    cell.focus();
+    // ensure visible inside scroll container without page-level scrolling
+    const scroll = document.querySelector('.matrix-scroll');
+    if (scroll){
+      const cr = cell.getBoundingClientRect();
+      const sr = scroll.getBoundingClientRect();
+      if (cr.top < sr.top + 40) scroll.scrollTop -= (sr.top + 40 - cr.top);
+      if (cr.bottom > sr.bottom - 20) scroll.scrollTop += (cr.bottom - sr.bottom + 20);
+      if (cr.left < sr.left + 260) scroll.scrollLeft -= (sr.left + 260 - cr.left);
+      if (cr.right > sr.right - 20) scroll.scrollLeft += (cr.right - sr.right + 20);
+    }
+  }
+}
+document.addEventListener('keydown', e=>{
+  if ($bd && $bd.classList.contains('open')) return;       // modal owns keys
+  if (STATE.view !== 'matrix') return;
+  if (e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT') return;
+  const cur = STATE.matrixCursor || {rowIdx:0, colIdx:0};
+  let {rowIdx, colIdx} = cur;
+  let handled = true;
+  switch(e.key){
+    case 'ArrowUp':    rowIdx--; break;
+    case 'ArrowDown':  rowIdx++; break;
+    case 'ArrowLeft':  colIdx--; break;
+    case 'ArrowRight': colIdx++; break;
+    case 'Home':       colIdx=0; break;
+    case 'End':        colIdx=(STATE._matrixRuns?.length||1)-1; break;
+    case 'Enter':
+    case ' ': {
+      const runs = STATE._matrixRuns || [];
+      const c = DATA.cases[cur.rowIdx];
+      const r = runs[cur.colIdx];
+      if (c && r && r.summary[c.id]) openDrill(c, r);
+      e.preventDefault();
+      return;
+    }
+    default: handled = false;
+  }
+  if (handled){
+    e.preventDefault();
+    STATE.matrixCursor = {rowIdx, colIdx};
+    focusMatrixCell(rowIdx, colIdx);
+  }
+});
+
+/* ===========================================================
+   COMPARE
+   =========================================================== */
+function defaultPairForCompare(){
+  // most recent two full runs
+  const byRecent = (a,b) => (runTime(b)-runTime(a)) || runStableLabel(a).localeCompare(runStableLabel(b));
+  const full = DATA.runs.filter(r=>!isProbeRun(r)).sort(byRecent);
+  if (full.length>=2) return [full[0].run_id, full[1].run_id];
+  const all = [...DATA.runs].sort(byRecent);
+  return [all[0]?.run_id, all[1]?.run_id || all[0]?.run_id];
+}
+function ensurePair(){
+  if (!STATE.runA || !STATE.runB){
+    const [a,b] = defaultPairForCompare();
+    STATE.runA = a; STATE.runB = b;
+  }
+}
+
+function renderPicker(target, valueRunId, otherRunId, onChange){
+  const run = DATA.runs.find(r=>r.run_id===valueRunId);
+  const sortedRuns = [...DATA.runs].sort((a,b)=>(runTime(b)-runTime(a)) || runStableLabel(a).localeCompare(runStableLabel(b)));
+  const opts = sortedRuns.map(r=>`<option value="${r.run_id}" ${r.run_id===valueRunId?'selected':''}>${escapeHTML(r.label)} — ${escapeHTML(r.run_id)}</option>`).join('');
+  target.innerHTML = `
+    <div class="picker-label">${target.id==='picker-a'?'Run A':'Run B'}</div>
+    <select class="select picker-select">${opts}</select>
+    <div class="picker-meta">
+      <span><b>${escapeHTML(run.run_id)}</b></span>
+      <span>${eraLabel(run.schema_era)}</span>
+      <span>${run.case_count} cases</span>
+      <span>literal <b>${fmtPct(run.pass_rate_literal)}</b></span>
+      <span>avg <b>${fmtMs(run.avg_duration_ms)}</b></span>
+      <span>${fmtDT(run.generated_at)}</span>
+    </div>
+    <div style="margin-top:8px;font-family:var(--mono);font-size:11px;color:var(--ink-2);word-break:break-word">${escapeHTML(run.config_hint)}</div>
+  `;
+  target.querySelector('select').addEventListener('change', e => onChange(e.target.value));
+}
+
+const METRIC_DEFS = [
+  {key:'completed',     label:'completed',     kind:'bool', good:'true'},
+  {key:'literal_ratio', label:'literal_hit',   kind:'num',  good:'high', fmt:r=>r==null?'—':Math.round(r*100)+'%'},
+  // retrieved count is NOT inherently "more is better" in RAG — mark as neutral.
+  {key:'retrieved',     label:'retrieved',     kind:'num',  good:'neutral'},
+  // score_max is only comparable when rerank_mode matches (LOCAL_BGE rerank score vs RRF score).
+  {key:'score_max',     label:'score_max',     kind:'num',  good:'high', crossRerankNeutral:true},
+  {key:'empty',         label:'empty',         kind:'bool', good:'false'},
+  {key:'duration_ms',   label:'duration',      kind:'num',  good:'low',  fmt:fmtMs},
+  {key:'top1_source',   label:'top1_source',   kind:'str'},
+  {key:'top1_chunk',    label:'top1_chunk',    kind:'str'},
+  {key:'rerank_mode',   label:'rerank_mode',   kind:'str'}
+];
+function metricVal(run, caseId, m){
+  const s = run.summary[caseId];
+  const d = run.details[caseId];
+  if (!s) return null;
+  switch(m.key){
+    case 'completed':     return s.completed;
+    case 'literal_ratio': return s.literal_hit_ratio ?? null;
+    case 'retrieved':     return s.retrieved ?? null;
+    case 'score_max':     return s.score_max!=null ? Number(s.score_max) : null;
+    case 'empty':         return s.empty ?? null;
+    case 'duration_ms':   return s.duration_ms ?? null;
+    case 'top1_source':   return d?.top1_source ?? null;
+    case 'top1_chunk':    return d?.top1_chunk ?? null;
+    case 'rerank_mode':   return d?.rerank_mode ?? null;
+  }
+}
+function deltaOf(a, b, m, ctx){
+  if (a===null && b===null) return {sym:'·',cls:'same'};
+  if (a===null || b===null) return {sym:'≠',cls:'diff'};
+  // cross-rerank neutralization for score_max — different rerank backends produce
+  // values on different scales, so up/down here is meaningless.
+  if (m.crossRerankNeutral && ctx && ctx.rerankA !== ctx.rerankB){
+    if (a===b) return {sym:'=',cls:'same'};
+    return {sym:'≠',cls:'diff', neutral:true};
+  }
+  if (m.kind==='bool'){
+    if (a===b) return {sym:'=',cls:'same'};
+    const aGood = (m.good==='true' && a===true) || (m.good==='false' && a===false);
+    return {sym: aGood?'↑':'↓', cls: aGood?'up':'down'};
+  }
+  if (m.kind==='num'){
+    if (a===b) return {sym:'=',cls:'same'};
+    if (m.good==='neutral') return {sym:'≠',cls:'diff', neutral:true};
+    const aBetter = m.good==='high' ? a>b : a<b;
+    return {sym: aBetter?'↑':'↓', cls: aBetter?'up':'down'};
+  }
+  // string
+  if (a===b) return {sym:'=',cls:'same'};
+  return {sym:'≠',cls:'diff'};
+}
+function valDisplay(v, m){
+  if (v===null || v===undefined) return '—';
+  if (typeof v==='boolean') return v?'true':'false';
+  if (m.fmt) return m.fmt(v);
+  if (typeof v==='number') return Number.isInteger(v) ? String(v) : v.toFixed(3);
+  return String(v);
+}
+
+/* ---- LCS line-level diff for answer panels ----
+   Returns {a: [{line, mark}], b: [{line, mark}]} where mark is 'same' or 'diff'. */
+function diffLines(aText, bText){
+  const ai = String(aText==null?'':aText).split('\n');
+  const bi = String(bText==null?'':bText).split('\n');
+  const m = ai.length, n = bi.length;
+  // safety cap — LCS is O(mn); large answers won't blow up the page
+  if (m * n > 60000) {
+    return {
+      a: ai.map(line=>({line, mark:'diff'})),
+      b: bi.map(line=>({line, mark:'diff'}))
+    };
+  }
+  const dp = Array.from({length:m+1}, ()=>new Int32Array(n+1));
+  for (let i=m-1;i>=0;i--){
+    for (let j=n-1;j>=0;j--){
+      dp[i][j] = ai[i]===bi[j] ? dp[i+1][j+1]+1 : Math.max(dp[i+1][j], dp[i][j+1]);
+    }
+  }
+  const aMark = new Array(m).fill('diff');
+  const bMark = new Array(n).fill('diff');
+  let i=0, j=0;
+  while (i<m && j<n){
+    if (ai[i]===bi[j]){ aMark[i]='same'; bMark[j]='same'; i++; j++; }
+    else if (dp[i+1][j] >= dp[i][j+1]) i++;
+    else j++;
+  }
+  return {
+    a: ai.map((line,k)=>({line, mark:aMark[k]})),
+    b: bi.map((line,k)=>({line, mark:bMark[k]}))
+  };
+}
+function renderAnswerLines(lines){
+  return lines.map(({line, mark})=>
+    `<span class="ln ln-${mark}">${escapeHTML(line) || '&nbsp;'}</span>`
+  ).join('');
+}
+
+function renderCompare(){
+  ensurePair();
+  renderPicker($('#picker-a'), STATE.runA, STATE.runB, v=>{STATE.runA=v; STATE.pairKey=null; renderCompare(); writeHash();});
+  renderPicker($('#picker-b'), STATE.runB, STATE.runA, v=>{STATE.runB=v; STATE.pairKey=null; renderCompare(); writeHash();});
+
+  const A = DATA.runs.find(r=>r.run_id===STATE.runA);
+  const B = DATA.runs.find(r=>r.run_id===STATE.runB);
+  const wrap = $('#compare-table');
+  wrap.innerHTML='';
+
+  // ---- compute per-case rows for everything (used by both summary + list) ----
+  const perCase = [];
+  DATA.cases.forEach(c=>{
+    const inA = !!A.summary[c.id];
+    const inB = !!B.summary[c.id];
+    if (!inA && !inB) return;
+    const rerankA = A.details[c.id]?.rerank_mode ?? null;
+    const rerankB = B.details[c.id]?.rerank_mode ?? null;
+    const ctx = {rerankA, rerankB};
+    const rows = METRIC_DEFS.map(m=>{
+      const va = metricVal(A,c.id,m);
+      const vb = metricVal(B,c.id,m);
+      const d  = deltaOf(va,vb,m,ctx);
+      return {m, va, vb, d, diff: d.cls!=='same'};
+    });
+    // verdict: does A or B win this case overall (ignoring neutral diffs)?
+    let verdict = 'same';
+    if (rows.some(r=>r.d.cls==='up')   && !rows.some(r=>r.d.cls==='down')) verdict='A';
+    else if (rows.some(r=>r.d.cls==='down') && !rows.some(r=>r.d.cls==='up'))   verdict='B';
+    else if (rows.some(r=>r.d.cls==='up' || r.d.cls==='down'))                 verdict='mixed';
+    else if (rows.some(r=>r.d.cls==='diff'))                                    verdict='diff';
+    const diffCount = rows.filter(r=>r.diff).length;
+    perCase.push({c, rows, anyDiff:diffCount>0, diffCount, verdict, inA, inB});
+  });
+
+  // ---- render global summary bar ----
+  renderCompareSummary(perCase, A, B);
+
+  // ---- re-seed openCases when pair changes: auto-open top 3 most-different ----
+  const pairKey = `${STATE.runA}|${STATE.runB}|${STATE.diffOnly?1:0}`;
+  if (STATE.pairKey !== pairKey){
+    STATE.openCases = new Set(
+      [...perCase]
+        .filter(p=>p.anyDiff)
+        .sort((a,b)=>b.diffCount-a.diffCount)
+        .slice(0,3)
+        .map(p=>p.c.id)
+    );
+    STATE.pairKey = pairKey;
+  }
+
+  // ---- render case rows ----
+  perCase.forEach(p=>{
+    const c = p.c;
+    const visible = STATE.diffOnly ? p.rows.filter(r=>r.diff) : p.rows;
+    if (STATE.diffOnly && !p.anyDiff) return;
+
+    const isOpen = STATE.openCases.has(c.id);
+    const block = document.createElement('div');
+    block.className = 'cmp-case' + (isOpen?' open':'');
+    block.id = `cmp-case-${c.id}`;
+    block.innerHTML = `
+      <div class="cmp-case-head">
+        <svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 3.5l5 4.5-5 4.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span class="cid">${escapeHTML(c.id)}</span>
+        <span class="ctype">${escapeHTML(c.case_type)}</span>
+        <span class="cq">${escapeHTML(c.question)}</span>
+        <span class="diffcount ${p.diffCount>0?'has-diff':'no-diff'}">${p.diffCount}/${p.rows.length} 差异</span>
+      </div>
+      <div class="cmp-metrics">
+        ${visible.map(r=>`
+          <div class="cmp-metric">
+            <div class="mname">${escapeHTML(r.m.label)}</div>
+            <div class="mval ${r.va===null?'muted':''}" title="${escapeHTML(valDisplay(r.va,r.m))}">${escapeHTML(valDisplay(r.va,r.m))}</div>
+            <div class="delta ${r.d.cls}"${r.d.neutral?' title="量纲不可比 / 中性差异"':''}>${r.d.sym}</div>
+            <div class="mval ${r.vb===null?'muted':''}" title="${escapeHTML(valDisplay(r.vb,r.m))}">${escapeHTML(valDisplay(r.vb,r.m))}</div>
+          </div>
+        `).join('')}
+        <div class="cmp-answer">
+          <div class="panel">
+            <div class="ptitle">Run A · answer</div>
+            ${(()=>{
+              const aTxt = A.details[c.id]?.answer || '—';
+              const bTxt = B.details[c.id]?.answer || '—';
+              if (!STATE.lcsDiff || aTxt==='—' || bTxt==='—') return escapeHTML(aTxt);
+              const {a} = diffLines(aTxt, bTxt);
+              return renderAnswerLines(a);
+            })()}
+          </div>
+          <div class="panel">
+            <div class="ptitle">Run B · answer</div>
+            ${(()=>{
+              const aTxt = A.details[c.id]?.answer || '—';
+              const bTxt = B.details[c.id]?.answer || '—';
+              if (!STATE.lcsDiff || aTxt==='—' || bTxt==='—') return escapeHTML(bTxt);
+              const {b} = diffLines(aTxt, bTxt);
+              return renderAnswerLines(b);
+            })()}
+          </div>
+        </div>
+      </div>
+    `;
+    block.querySelector('.cmp-case-head').addEventListener('click',()=>{
+      if (block.classList.contains('open')){ block.classList.remove('open'); STATE.openCases.delete(c.id); }
+      else { block.classList.add('open'); STATE.openCases.add(c.id); }
+    });
+    wrap.appendChild(block);
+  });
+
+  if (!wrap.children.length){
+    wrap.innerHTML = `<div style="padding:48px;text-align:center;color:var(--ink-3);font-size:13px">两次 run 在所选 case 上没有任何差异。</div>`;
+  }
+}
+
+/* Aggregate diff stats across all cases and render the top "summary" panel. */
+function renderCompareSummary(perCase, A, B){
+  const host = $('#compare-summary');
+  if (!host) return;
+  if (!perCase.length){
+    host.innerHTML = `<div style="padding:18px;color:var(--ink-3);font-size:13px">两次 run 无共同 case。</div>`;
+    return;
+  }
+  const total = perCase.length;
+  const win = {A:0, B:0, mixed:0, diff:0, same:0};
+  perCase.forEach(p=>{
+    if (p.verdict==='A') win.A++;
+    else if (p.verdict==='B') win.B++;
+    else if (p.verdict==='mixed') win.mixed++;
+    else if (p.verdict==='diff') win.diff++;
+    else win.same++;
+  });
+  const pct = n => total ? (n/total*100) : 0;
+
+  // metric-level aggregation: how many cases differ per metric? for numeric metrics,
+  // also compute A's average delta vs B.
+  const metricStats = METRIC_DEFS.map(m=>{
+    let diffN=0, upN=0, downN=0, neutN=0, sumA=0, sumB=0, numN=0;
+    perCase.forEach(p=>{
+      const row = p.rows.find(r=>r.m.key===m.key);
+      if (!row) return;
+      if (row.diff) diffN++;
+      if (row.d.cls==='up') upN++;
+      else if (row.d.cls==='down') downN++;
+      else if (row.d.cls==='diff') neutN++;
+      if (m.kind==='num' && typeof row.va==='number' && typeof row.vb==='number'){
+        sumA+=row.va; sumB+=row.vb; numN++;
+      }
+    });
+    return {m, diffN, upN, downN, neutN, avgA: numN?sumA/numN:null, avgB: numN?sumB/numN:null, numN};
+  }).filter(s=>s.diffN>0)
+    .sort((a,b)=>b.diffN-a.diffN)
+    .slice(0,5);
+
+  const segs = `
+    <div class="cs-bar" aria-hidden="true">
+      ${win.A>0?`<span class="seg-up" style="width:${pct(win.A).toFixed(2)}%"></span>`:''}
+      ${win.B>0?`<span class="seg-down" style="width:${pct(win.B).toFixed(2)}%"></span>`:''}
+      ${win.mixed>0?`<span class="seg-diff" style="width:${pct(win.mixed).toFixed(2)}%"></span>`:''}
+      ${win.diff>0?`<span class="seg-diff" style="width:${pct(win.diff).toFixed(2)}%;opacity:.6"></span>`:''}
+      ${win.same>0?`<span class="seg-same" style="width:${pct(win.same).toFixed(2)}%"></span>`:''}
+    </div>`;
+
+  const fmtAvg = (s, m)=>{
+    if (s.avgA==null) return null;
+    const fa = m.fmt ? m.fmt(s.avgA) : (typeof s.avgA==='number' ? s.avgA.toFixed(3) : String(s.avgA));
+    const fb = m.fmt ? m.fmt(s.avgB) : (typeof s.avgB==='number' ? s.avgB.toFixed(3) : String(s.avgB));
+    return `avg ${fa} ↔ ${fb}`;
+  };
+
+  host.innerHTML = `
+    <div class="cs-head">
+      <span class="cs-title">Compare summary</span>
+      <span class="cs-count"><b>${total}</b> 个共同 case</span>
+    </div>
+    ${segs}
+    <div class="cs-legend">
+      <span><i class="swatch-tiny ti-up"></i>A 优势 <b>${win.A}</b></span>
+      <span><i class="swatch-tiny ti-down"></i>B 优势 <b>${win.B}</b></span>
+      <span><i class="swatch-tiny ti-diff"></i>互有优劣 <b>${win.mixed}</b></span>
+      <span><i class="swatch-tiny ti-diff" style="opacity:.6"></i>仅形式差异 <b>${win.diff}</b></span>
+      <span><i class="swatch-tiny ti-same"></i>完全相同 <b>${win.same}</b></span>
+    </div>
+    <div class="cs-changes">
+      ${metricStats.length
+        ? metricStats.map(s=>{
+            const parts = [];
+            if (s.upN)   parts.push(`A ↑ ${s.upN}`);
+            if (s.downN) parts.push(`B ↑ ${s.downN}`);
+            if (s.neutN) parts.push(`中性 ${s.neutN}`);
+            const avgPart = fmtAvg(s, s.m);
+            return `<div class="ch-row">
+              <span class="ch-k">${escapeHTML(s.m.label)}</span>
+              <span class="ch-v">${parts.join(' · ') || (s.diffN+' 差异')}${avgPart?` · ${escapeHTML(avgPart)}`:''}</span>
+            </div>`;
+          }).join('')
+        : `<div class="ch-empty">所有指标践定一致。</div>`}
+    </div>
+    ${(win.A+win.B+win.mixed > 0) ? `<div class="cs-jump">
+      ${jumpLink('→ 跳到第一个 A 优势 case', perCase.find(p=>p.verdict==='A'))}
+      ${jumpLink('→ 跳到第一个 B 优势 case', perCase.find(p=>p.verdict==='B'))}
+      ${jumpLink('→ 跳到互有优劣 case', perCase.find(p=>p.verdict==='mixed'))}
+    </div>` : ''}
+  `;
+
+  // hook up jump links
+  host.querySelectorAll('a[data-jump]').forEach(a=>{
+    a.addEventListener('click', e=>{
+      e.preventDefault();
+      const cid = a.getAttribute('data-jump');
+      STATE.openCases.add(cid);
+      renderCompare();
+      setTimeout(()=>{
+        const el = document.getElementById(`cmp-case-${cid}`);
+        if (el){
+          const top = el.getBoundingClientRect().top + window.scrollY - 80;
+          window.scrollTo({top, behavior:'smooth'});
+        }
+      }, 30);
+    });
+  });
+}
+function jumpLink(label, p){
+  if (!p) return `<a class="disabled">${escapeHTML(label)}</a>`;
+  return `<a data-jump="${escapeHTML(p.c.id)}">${escapeHTML(label)} · ${escapeHTML(p.c.id)}</a>`;
+}
+
+/* ===========================================================
+   STATS
+   =========================================================== */
+function renderStats(){
+  const host = $('#stats-content');
+  const sorted = [...DATA.runs].sort((a,b)=>new Date(b.generated_at)-new Date(a.generated_at));
+  const dens = STATE.statsDensity || 'auto';
+  let fullRuns, probeRuns, fullAsList, probeAsCards;
+  if (dens==='cards'){
+    fullRuns  = sorted.filter(r=>!isProbeRun(r));
+    probeRuns = sorted.filter(r=> isProbeRun(r));
+    fullAsList = false; probeAsCards = true;
+  } else if (dens==='list'){
+    fullRuns  = sorted.filter(r=>!isProbeRun(r));
+    probeRuns = sorted.filter(r=> isProbeRun(r));
+    fullAsList = true; probeAsCards = false;
+  } else { // auto
+    fullRuns  = sorted.filter(r=>!isProbeRun(r));
+    probeRuns = sorted.filter(r=> isProbeRun(r));
+    fullAsList = false; probeAsCards = false;
+  }
+
+  const cardHTML = r => {
+    const rate = r.pass_rate_literal;
+    const hasData = rate!=null;
+    const numStr = hasData ? (rate*100).toFixed(1) : '—';
+    const pct = hasData ? rate*100 : 0;
+    const ratios = Object.values(r.summary||{}).filter(s=>s && s.literal_hit_ratio!=null).length;
+    const manualCount = Object.values(r.summary||{}).filter(s=>s && s.literal_hit==='manual').length;
+    return `
+      <div class="stat-card ${hasData?'':'no-data'}">
+        <div class="scard-head">
+          <div class="scard-label" title="${escapeHTML(r.run_id)}">${escapeHTML(r.label)}</div>
+          <div class="scard-era">${eraLabel(r.schema_era)}</div>
+        </div>
+        <div>
+          <div class="scard-rate ${hasData?'':'muted'}">
+            <span class="num">${numStr}</span>${hasData?'<span class="pct">%</span>':''}
+            <span class="kind">literal pass</span>
+            ${hasData?'':'<span class="scard-status">未完成评定</span>'}
+          </div>
+          <div class="scard-bar" style="margin-top:10px"><div class="fill" style="width:${pct.toFixed(1)}%"></div></div>
+        </div>
+        <div class="scard-meta">
+          <span class="k">avg duration</span><span class="v">${fmtMs(r.avg_duration_ms)}</span>
+          <span class="k">case count</span><span class="v">${r.case_count}${manualCount?` <span style="color:var(--ink-3)">(manual ${manualCount})</span>`:''}</span>
+          <span class="k">schema</span><span class="v">${eraLabel(r.schema_era)}</span>
+          <span class="k">generated</span><span class="v">${fmtDT(r.generated_at)}</span>
+        </div>
+        <div class="scard-config">${escapeHTML(r.config_hint || '—')}</div>
+      </div>
+    `;
+  };
+
+  const rowHTML = r => {
+    const rate = r.pass_rate_literal;
+    const cls = rate==null?'muted':(rate>=1?'pass':(rate<=0?'fail':''));
+    const pctStr = rate==null ? '—' : `${(rate*100).toFixed(0)}%`;
+    return `
+      <div class="stats-list-row">
+        <div class="runid" title="${escapeHTML(r.run_id)}">${escapeHTML(r.label)}</div>
+        <div class="pr ${cls}">${pctStr}</div>
+        <div class="dur">${fmtMs(r.avg_duration_ms)}</div>
+        <div class="cc">${r.case_count} case${r.case_count===1?'':'s'}</div>
+        <div class="cfg" title="${escapeHTML(r.config_hint||'')}">${escapeHTML(r.config_hint||'—')}</div>
+        <div class="when">${fmtDT(r.generated_at)}</div>
+      </div>
+    `;
+  };
+
+  host.innerHTML = `
+    ${fullRuns.length ? `
+      <div class="stats-group">
+        <div class="stats-group-head">
+          <h2>全量评测</h2>
+          <span class="gcount">${fullRuns.length} runs · ${FULL_CASE_COUNT} cases each</span>
+          <span class="gnote">使用这些 run 进行主要结论对比</span>
+        </div>
+        ${fullAsList
+          ? `<div class="stats-list">${fullRuns.map(rowHTML).join('')}</div>`
+          : `<div class="stats-grid">${fullRuns.map(cardHTML).join('')}</div>`}
+      </div>
+    `:''}
+    ${probeRuns.length ? `
+      <div class="stats-group">
+        <div class="stats-group-head">
+          <h2>探针实验</h2>
+          <span class="gcount">${probeRuns.length} runs · case_count &lt; ${FULL_CASE_COUNT}</span>
+          <span class="gnote">单粒度验证，不用于结论</span>
+        </div>
+        ${probeAsCards
+          ? `<div class="stats-grid">${probeRuns.map(cardHTML).join('')}</div>`
+          : `<div class="stats-list">${probeRuns.map(rowHTML).join('')}</div>`}
+      </div>
+    `:''}
+  `;
+}
+
+/* ===========================================================
+   DRILL-DOWN MODAL
+   =========================================================== */
+const $bd = $('#modal-backdrop');
+const $md = $('#modal');
+$bd.addEventListener('click', e=>{ if (e.target===$bd) closeDrill(); });
+document.addEventListener('keydown', e=>{
+  if (!$bd.classList.contains('open')) return;
+  if (e.key==='Escape'){ closeDrill(); return; }
+  // ← / → navigate to prev/next case within the same run, skipping cases that
+  // are not part of this run (no summary entry).
+  if (e.key==='ArrowLeft' || e.key==='ArrowRight' || e.key==='j' || e.key==='k'){
+    if (!STATE.drill) return;
+    e.preventDefault();
+    const dir = (e.key==='ArrowLeft' || e.key==='k') ? -1 : 1;
+    navDrill(dir);
+  }
+});
+
+function literalCls(s){
+  const st = stateFromRatio(s);
+  return st==='pass' ? 'pass' : (st==='fail' ? 'fail' : '');
+}
+function literalDisplay(s){
+  if (!s) return '—';
+  const raw = s.literal_hit;
+  const r = s.literal_hit_ratio;
+  if (raw==='manual' || raw==null) return 'manual';
+  return r!=null ? `${raw} (${Math.round(r*100)}%)` : String(raw);
+}
+function renderMissed(text){
+  if (text==null || text==='' || text==='—') {
+    return `<ul class="missed-list empty"><li>无遗漏要点记录。</li></ul>`;
+  }
+  const items = String(text).split(/[,，;；]\s*/).map(x=>x.trim()).filter(Boolean);
+  if (!items.length) return `<ul class="missed-list empty"><li>${escapeHTML(text)}</li></ul>`;
+  return `<ul class="missed-list">${items.map(p=>`<li>${escapeHTML(p)}</li>`).join('')}</ul>`;
+}
+const DOC_COLS_CORE = [
+  ['rank',             'rank',          'rk'],
+  ['source',           'source',        'src'],
+  ['chunk',            'chunk',         ''],
+  ['retrievalSource',  'origin',        'tag'],
+  ['score',            'score',         'sc'],
+  ['vectorRank',       'vec rank',      'sc'],
+  ['keywordRank',      'kw rank',       'sc'],
+  ['rrfScore',         'rrf',           'sc'],
+  ['beforeRerankRank', 'pre-rerank',    'sc'],
+  ['rerankRank',       'rerank rank',   'sc'],
+  ['rerankScore',      'rerank score',  'sc'],
+  ['rerankMode',       'rerank mode',   '']
+];
+const DOC_COLS_SECONDARY = [
+  ['vectorScore',      'vec score',     'sc'],
+  ['keywordScore',     'kw score',      'sc'],
+  ['rerankApplied',    'reranked',      ''],
+  ['keywordSkippedReason','kw skipped', '']
+];
+function fmtCell(key, v){
+  if (v==null || v==='') return '<span style="color:var(--ink-3)">—</span>';
+  if (key==='retrievalSource'){
+    const slug = String(v).toLowerCase().replace(/[^a-z]/g,'-');
+    return `<span class="tag ${slug}">${escapeHTML(v)}</span>`;
+  }
+  if (typeof v==='number' && !Number.isInteger(v)){
+    return Math.abs(v) < 1 ? v.toFixed(4) : v.toFixed(3);
+  }
+  if (typeof v==='boolean') return v?'true':'false';
+  return escapeHTML(String(v));
+}
+function renderDocsTable(docs){
+  const seen = new Set([...DOC_COLS_CORE, ...DOC_COLS_SECONDARY].map(c=>c[0]));
+  const extras = [];
+  docs.forEach(d=>Object.keys(d).forEach(k=>{
+    if (!seen.has(k) && k!=='preview'){ seen.add(k); extras.push([k,k,'']); }
+  }));
+  // hide columns whose every row value is null/empty — dramatically narrows the table
+  // for legacy / triangle schemas where rerank fields don't apply.
+  const allCols = [...DOC_COLS_CORE, ...DOC_COLS_SECONDARY, ...extras];
+  const cols = allCols.filter(c=>{
+    const key = c[0];
+    return docs.some(d => {
+      const v = d[key];
+      return v!=null && v!=='' && !(typeof v==='number' && Number.isNaN(v));
+    });
+  });
+  const hiddenCount = allCols.length - cols.length;
+  return `<div style="overflow-x:auto"><table class="docs-table">
+    <thead><tr>
+      ${cols.map(c=>`<th>${escapeHTML(c[1])}</th>`).join('')}
+      <th>preview</th>
+    </tr></thead>
+    <tbody>
+      ${docs.map(doc=>`<tr>
+        ${cols.map(c=>`<td class="${c[2]}">${fmtCell(c[0], doc[c[0]])}</td>`).join('')}
+        <td class="prev">${escapeHTML(doc.preview ?? '')}</td>
+      </tr>`).join('')}
+    </tbody>
+  </table>${hiddenCount>0?`<div style="padding:8px 4px 0;font-family:var(--mono);font-size:11px;color:var(--ink-3)">隐藏了 ${hiddenCount} 个全空列（该 schema 不适用）</div>`:''}</div>`;
+}
+
+function openDrill(c, r){
+  const s = r.summary[c.id];
+  const d = r.details[c.id];
+  if (!s) return;
+
+  // remember context for arrow-key nav
+  const caseIdx = DATA.cases.findIndex(x=>x.id===c.id);
+  STATE.drill = {caseIdx, runId:r.run_id};
+
+  // find prev/next valid case (must exist in this run.summary)
+  const findNeighbor = (start, step) => {
+    let i = start + step;
+    while (i >= 0 && i < DATA.cases.length){
+      const nc = DATA.cases[i];
+      if (r.summary[nc.id]) return i;
+      i += step;
+    }
+    return -1;
+  };
+  const prevIdx = findNeighbor(caseIdx, -1);
+  const nextIdx = findNeighbor(caseIdx,  1);
+
+  $md.innerHTML = `
+    <div class="modal-head">
+      <div class="htext">
+        <div class="eyebrow">${escapeHTML(c.id)} · ${escapeHTML(c.case_type)} × ${escapeHTML(r.label)}</div>
+        <h2>${escapeHTML(c.question)}</h2>
+        <div class="hsub">${escapeHTML(r.run_id)} · ${escapeHTML(r.config_hint)} · ${fmtDT(r.generated_at)}</div>
+      </div>
+      <div class="modal-nav">
+        <button id="modal-prev-btn" aria-label="上一个 case (←)" title="上一个 case (←)" ${prevIdx<0?'disabled':''}>
+          <svg width="14" height="14" viewBox="0 0 16 16"><path d="M10 3.5l-5 4.5 5 4.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <span class="label">${String(caseIdx+1).padStart(2,'0')} / ${String(DATA.cases.length).padStart(2,'0')}</span>
+        <button id="modal-next-btn" aria-label="下一个 case (→)" title="下一个 case (→)" ${nextIdx<0?'disabled':''}>
+          <svg width="14" height="14" viewBox="0 0 16 16"><path d="M6 3.5l5 4.5-5 4.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button class="modal-close" aria-label="关闭 (Esc)" title="关闭 (Esc)" id="modal-close-btn" style="margin-left:6px">
+          <svg width="14" height="14" viewBox="0 0 16 16"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="modal-body">
+      <div class="stat-row">
+        <div class="stat-tile ${literalCls(s)}"><div class="k">literal_hit</div><div class="v">${escapeHTML(literalDisplay(s))}</div></div>
+        <div class="stat-tile"><div class="k">retrieved</div><div class="v">${s.retrieved ?? '—'}</div></div>
+        <div class="stat-tile"><div class="k">score_max</div><div class="v">${s.score_max!=null?Number(s.score_max).toFixed(3):'—'}</div></div>
+        <div class="stat-tile"><div class="k">duration</div><div class="v">${s.duration_ms?fmtMs(s.duration_ms):'—'}</div></div>
+        <div class="stat-tile"><div class="k">empty</div><div class="v">${s.empty==null?'—':(s.empty?'true':'false')}</div></div>
+        <div class="stat-tile"><div class="k">rerank mode</div><div class="v">${escapeHTML(d?.rerank_mode || '—')}</div></div>
+        <div class="stat-tile"><div class="k">top1 source</div><div class="v" title="${escapeHTML(d?.top1_source||'')}">${escapeHTML((d?.top1_source||'—').split('/').pop())}</div></div>
+        <div class="stat-tile"><div class="k">top1 chunk</div><div class="v">${escapeHTML(d?.top1_chunk || '—')}</div></div>
+      </div>
+
+      <div class="modal-section">
+        <h3>Answer</h3>
+        <div class="answer-box">${escapeHTML(d?.answer || s.answer_preview || '—')}</div>
+      </div>
+
+      <div class="modal-section">
+        <h3>Retrieved documents (${d?.documents?.length ?? 0})</h3>
+        ${(d?.documents?.length)
+          ? renderDocsTable(d.documents)
+          : `<div style="padding:18px;color:var(--ink-3);font-size:13px;background:var(--card-2);border:1px dashed var(--rule);border-radius:6px">retrieved = 0 · 该次未召回任何文档</div>`
+        }
+      </div>
+
+      <div class="modal-section">
+        <h3>Missed points</h3>
+        ${renderMissed(d?.missed_points_text)}
+      </div>
+    </div>
+  `;
+  $('#modal-close-btn').addEventListener('click', closeDrill);
+  if (prevIdx>=0) $('#modal-prev-btn').addEventListener('click', ()=>navDrill(-1));
+  if (nextIdx>=0) $('#modal-next-btn').addEventListener('click', ()=>navDrill(1));
+  // scroll modal body to top on each open (incl. nav-replace)
+  const body = $md.querySelector('.modal-body');
+  if (body) body.scrollTop = 0;
+  $bd.classList.add('open');
+  $bd.scrollTop = 0;
+  document.body.style.overflow='hidden';
+  writeHash();
+}
+function navDrill(dir){
+  if (!STATE.drill) return;
+  const r = DATA.runs.find(x=>x.run_id===STATE.drill.runId);
+  if (!r) return;
+  let i = STATE.drill.caseIdx + dir;
+  while (i >= 0 && i < DATA.cases.length){
+    const nc = DATA.cases[i];
+    if (r.summary[nc.id]){ openDrill(nc, r); return; }
+    i += dir;
+  }
+}
+
+function closeDrill(){
+  $bd.classList.remove('open');
+  document.body.style.overflow='';
+  STATE.drill = null;
+  writeHash();
+}
+
+/* ===========================================================
+   TOOLTIP
+   =========================================================== */
+const $tt = $('#tt');
+function bindTT(el){
+  el.addEventListener('mouseenter', e=>{
+    const txt = el.dataset.tt; if (!txt) return;
+    $tt.textContent = txt;
+    $tt.classList.add('show');
+    moveTT(e);
+  });
+  el.addEventListener('mousemove', moveTT);
+  el.addEventListener('mouseleave', ()=>$tt.classList.remove('show'));
+}
+function moveTT(e){
+  const pad=14;
+  let x=e.clientX+pad, y=e.clientY+pad;
+  const r=$tt.getBoundingClientRect();
+  if (x+r.width>innerWidth-8) x=e.clientX-r.width-pad;
+  if (y+r.height>innerHeight-8) y=e.clientY-r.height-pad;
+  $tt.style.left=x+'px'; $tt.style.top=y+'px';
+}
+
+/* ===========================================================
+   helpers
+   =========================================================== */
+function el(tag, cls, text){
+  const e=document.createElement(tag);
+  if (cls) e.className=cls;
+  if (text!=null) e.textContent=text;
+  return e;
+}
+function escapeHTML(s){
+  return String(s==null?'':s)
+    .replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')
+    .replaceAll('"','&quot;').replaceAll("'",'&#39;');
+}
+
+/* ===========================================================
+   URL HASH STATE
+   #view=compare&a=...&b=...   /   #view=stats&density=list   /   #drill=runId|caseId
+   =========================================================== */
+function parseHash(){
+  const h = location.hash.replace(/^#/,'');
+  const out = {};
+  h.split('&').filter(Boolean).forEach(p=>{
+    const idx = p.indexOf('=');
+    if (idx<0){ out[p] = ''; return; }
+    const k = p.slice(0,idx);
+    const v = decodeURIComponent(p.slice(idx+1));
+    out[k] = v;
+  });
+  return out;
+}
+let _suppressHashRead = false;
+function writeHash(){
+  const parts = [];
+  if (STATE.view && STATE.view!=='matrix') parts.push(`view=${STATE.view}`);
+  if (STATE.view==='matrix'){
+    if (STATE.matrixSort && STATE.matrixSort!=='time-desc') parts.push(`sort=${STATE.matrixSort}`);
+    if (STATE.matrixScope && STATE.matrixScope!=='full') parts.push(`scope=${STATE.matrixScope}`);
+  }
+  if (STATE.view==='compare'){
+    if (STATE.runA) parts.push(`a=${encodeURIComponent(STATE.runA)}`);
+    if (STATE.runB) parts.push(`b=${encodeURIComponent(STATE.runB)}`);
+  }
+  if (STATE.view==='stats' && STATE.statsDensity && STATE.statsDensity!=='auto'){
+    parts.push(`density=${STATE.statsDensity}`);
+  }
+  if (STATE.drill){
+    const cid = DATA.cases[STATE.drill.caseIdx]?.id;
+    if (cid) parts.push(`drill=${encodeURIComponent(STATE.drill.runId)}|${encodeURIComponent(cid)}`);
+  }
+  const newHash = parts.length ? '#' + parts.join('&') : '';
+  if (newHash === location.hash) return;
+  _suppressHashRead = true;
+  history.replaceState(null, '', newHash || location.pathname + location.search);
+  setTimeout(()=>{_suppressHashRead=false;}, 0);
+}
+function applyHash(){
+  if (_suppressHashRead) return;
+  const h = parseHash();
+  const targetView = ['matrix','compare','stats'].includes(h.view) ? h.view : 'matrix';
+  if (['time-desc','time-asc','rate-desc','rate-asc'].includes(h.sort)){
+    STATE.matrixSort = h.sort;
+    $('#matrix-sort').value = h.sort;
+  }
+  if (['full','all','probe'].includes(h.scope)){
+    STATE.matrixScope = h.scope;
+    $('#matrix-scope').value = h.scope;
+  }
+  if (h.view==='compare'){
+    if (h.a && DATA.runs.some(r=>r.run_id===h.a)) STATE.runA = h.a;
+    if (h.b && DATA.runs.some(r=>r.run_id===h.b)) STATE.runB = h.b;
+    STATE.pairKey = null;
+  }
+  if (h.view==='stats'){
+    const d = h.density;
+    if (['auto','cards','list'].includes(d)){
+      STATE.statsDensity = d;
+      // sync segmented control AFTER render
+      setTimeout(()=>{
+        $$('#stats-density button').forEach(x=>x.classList.toggle('active', x.dataset.density===d));
+      }, 0);
+    }
+  }
+  // suppress writeHash during setView since we're already in sync
+  _suppressHashRead = true;
+  setView(targetView);
+  _suppressHashRead = false;
+
+  // drill?
+  if (h.drill){
+    const [runId, caseId] = h.drill.split('|');
+    const r = DATA.runs.find(x=>x.run_id===runId);
+    const c = DATA.cases.find(x=>x.id===caseId);
+    if (r && c && r.summary[c.id]) openDrill(c, r);
+  }
+}
+window.addEventListener('hashchange', applyHash);
+
+/* boot */
+applyHash(); // applies any initial #-state, else falls through to matrix view
+</script>
+
+</body>
+</html>
