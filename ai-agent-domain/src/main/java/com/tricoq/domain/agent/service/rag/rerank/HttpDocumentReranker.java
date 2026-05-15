@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.ai.document.Document;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -29,23 +30,44 @@ import java.util.*;
 @Component
 public class HttpDocumentReranker implements DocumentReranker {
 
-    private static final String RERANK_URL = "http://127.0.0.1:18080/rerank";
-    private static final Duration TIMEOUT = Duration.ofSeconds(10);
-
+    private static final String DEFAULT_ENDPOINT = "http://127.0.0.1:18080/rerank";
+    private static final String DEFAULT_MODEL_NAME = "bge-reranker-v2-m3";
+    private static final Duration DEFAULT_CONNECT_TIMEOUT = Duration.ofSeconds(10);
+    private static final Duration DEFAULT_READ_TIMEOUT = Duration.ofSeconds(10);
 
     private final HttpClient httpClient;
     private final DocumentReranker fallbackDocumentReranker;
+    private final boolean enabled;
+    private final String endpoint;
+    private final Duration readTimeout;
+    private final String modelName;
 
-    public HttpDocumentReranker() {
+    public HttpDocumentReranker(PassthroughDocumentReranker fallbackDocumentReranker,
+                                @Value("${spring.ai.rag.rerank.local-bge.enabled:true}") boolean enabled,
+                                @Value("${spring.ai.rag.rerank.local-bge.endpoint:" + DEFAULT_ENDPOINT + "}") String endpoint,
+                                @Value("${spring.ai.rag.rerank.local-bge.connect-timeout:10s}") Duration connectTimeout,
+                                @Value("${spring.ai.rag.rerank.local-bge.read-timeout:10s}") Duration readTimeout,
+                                @Value("${spring.ai.rag.rerank.local-bge.model-name:" + DEFAULT_MODEL_NAME + "}") String modelName) {
+        Duration safeConnectTimeout = connectTimeout == null ? DEFAULT_CONNECT_TIMEOUT : connectTimeout;
+        this.enabled = enabled;
+        this.endpoint = StringUtils.defaultIfBlank(endpoint, DEFAULT_ENDPOINT);
+        this.readTimeout = readTimeout == null ? DEFAULT_READ_TIMEOUT : readTimeout;
+        this.modelName = StringUtils.defaultIfBlank(modelName, DEFAULT_MODEL_NAME);
         this.httpClient = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
-                .connectTimeout(TIMEOUT)
+                .connectTimeout(safeConnectTimeout)
                 .build();
-        this.fallbackDocumentReranker = new PassthroughDocumentReranker();
+        this.fallbackDocumentReranker = fallbackDocumentReranker == null
+                ? new PassthroughDocumentReranker()
+                : fallbackDocumentReranker;
     }
 
     @Override
     public RerankResult rerank(String query, List<Document> candidates, int topK) {
+        if (!enabled) {
+            return fallback("RERANK_DISABLED", query, candidates, topK);
+        }
+
         if (StringUtils.isBlank(query) || CollectionUtils.isEmpty(candidates) || topK <= 0) {
             return fallback("RERANK_INVALID_ARGUMENT", query, candidates, topK);
         }
@@ -57,14 +79,19 @@ public class HttpDocumentReranker implements DocumentReranker {
 
         RerankHttpRequest rerankHttpRequest = new RerankHttpRequest(query, rerankHttpDocuments, topK);
 
-        //请求服务
-        HttpRequest httpRequest = HttpRequest.newBuilder()
-                .uri(URI.create(RERANK_URL))
-                .timeout(TIMEOUT)
-                .header("Content-Type", "application/json")
-                .header("Accept", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(JSON.toJSONString(rerankHttpRequest), StandardCharsets.UTF_8))
-                .build();
+        HttpRequest httpRequest;
+        try {
+            httpRequest = HttpRequest.newBuilder()
+                    .uri(URI.create(endpoint))
+                    .timeout(readTimeout)
+                    .header("Content-Type", "application/json")
+                    .header("Accept", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(JSON.toJSONString(rerankHttpRequest), StandardCharsets.UTF_8))
+                    .build();
+        } catch (IllegalArgumentException e) {
+            log.warn("Rerank服务地址配置非法,endpoint={},message={}", endpoint, e.getMessage());
+            return fallback(failureReason("RERANK_INVALID_ENDPOINT", e), query, candidates, topK);
+        }
 
         HttpResponse<String> response = null;
 
@@ -73,11 +100,11 @@ public class HttpDocumentReranker implements DocumentReranker {
                     HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
         } catch (IOException e) {
             log.warn("Rerank服务调用失败,message={}", e.getMessage());
-            return fallback("RERANK_HTTP_IO_ERROR:" + e.getMessage(), query, candidates, topK);
+            return fallback(failureReason("RERANK_HTTP_IO_ERROR", e), query, candidates, topK);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             log.warn("Rerank服务调用被中断,message={}", e.getMessage());
-            return fallback("RERANK_HTTP_INTERRUPTED:" + e.getMessage(), query, candidates, topK);
+            return fallback(failureReason("RERANK_HTTP_INTERRUPTED", e), query, candidates, topK);
         }
 
         //处理响应
@@ -102,7 +129,7 @@ public class HttpDocumentReranker implements DocumentReranker {
             });
         } catch (Exception e) {
             log.warn("Rerank服务响应解析失败,statusCode={},message={}", statusCode, e.getMessage());
-            return fallback("RERANK_RESPONSE_PARSE_ERROR,statusCode=" + statusCode + ",message=" + e.getMessage(), query, candidates, topK);
+            return fallback("RERANK_RESPONSE_PARSE_ERROR,statusCode=" + statusCode + "," + failureReason("message", e), query, candidates, topK);
         }
 
         if (rerankHttpResponse == null) {
@@ -142,12 +169,16 @@ public class HttpDocumentReranker implements DocumentReranker {
         }
 
 
+        String actualModelName = StringUtils.defaultIfBlank(rerankHttpResponse.model(), modelName);
+
         return RerankResult.builder().documents(documents)
                 .applied(true)
                 .mode(RerankPolicy.LOCAL_BGE.getPolicyName())
                 .candidateCount(candidateCount)
                 .finalCount(Math.min(finalCount, documents.size()))
                 .failureReason(null)
+                .modelName(actualModelName)
+                .endpoint(endpoint)
                 .build();
     }
 
@@ -156,7 +187,17 @@ public class HttpDocumentReranker implements DocumentReranker {
         if (StringUtils.isNotBlank(reason)) {
             result.setFailureReason(reason);
         }
+        result.setModelName(modelName);
+        result.setEndpoint(endpoint);
         return result;
+    }
+
+    private String failureReason(String code, Exception e) {
+        if (e == null) {
+            return code;
+        }
+        String message = StringUtils.defaultIfBlank(e.getMessage(), e.getClass().getSimpleName());
+        return code + ":" + message;
     }
 
 

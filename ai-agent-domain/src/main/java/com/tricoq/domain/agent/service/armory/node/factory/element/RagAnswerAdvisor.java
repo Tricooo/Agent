@@ -182,6 +182,9 @@ public class RagAnswerAdvisor implements BaseAdvisor {
             emptyRetrievalContext.put(Qa.RERANK_MODE, RERANK_MODE_PASSTHROUGH);
             emptyRetrievalContext.put(Qa.RERANK_CANDIDATE_COUNT, 0);
             emptyRetrievalContext.put(Qa.RERANK_FINAL_COUNT, 0);
+            emptyRetrievalContext.put(Qa.RERANK_FAILURE_REASON, "");
+            emptyRetrievalContext.put(Qa.RERANK_MODEL_NAME, "");
+            emptyRetrievalContext.put(Qa.RERANK_ENDPOINT, "");
 
             PromptTemplate promptTemplate = new PromptTemplate(advisedUserText);
             String rendered = promptTemplate.render(Map.of(AdvisorContext.QUESTION_ANSWER_CONTEXT, emptyContext));
@@ -226,6 +229,9 @@ public class RagAnswerAdvisor implements BaseAdvisor {
         advisedUserParams.put(Qa.RERANK_MODE, rerankResult.getMode());
         advisedUserParams.put(Qa.RERANK_CANDIDATE_COUNT, rerankResult.getCandidateCount());
         advisedUserParams.put(Qa.RERANK_FINAL_COUNT, rerankResult.getFinalCount());
+        advisedUserParams.put(Qa.RERANK_FAILURE_REASON, StringUtils.defaultString(rerankResult.getFailureReason()));
+        advisedUserParams.put(Qa.RERANK_MODEL_NAME, StringUtils.defaultString(rerankResult.getModelName()));
+        advisedUserParams.put(Qa.RERANK_ENDPOINT, StringUtils.defaultString(rerankResult.getEndpoint()));
 
 
         //给人看 便于看到引用的文本

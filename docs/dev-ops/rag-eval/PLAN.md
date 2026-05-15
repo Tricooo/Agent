@@ -1,7 +1,7 @@
 # RAG Eval 自动化 — 计划与状态
 
 > 这份文档是 RAG 评测链路工作的 single source of truth。任何接手会话先读这里。
-> 最后更新：2026-05-14（D15：Step 5.3 Rerank A/B 评测完成）
+> 最后更新：2026-05-14（D16：Step 5.4 Rerank 工程化收口已完成）
 
 ## 目录组织
 
@@ -31,7 +31,8 @@ docs/dev-ops/rag-eval/
     ├── step5-rerank-observe/     ← rerank passthrough 观测字段 smoke（May 9）
     ├── step5.1-rerank-abstraction/ ← DocumentReranker 抽象接入 smoke（May 13）
     ├── step5.2-http-rerank-live/   ← 本地 bge reranker HTTP 接入 smoke（May 14）
-    └── step5.3-rerank-ab/          ← PASSTHROUGH vs LOCAL_BGE 全量 A/B（May 14）
+    ├── step5.3-rerank-ab/          ← PASSTHROUGH vs LOCAL_BGE 全量 A/B（May 14）
+    └── step5.4-rerank-engineering/ ← 配置化 / fallback smoke / 生产化口径（May 14）
 ```
 
 > 归档原则：按"评测口径是否一致"分。F-fix 是 schema 硬边界——之前的产物没有 `retrieved/score/empty` 三列，永久不可与之后互比 score。
@@ -132,6 +133,11 @@ docs/dev-ops/rag-eval/
   - 正向价值：RAG-05、RAG-07、RAG-13、RAG-14 等 case 中，rerank 能把更贴近 query 的 chunk 前移，给面试讲解提供了“向量/RRF 初排 + query-chunk 交互重排”的可观测证据。
   - 边界：RAG-10 仍是 2/5，说明 rerank 只能重排已召回候选，不能弥补候选池本身没有覆盖完整答案、或生成阶段没有展开细节的问题。
   - 详细决策见 §3 D15
+- **Step 5.4 Rerank 工程化收口 — 已完成（May 14）**：
+  - 实现：`HttpDocumentReranker` 的 enabled / endpoint / connect-timeout / read-timeout / model-name 配置化；fallback 依赖 `PassthroughDocumentReranker` bean；`qa_rerank_failure_reason/qa_rerank_model_name/qa_rerank_endpoint` 透出到 retrieval SSE 与 runner 报告。
+  - 验证产物：`results/step5.4-rerank-engineering/rag-eval-result-step5.4-live-rag04.md` / `rag-eval-result-step5.4-fallback-rag04.md` / `rag-eval-result-step5.4-disabled-rag04.md`
+  - 关键结论：正常服务时 `LOCAL_BGE` applied=true；服务不可用或配置禁用时自动降级 `PASSTHROUGH`，主链路仍 completed=true，报告能看到 failure reason。
+  - 详细决策见 §3 D16
 
 ### 2.2 关键认知（必读，否则会重复踩坑）
 
@@ -661,13 +667,74 @@ Step 4.1 不是证明 Hybrid 已经稳定提升答案质量，而是证明我们
 
 **下一步候选**：
 
-1. 先提交本轮 singleton 刷新修复与 Step 5.3 评测证据。
-2. 若继续工程化 rerank：把 `HttpDocumentReranker` 的 URL / timeout / enabled 配置化，并考虑 Python 服务生命周期管理。
-3. 若继续 RAG 效果优化：进入 Step 6 Query rewrite，用 multi-query / RAG-fusion / HyDE 解决“原 query 候选池覆盖不足”的问题。
+1. Step 5.3 已由 commit `cc20ba4` 提交：singleton 刷新修复与 A/B 评测证据已归档。
+2. Step 5.4 Rerank 工程化收口已完成：本地 POC 能力已收敛成可配置、可观测、可降级的工程能力，并补齐面试解释口径。
+3. Step 5.4 代码待用户 review 后自行提交；功能主线可进入 Step 6 Query rewrite，用 multi-query / RAG-fusion / HyDE 解决“原 query 候选池覆盖不足”的问题。
+
+### D16（已完成并验证 2026-05-14）：Step 5.4 Rerank 工程化收口
+
+**为什么还需要 Step 5.4**：
+
+Step 5.3 已经证明真实 rerank 链路生效，但当前仍有明显 POC 边界：`HttpDocumentReranker` 的本地 HTTP 地址 / timeout 仍偏硬编码，本地 Python 服务生命周期不属于 Java 应用，rerank 服务不可用时的端到端 fallback 还没有专门 smoke，报告里也还需要更直接地解释 model / endpoint / failureReason。
+
+因此 Step 5.4 的目标不是再证明“准确率提升”，而是把 rerank 做成可运维、可解释、可面试复述的工程闭环。
+
+**计划范围**：
+
+1. 配置化：把 `HttpDocumentReranker` 的 enabled、baseUrl 或 endpoint、connect/read timeout、modelName 等从代码常量迁入 Spring 配置。
+2. 可观测：补齐 rerank endpoint / model / failureReason / fallback mode 等观测字段，让报告能解释“为什么这次用了模型”或“为什么降级”。
+3. 降级验证：做服务健康与服务不可用两类 smoke test。服务不可用时应 fallback 到 `PASSTHROUGH`，Java 主链路不崩，报告能看到失败原因。
+4. 面试口径：把 rerank 的“为什么做、解决什么、没有解决什么、实测证据是什么”沉淀到计划或笔记。
+
+**实现范围**：
+
+- `HttpDocumentReranker`：去掉硬编码 URL / timeout 作为唯一来源，改为读取 `spring.ai.rag.rerank.local-bge.enabled/endpoint/connect-timeout/read-timeout/model-name`；fallback 改为依赖 `PassthroughDocumentReranker` bean。
+- `RerankResult`：新增 `modelName` / `endpoint`，与既有 `failureReason` 一起承载运行时观测信息。
+- `RagObservationKeys.Qa` + `RagAnswerAdvisor`：新增并透传 `qa_rerank_failure_reason` / `qa_rerank_model_name` / `qa_rerank_endpoint`。注意 advisor context 不能放 null，否则 Spring AI 后续 `Map.copyOf` 会抛 NPE，因此空值用空字符串。
+- `rag_eval_runner.py`：在 retrieval details 中新增 `rerank_runtime: model / endpoint / failure_reason`。
+- `application-dev.yml`：新增本地 bge reranker 配置入口，支持环境变量覆盖。
+
+**非目标**：
+
+- 不换 rerank 模型。
+- 不把 Python 服务强行塞进 Java 进程生命周期。
+- 不新增复杂评测集。
+- 不进入 Step 6 Query rewrite。
+- 不把 Step 5.3 的 A/B 结果包装成“答案指标显著提升”。
+
+**验收标准**：
+
+| 验收项 | 通过标准 |
+|---|---|
+| 配置化 | URL / timeout / enabled / modelName 不再散落在 `HttpDocumentReranker` 常量中 |
+| 正常链路 | 本地 rerank 服务健康时，RAG-04 smoke 仍显示 `rerank applied=true / mode=LOCAL_BGE` |
+| 降级链路 | rerank 服务不可用或配置禁用时，RAG 主链路仍完成，且报告能看到 fallback reason |
+| 可解释性 | 评测报告或 metadata 能解释 rerank 模型、endpoint、是否 applied、失败原因 |
+| 面试材料 | 能用 1-2 分钟讲清 Step 5 为什么做、做了什么、效果与边界 |
+
+**验证产物**：
+
+| 场景 | 端口 / 配置 | 产物 | 关键观测 |
+|---|---|---|---|
+| 正常 LOCAL_BGE | `8100`，endpoint=`127.0.0.1:18080/rerank` | `results/step5.4-rerank-engineering/rag-eval-result-step5.4-live-rag04.md` | RAG-04 completed=true，literal 3/3，`applied=true / mode=LOCAL_BGE`，runtime model/endpoint 正常，failure_reason 空 |
+| 服务不可用 fallback | `8101`，endpoint=`127.0.0.1:18081/rerank` | `results/step5.4-rerank-engineering/rag-eval-result-step5.4-fallback-rag04.md` | RAG-04 completed=true，literal 3/3，`applied=false / mode=PASSTHROUGH`，failure_reason=`RERANK_HTTP_IO_ERROR:ConnectException` |
+| 配置禁用 fallback | `8102`，`RAG_RERANK_LOCAL_BGE_ENABLED=false` | `results/step5.4-rerank-engineering/rag-eval-result-step5.4-disabled-rag04.md` | RAG-04 completed=true，literal 3/3，`applied=false / mode=PASSTHROUGH`，failure_reason=`RERANK_DISABLED` |
+
+**收口结论**：
+
+Step 5.4 不改变 Step 5.3 的效果结论：rerank 的答案指标仍不能被包装成显著提升。它完成的是工程化闭环：真实 reranker 可配置、可观测、可降级，报告能直接解释用了哪个模型、打到哪个 endpoint、为什么 fallback。
+
+**辅导节奏**：
+
+1. 先讲清“配置类 / 策略工厂 / fallback / 观测字段”的职责边界。
+2. 用户主笔改 Java 代码，Codex 负责拆步骤、review、小范围修补和验证。
+3. 每个小改动都先跑 compile 或 smoke，再进入下一步。
+4. Step 5.4 已完成；代码待用户 review 后自行提交，功能主线可进入 Step 6。
 
 ### Commit 范围（已落地）
 
 ```
+cc20ba4 fix: 修复 Armory 重装配并归档 RAG rerank A/B
 176abc5 feat: 接入本地 RAG rerank 模型服务
 c95aabd feat: 完成 RAG rerank 抽象接入
 631ffd2 refactor: 抽取 RAG 观测字段常量
@@ -697,11 +764,10 @@ fc49eb4 docs: RAG eval 接力计划 + 历史评测产物归档
 
 按下一步时机排序：
 
-1. RAG-09 / RAG-10 paraphrase regression
-2. RAGAS 集成（faithfulness / context precision / answer relevance）
-3. rerank 模型选型与真实 reranker 接入（Step 5.2）
+1. Step 6 Query rewrite（multi-query / RAG-fusion / HyDE，重点处理 RAG-10 这类候选覆盖 / 生成展开问题）
+2. RAG-09 / RAG-10 paraphrase regression
+3. RAGAS 集成（faithfulness / context precision / answer relevance）
 4. embedding 模型迁移
-5. Codex 对全部 8 个文件改动的 final review
 
 **触发原则**：等用户点哪个就做哪个，不批量推进。
 
@@ -730,9 +796,9 @@ fc49eb4 docs: RAG eval 接力计划 + 历史评测产物归档
 
 下一会话接手时：
 
-1. Read 这份 `PLAN.md` 全文（特别是 §3 D10/D11/D12/D13：Hybrid + RRF 归因、Hybrid calibration、Rerank 观测地基、Rerank 抽象接入）
-2. 确认 §3 commit 范围是否已落地（`git log --oneline -10` 看 `631ffd2`、`a820144`、`a7826bc` 以及 Step 5.1 抽象接入提交）
-3. 当前游标：**Step 5.1 Rerank abstraction 已完成，下一步 Step 5.2 真实 reranker 选型 / 接入设计**。当前仍是 `PASSTHROUGH` 行为；还没有真实模型 reranker。
+1. Read 这份 `PLAN.md` 全文（特别是 §3 D10-D16：Hybrid、Rerank、A/B 归因与 Step 5.4 工程化收口）
+2. 确认 §3 commit 范围是否已落地（`git log --oneline -10` 看 `cc20ba4`、`176abc5`、`c95aabd`、`631ffd2` 等 Step 5 提交）
+3. 当前游标：**Step 5.4 Rerank 工程化收口已完成；代码待用户 review 后自行提交，功能主线可进入 Step 6 Query rewrite**。真实 reranker 已接入并完成 A/B，配置化、降级 smoke、观测与面试口径已收口。
 4. 如果改 yml / 重启 backend / 重灌向量库后再跑 eval：必须先预热 `POST http://localhost:8099/api/v1/agent/armory_agent` body `{"agentId":"rag_demo"}`（未预热直接打 auto_agent 会 HTTP 500，duration ~5ms，看似 endpoint 死了）
 5. **不要**自行重跑 v1/v2/v3 中任何一轮——Phase A 已锁定参数 250/109，重跑只会消耗 LLM 配额且 score 必然飘动（embedding 不变 score 应稳定，LLM 输出会因 sampling 飘）
 

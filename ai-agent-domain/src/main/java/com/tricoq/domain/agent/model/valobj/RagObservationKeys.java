@@ -114,6 +114,21 @@ public final class RagObservationKeys {
          */
         public static final String RERANK_FINAL_COUNT = "qa_rerank_final_count";
 
+        /**
+         * rerank 模型或服务降级时的失败原因；为空表示未触发异常降级。
+         */
+        public static final String RERANK_FAILURE_REASON = "qa_rerank_failure_reason";
+
+        /**
+         * 本次 rerank 期望或实际使用的模型名称，用于区分不同重排模型。
+         */
+        public static final String RERANK_MODEL_NAME = "qa_rerank_model_name";
+
+        /**
+         * 本次 rerank 调用的服务端点，用于排查本地服务和远端服务配置。
+         */
+        public static final String RERANK_ENDPOINT = "qa_rerank_endpoint";
+
         private Qa() {
         }
     }

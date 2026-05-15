@@ -30,6 +30,8 @@ public class PassthroughDocumentReranker implements DocumentReranker {
                     .candidateCount(candidateCount)
                     .finalCount(0)
                     .failureReason(null)
+                    .modelName(null)
+                    .endpoint(null)
                     .build();
         }
 
@@ -53,6 +55,8 @@ public class PassthroughDocumentReranker implements DocumentReranker {
                 .candidateCount(candidateCount)
                 .finalCount(limit)
                 .failureReason(null)
+                .modelName(null)
+                .endpoint(null)
                 .build();
     }
 }

@@ -27,4 +27,8 @@ public class RerankResult {
 
     private String failureReason;
 
+    private String modelName;
+
+    private String endpoint;
+
 }

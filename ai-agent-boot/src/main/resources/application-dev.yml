@@ -85,6 +85,15 @@ spring:
         # 模型靠段落结构理解'这是一个完整概念段'，丢了换行就只能靠 token 数硬切。所以默认 true 是对的。我们这次改造保留 true，未来如果文档源是
         # markdown 表格之类不依赖换行的结构化数据，再考虑改 false。
         keep-separator: true
+      rerank:
+        local-bge:
+          # Step 5.4：本地 cross-encoder reranker 配置化。关闭后即使 DB 配了 LOCAL_BGE，
+          # Java 主链路也会安全降级为 PASSTHROUGH，并在 qa_rerank_failure_reason 中标记 RERANK_DISABLED。
+          enabled: ${RAG_RERANK_LOCAL_BGE_ENABLED:true}
+          endpoint: ${RAG_RERANK_LOCAL_BGE_ENDPOINT:http://127.0.0.1:18080/rerank}
+          connect-timeout: ${RAG_RERANK_LOCAL_BGE_CONNECT_TIMEOUT:10s}
+          read-timeout: ${RAG_RERANK_LOCAL_BGE_READ_TIMEOUT:10s}
+          model-name: ${RAG_RERANK_LOCAL_BGE_MODEL_NAME:bge-reranker-v2-m3}
 
 mybatis-plus:
   configuration:

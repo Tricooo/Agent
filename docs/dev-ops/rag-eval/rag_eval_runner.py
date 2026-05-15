@@ -37,6 +37,9 @@ QA_RERANK_APPLIED = "qa_rerank_applied"
 QA_RERANK_MODE = "qa_rerank_mode"
 QA_RERANK_CANDIDATE_COUNT = "qa_rerank_candidate_count"
 QA_RERANK_FINAL_COUNT = "qa_rerank_final_count"
+QA_RERANK_FAILURE_REASON = "qa_rerank_failure_reason"
+QA_RERANK_MODEL_NAME = "qa_rerank_model_name"
+QA_RERANK_ENDPOINT = "qa_rerank_endpoint"
 
 DOC_SOURCE_PATH = "sourcePath"
 DOC_CHUNK_INDEX = "chunkIndex"
@@ -289,7 +292,7 @@ def write_markdown(path: Path, results: list[dict[str, Any]], api_url: str, agen
     lines.append(">")
     lines.append("> `retrieved` / `score` / `empty` 三列的 `—` 表示**没拿到成功的 ChatResponse metadata**，不等价于\"无检索\"。当前实现把 retrieval SSE 帧放在 `.call().chatResponse()` 返回之后才发，所以 LLM 调用失败时（即使 RAG 检索本身成功）三列都会是 `—`。要区分\"检索失败\"和\"生成失败\"，对照 `error` 列 / details 区 / backend log。")
     lines.append(">")
-    lines.append("> Details 区的 `documents` 会展开 top-K chunk attribution；HYBRID 模式下 `score` 是 RRF score，原始向量分与关键词分分别看 `vectorScore` / `keywordScore`；真实 rerank 分数看 `rerankScore`；keyword 分支未参与时看 `keywordSkippedReason`。")
+    lines.append("> Details 区的 `documents` 会展开 top-K chunk attribution；HYBRID 模式下 `score` 是 RRF score，原始向量分与关键词分分别看 `vectorScore` / `keywordScore`；真实 rerank 分数看 `rerankScore`；rerank 服务状态看 `rerank_runtime` 的 model / endpoint / failure_reason；keyword 分支未参与时看 `keywordSkippedReason`。")
     lines.append("")
     lines.append("| id | type | completed | duration_ms | should_answer | retrieved | score | empty | literal_hit | missed_points | answer_preview | manual_pass |")
     lines.append("|---|---|---:|---:|---:|---:|---|---:|---:|---|---|---|")
@@ -380,6 +383,13 @@ def write_markdown(path: Path, results: list[dict[str, Any]], api_url: str, agen
                         mode=data.get(QA_RERANK_MODE),
                         cand=data.get(QA_RERANK_CANDIDATE_COUNT),
                         final=data.get(QA_RERANK_FINAL_COUNT),
+                    )
+                )
+                lines.append(
+                    "  - rerank_runtime: model `{model}` / endpoint `{endpoint}` / failure_reason `{reason}`".format(
+                        model=data.get(QA_RERANK_MODEL_NAME),
+                        endpoint=data.get(QA_RERANK_ENDPOINT),
+                        reason=data.get(QA_RERANK_FAILURE_REASON),
                     )
                 )
                 _append_retrieved_documents(lines, data)
