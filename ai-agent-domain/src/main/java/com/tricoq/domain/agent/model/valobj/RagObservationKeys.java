@@ -135,6 +135,16 @@ public final class RagObservationKeys {
         public static final String RERANK_ENDPOINT = "qa_rerank_endpoint";
 
         /**
+         * rerank 后是否触发 final context coverage guard。
+         */
+        public static final String RERANK_COVERAGE_GUARD_APPLIED = "qa_rerank_coverage_guard_applied";
+
+        /**
+         * coverage guard 补回 final context 的文档数量。
+         */
+        public static final String RERANK_COVERAGE_GUARD_ADDED_COUNT = "qa_rerank_coverage_guard_added_count";
+
+        /**
          * query rewrite 模式，例如 PASSTHROUGH / HEURISTIC_MULTI_QUERY。
          */
         public static final String QUERY_REWRITE_MODE = "qa_query_rewrite_mode";
@@ -264,6 +274,11 @@ public final class RagObservationKeys {
          * rerank 模型对当前文档和查询相关性的打分。
          */
         public static final String RERANK_SCORE = "rerankScore";
+
+        /**
+         * 当前文档是否由 rerank coverage guard 补回最终上下文。
+         */
+        public static final String COVERAGE_GUARD_ADDED = "coverageGuardAdded";
 
         /**
          * 当前 chunk 最先由第几个 query variant 召回，1 表示原始 query。

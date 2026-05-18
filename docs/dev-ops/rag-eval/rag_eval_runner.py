@@ -41,6 +41,8 @@ QA_RERANK_FINAL_COUNT = "qa_rerank_final_count"
 QA_RERANK_FAILURE_REASON = "qa_rerank_failure_reason"
 QA_RERANK_MODEL_NAME = "qa_rerank_model_name"
 QA_RERANK_ENDPOINT = "qa_rerank_endpoint"
+QA_RERANK_COVERAGE_GUARD_APPLIED = "qa_rerank_coverage_guard_applied"
+QA_RERANK_COVERAGE_GUARD_ADDED_COUNT = "qa_rerank_coverage_guard_added_count"
 QA_QUERY_REWRITE_MODE = "qa_query_rewrite_mode"
 QA_QUERY_VARIANT_COUNT = "qa_query_variant_count"
 QA_QUERY_VARIANT_TEXTS = "qa_query_variant_texts"
@@ -59,6 +61,7 @@ DOC_RERANK_RANK = "rerankRank"
 DOC_RERANK_SCORE = "rerankScore"
 DOC_RERANK_APPLIED = "rerankApplied"
 DOC_RERANK_MODE = "rerankMode"
+DOC_COVERAGE_GUARD_ADDED = "coverageGuardAdded"
 DOC_QUERY_VARIANT_INDEX = "queryVariantIndex"
 DOC_QUERY_VARIANT_TEXT = "queryVariantText"
 DOC_QUERY_VARIANT_RANK = "queryVariantRank"
@@ -259,7 +262,8 @@ def _append_document_list(lines: list[str], data: dict[str, Any], documents_key:
                 "keywordSkippedReason=`{keyword_skipped_reason}`, "
                 "beforeRerankRank=`{before_rerank_rank}`, rerankRank=`{rerank_rank}`, "
                 "rerankScore=`{rerank_score}`, rerankApplied=`{rerank_applied}`, "
-                "rerankMode=`{rerank_mode}`, queryVariantIndex=`{query_variant_index}`, "
+                "rerankMode=`{rerank_mode}`, coverageGuardAdded=`{coverage_guard_added}`, "
+                "queryVariantIndex=`{query_variant_index}`, "
                 "queryVariantRank=`{query_variant_rank}`, queryVariantText=`{query_variant_text}`"
             ).format(
                 idx=doc_index,
@@ -278,6 +282,7 @@ def _append_document_list(lines: list[str], data: dict[str, Any], documents_key:
                 rerank_score=_fmt_score(metadata.get(DOC_RERANK_SCORE)),
                 rerank_applied=md_escape(_metadata_value(metadata, DOC_RERANK_APPLIED)),
                 rerank_mode=md_escape(_metadata_value(metadata, DOC_RERANK_MODE)),
+                coverage_guard_added=md_escape(_metadata_value(metadata, DOC_COVERAGE_GUARD_ADDED)),
                 query_variant_index=md_escape(_metadata_value(metadata, DOC_QUERY_VARIANT_INDEX)),
                 query_variant_rank=md_escape(_metadata_value(metadata, DOC_QUERY_VARIANT_RANK)),
                 query_variant_text=md_escape(_metadata_value(metadata, DOC_QUERY_VARIANT_TEXT)),
@@ -409,6 +414,12 @@ def write_markdown(path: Path, results: list[dict[str, Any]], api_url: str, agen
                         model=data.get(QA_RERANK_MODEL_NAME),
                         endpoint=data.get(QA_RERANK_ENDPOINT),
                         reason=data.get(QA_RERANK_FAILURE_REASON),
+                    )
+                )
+                lines.append(
+                    "  - coverage_guard: applied `{applied}` / added `{added}`".format(
+                        applied=str(data.get(QA_RERANK_COVERAGE_GUARD_APPLIED)).lower(),
+                        added=data.get(QA_RERANK_COVERAGE_GUARD_ADDED_COUNT),
                     )
                 )
                 query_variants = data.get(QA_QUERY_VARIANT_TEXTS) or []

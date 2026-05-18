@@ -148,6 +148,15 @@ docs/dev-ops/rag-eval/
   - 追加观测：已新增 `qa_pre_rerank_documents` / runner `pre_rerank_documents`，用于对比 rerank 前候选池和最终 `documents`。下一步应先诊断 candidate coverage、rerank final topK 和 answer prompt，不直接跳 LLM rewrite。
   - pre-rerank 复测结论：用户重启 8099 后，RAG-10 报告显示 chunkIndex=5 已进入 `pre_rerank_documents` 第 4 位，但最终 `documents` 不包含 chunk 5；因此当前断点收窄为 `LOCAL_BGE` rerank/final topK 淘汰目标 chunk。下一步建议先跑 `rerankPolicy=PASSTHROUGH` 对照。
   - PASSTHROUGH 对照结论：严格顺序切 `rerankPolicy=PASSTHROUGH` 并 armory 后，RAG-10 报告显示 chunkIndex=5 进入最终 `documents` 第 4 位，literal_hit 从 `2/5` 变为 `5/5`。测试后已恢复 `rerankPolicy=LOCAL_BGE`。下一步方向转为 rerank 保护策略 / final context coverage guard，而不是继续强化 query rewrite。
+- **Step 6.2 Rerank coverage guard 最小验证版 — RAG-10 live smoke 通过（May 18）**：
+  - 实现方向：在真实 rerank 后保护非原始 query variant 的前 2 个候选；如果保护候选缺席 final documents，则补回并优先替换尾部非保护 chunk，不扩大 finalTopK。
+  - 观测字段：新增 `qa_rerank_coverage_guard_applied` / `qa_rerank_coverage_guard_added_count` / `coverageGuardAdded`，runner 报告展示 `coverage_guard` 与 document 级标记。
+  - 当前验证：`mvn -q -pl ai-agent-domain -am compile -DskipTests`、`mvn -q -pl ai-agent-boot -am compile -DskipTests`、`python3 -m py_compile docs/dev-ops/rag-eval/rag_eval_runner.py`、`git diff --check` 已通过。
+  - live smoke：用户重启 8099 后，armory 返回装配成功，reranker health `loaded=true`；RAG-10 completed=true，`coverage_guard applied=true / added=1`，chunkIndex=5 以 `coverageGuardAdded=True` 进入最终 `documents` 第 3 位，literal_hit=`5/5`。
+  - 验证产物：`results/step6.2-coverage-guard/rag-eval-result-step6.2-rag10-guard.md`
+  - 窄回归：RAG-04 / RAG-07 / RAG-10 / RAG-14 completed=true；RAG-04 仍 `3/3` 且 guard=false；RAG-07 保持拒答且 guard=false；RAG-10 `5/5` 且 guard=true added=1；RAG-14 保持英文负证据拒答且 guard=false。
+  - 回归产物：`results/step6.2-coverage-guard/rag-eval-result-step6.2-narrow-regression.md`
+  - 下一步：做 diff review 后提交 Step 6.2；后续若要从验证方案升级为通用方案，再比较 query-aware rerank / variant RRF / 更细 coverage 策略。
 
 ### 2.2 关键认知（必读，否则会重复踩坑）
 
@@ -808,7 +817,7 @@ fc49eb4 docs: RAG eval 接力计划 + 历史评测产物归档
 
 1. Read 这份 `PLAN.md` 全文（特别是 §3 D10-D16：Hybrid、Rerank、A/B 归因与 Step 5.4 工程化收口）
 2. 确认 §3 commit 范围是否已落地（`git log --oneline -10` 看 `cc20ba4`、`176abc5`、`c95aabd`、`631ffd2` 等 Step 5 提交）
-3. 当前游标：**Step 6.1 Query rewrite 首轮 smoke 已完成；rewrite 机制进入运行链路，但 RAG-10 仍 2/5**。下一步不要直接扩大成 LLM rewrite，先定位 chunkIndex=5 在 candidate / rerank / final context / answer generation 哪一层丢失或未被使用。
+3. 当前游标：**Step 6.2 coverage guard 窄回归已通过**。下一步不要直接扩大成 LLM rewrite，先做 diff review 并提交当前 Step 6.2；后续再讨论 query-aware rerank / variant RRF / RAG-fusion / HyDE。
 4. 如果改 yml / 重启 backend / 重灌向量库后再跑 eval：必须先预热 `POST http://localhost:8099/api/v1/agent/armory_agent` body `{"agentId":"rag_demo"}`（未预热直接打 auto_agent 会 HTTP 500，duration ~5ms，看似 endpoint 死了）
 5. **不要**自行重跑 v1/v2/v3 中任何一轮——Phase A 已锁定参数 250/109，重跑只会消耗 LLM 配额且 score 必然飘动（embedding 不变 score 应稳定，LLM 输出会因 sampling 飘）
 
