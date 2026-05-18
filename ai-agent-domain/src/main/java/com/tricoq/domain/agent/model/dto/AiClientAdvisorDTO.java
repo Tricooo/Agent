@@ -107,6 +107,8 @@ public class AiClientAdvisorDTO {
         private int rrfK = 60;
 
         private String rerankPolicy;
+
+        private String rewritePolicy;
     }
 
 }

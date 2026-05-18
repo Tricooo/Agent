@@ -8,6 +8,8 @@ import com.tricoq.domain.agent.model.enums.AiClientAdvisorTypeEnumVO;
 import com.tricoq.domain.agent.service.armory.node.factory.DefaultArmoryStrategyFactory;
 import com.tricoq.domain.agent.service.rag.rerank.DocumentReranker;
 import com.tricoq.domain.agent.service.rag.rerank.factory.DocumentRerankerFactory;
+import com.tricoq.domain.agent.service.rag.rewrite.QueryRewriter;
+import com.tricoq.domain.agent.service.rag.rewrite.factory.QueryRewriterFactory;
 import com.tricoq.types.framework.chain.StrategyHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,6 +34,8 @@ public class AiClientAdvisorNode extends AbstractArmorySupport {
     private final VectorStore vectorStore;
 
     protected final DocumentRerankerFactory documentRerankerFactory;
+
+    protected final QueryRewriterFactory queryRewriterFactory;
 
     /**
      * 节点自身处理逻辑
@@ -67,7 +71,10 @@ public class AiClientAdvisorNode extends AbstractArmorySupport {
         DocumentReranker reranker = documentRerankerFactory.getDocumentReranker(
                 advisorVO.getRagAnswer().getRerankPolicy()
         );
-        return vo.createAdvisor(advisorVO, vectorStore, reranker);
+        QueryRewriter queryRewriter = queryRewriterFactory.getQueryRewriter(
+                advisorVO.getRagAnswer().getRewritePolicy()
+        );
+        return vo.createAdvisor(advisorVO, vectorStore, reranker, queryRewriter);
     }
 
 

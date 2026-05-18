@@ -1,7 +1,7 @@
 # RAG Eval 自动化 — 计划与状态
 
 > 这份文档是 RAG 评测链路工作的 single source of truth。任何接手会话先读这里。
-> 最后更新：2026-05-14（D16：Step 5.4 Rerank 工程化收口已完成）
+> 最后更新：2026-05-18（D17：Step 6.1 multi-query live smoke 已完成）
 
 ## 目录组织
 
@@ -32,7 +32,8 @@ docs/dev-ops/rag-eval/
     ├── step5.1-rerank-abstraction/ ← DocumentReranker 抽象接入 smoke（May 13）
     ├── step5.2-http-rerank-live/   ← 本地 bge reranker HTTP 接入 smoke（May 14）
     ├── step5.3-rerank-ab/          ← PASSTHROUGH vs LOCAL_BGE 全量 A/B（May 14）
-    └── step5.4-rerank-engineering/ ← 配置化 / fallback smoke / 生产化口径（May 14）
+    ├── step5.4-rerank-engineering/ ← 配置化 / fallback smoke / 生产化口径（May 14）
+    └── step6.1-multi-query/        ← Query rewrite 首轮 RAG-10 smoke（May 18）
 ```
 
 > 归档原则：按"评测口径是否一致"分。F-fix 是 schema 硬边界——之前的产物没有 `retrieved/score/empty` 三列，永久不可与之后互比 score。
@@ -138,6 +139,15 @@ docs/dev-ops/rag-eval/
   - 验证产物：`results/step5.4-rerank-engineering/rag-eval-result-step5.4-live-rag04.md` / `rag-eval-result-step5.4-fallback-rag04.md` / `rag-eval-result-step5.4-disabled-rag04.md`
   - 关键结论：正常服务时 `LOCAL_BGE` applied=true；服务不可用或配置禁用时自动降级 `PASSTHROUGH`，主链路仍 completed=true，报告能看到 failure reason。
   - 详细决策见 §3 D16
+- **Step 6.1 Query rewrite 首轮 smoke — 已完成（May 18）**：
+  - 实现方向：`QueryRewriter / RewriteResult / RewritePolicy / QueryRewriterFactory` 接入 `RagAnswerAdvisor`，原 query 永远保留为 variant 1，多 variant 同步检索后按 rank 轮询去重合并，再进入既有 rerank/context assembly。
+  - 配置入口：`ai_client_advisor.rag_advisor_grafana.ext_param.rewritePolicy=HEURISTIC_MULTI_QUERY`；重启/改 DB 后仍需 `POST /api/v1/agent/armory_agent {"agentId":"rag_demo"}` 重装配。
+  - 验证产物：`results/step6.1-multi-query/rag-eval-result-step6.1-rag10.md`
+  - 关键观测：报告显示 `query_rewrite mode=HEURISTIC_MULTI_QUERY / variants=2`，document attribution 出现 `queryVariantIndex/queryVariantText/queryVariantRank`，证明 rewrite 机制进入运行链路。
+  - 当前边界：RAG-10 literal 仍为 `2/5`，缺 `正常范围/警告范围/危险范围`；完整“内存数据解释”段在 source lines 160-164 / vector chunkIndex=5，但本轮最终上下文没有稳定把该 chunk 送入答案。
+  - 追加观测：已新增 `qa_pre_rerank_documents` / runner `pre_rerank_documents`，用于对比 rerank 前候选池和最终 `documents`。下一步应先诊断 candidate coverage、rerank final topK 和 answer prompt，不直接跳 LLM rewrite。
+  - pre-rerank 复测结论：用户重启 8099 后，RAG-10 报告显示 chunkIndex=5 已进入 `pre_rerank_documents` 第 4 位，但最终 `documents` 不包含 chunk 5；因此当前断点收窄为 `LOCAL_BGE` rerank/final topK 淘汰目标 chunk。下一步建议先跑 `rerankPolicy=PASSTHROUGH` 对照。
+  - PASSTHROUGH 对照结论：严格顺序切 `rerankPolicy=PASSTHROUGH` 并 armory 后，RAG-10 报告显示 chunkIndex=5 进入最终 `documents` 第 4 位，literal_hit 从 `2/5` 变为 `5/5`。测试后已恢复 `rerankPolicy=LOCAL_BGE`。下一步方向转为 rerank 保护策略 / final context coverage guard，而不是继续强化 query rewrite。
 
 ### 2.2 关键认知（必读，否则会重复踩坑）
 
@@ -798,7 +808,7 @@ fc49eb4 docs: RAG eval 接力计划 + 历史评测产物归档
 
 1. Read 这份 `PLAN.md` 全文（特别是 §3 D10-D16：Hybrid、Rerank、A/B 归因与 Step 5.4 工程化收口）
 2. 确认 §3 commit 范围是否已落地（`git log --oneline -10` 看 `cc20ba4`、`176abc5`、`c95aabd`、`631ffd2` 等 Step 5 提交）
-3. 当前游标：**Step 5.4 Rerank 工程化收口已完成；代码待用户 review 后自行提交，功能主线可进入 Step 6 Query rewrite**。真实 reranker 已接入并完成 A/B，配置化、降级 smoke、观测与面试口径已收口。
+3. 当前游标：**Step 6.1 Query rewrite 首轮 smoke 已完成；rewrite 机制进入运行链路，但 RAG-10 仍 2/5**。下一步不要直接扩大成 LLM rewrite，先定位 chunkIndex=5 在 candidate / rerank / final context / answer generation 哪一层丢失或未被使用。
 4. 如果改 yml / 重启 backend / 重灌向量库后再跑 eval：必须先预热 `POST http://localhost:8099/api/v1/agent/armory_agent` body `{"agentId":"rag_demo"}`（未预热直接打 auto_agent 会 HTTP 500，duration ~5ms，看似 endpoint 死了）
 5. **不要**自行重跑 v1/v2/v3 中任何一轮——Phase A 已锁定参数 250/109，重跑只会消耗 LLM 配额且 score 必然飘动（embedding 不变 score 应稳定，LLM 输出会因 sampling 飘）
 

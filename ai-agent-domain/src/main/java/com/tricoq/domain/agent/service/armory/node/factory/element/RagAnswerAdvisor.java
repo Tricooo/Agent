@@ -3,6 +3,7 @@ package com.tricoq.domain.agent.service.armory.node.factory.element;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.TypeReference;
 import com.tricoq.domain.agent.model.dto.RerankResult;
+import com.tricoq.domain.agent.model.dto.RewriteResult;
 import com.tricoq.domain.agent.model.entity.VectorKeywordEntity;
 import com.tricoq.domain.agent.model.enums.KeyWordPolicy;
 import com.tricoq.domain.agent.model.valobj.RagObservationKeys;
@@ -12,6 +13,9 @@ import com.tricoq.domain.agent.model.valobj.RagObservationKeys.Qa;
 import com.tricoq.domain.agent.model.valobj.RetrievalOptionsVO;
 import com.tricoq.domain.agent.service.rag.rerank.DocumentReranker;
 import com.tricoq.domain.agent.service.rag.rerank.PassthroughDocumentReranker;
+import com.tricoq.domain.agent.service.rag.rewrite.PassthroughQueryRewriter;
+import com.tricoq.domain.agent.service.rag.rewrite.QueryRewriter;
+import com.tricoq.domain.agent.service.rag.rewrite.enums.RewritePolicy;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.collections4.MapUtils;
@@ -66,6 +70,7 @@ public class RagAnswerAdvisor implements BaseAdvisor {
     private final RetrievalOptionsVO retrievalOptions;
     private final RetrievalTopKPlan retrievalTopKPlan;
     private final DocumentReranker documentReranker;
+    private final QueryRewriter queryRewriter;
 
     private static final int DEFAULT_MAX_CONTEXT_CHARS = 6000;
     private static final String CHUNK_TRUNCATED_NOTICE = "\n...[chunk truncated]...\n";
@@ -106,10 +111,17 @@ public class RagAnswerAdvisor implements BaseAdvisor {
 
     public RagAnswerAdvisor(VectorStore vectorStore, SearchRequest searchRequest,
                             RetrievalOptionsVO retrievalOptions, DocumentReranker documentReranker) {
+        this(vectorStore, searchRequest, retrievalOptions, documentReranker, new PassthroughQueryRewriter());
+    }
+
+    public RagAnswerAdvisor(VectorStore vectorStore, SearchRequest searchRequest,
+                            RetrievalOptionsVO retrievalOptions, DocumentReranker documentReranker,
+                            QueryRewriter queryRewriter) {
         this.vectorStore = vectorStore;
         this.searchRequest = searchRequest;
         this.retrievalOptions = retrievalOptions == null ? new RetrievalOptionsVO() : retrievalOptions;
         this.documentReranker = documentReranker == null ? new PassthroughDocumentReranker() : documentReranker;
+        this.queryRewriter = queryRewriter == null ? new PassthroughQueryRewriter() : queryRewriter;
         this.retrievalTopKPlan = buildTopKPlan(searchRequest.getTopK());
         this.userTextAdvisor = """
                 
@@ -156,17 +168,19 @@ public class RagAnswerAdvisor implements BaseAdvisor {
         String userText = chatClientRequest.prompt().getUserMessage().getText();
         String advisedUserText = userText + System.lineSeparator() + userTextAdvisor;
 
-        SearchRequest request = SearchRequest.from(searchRequest).query(userText)
-                .topK(retrievalTopKPlan.finalTopK())
-                .filterExpression(doGetFilterExpression(context)).build();
+        SearchRequest request = buildSearchRequest(userText, context);
         double candidateSimilarityThreshold = candidateSimilarityThreshold(request);
+        RewriteResult rewriteResult = rewriteQuery(userText);
+        List<String> queryVariants = normalizeQueryVariants(rewriteResult, userText);
 
-        List<Document> documents = retrieveDocuments(userText, request);
+        List<Document> documents = tagBeforeRerankRank(retrieveDocuments(queryVariants, request));
 
         if (CollectionUtils.isEmpty(documents)) {
             // 空召回不可静默，是 RAG 链路重要状态；同时不能退化成普通聊天，仍要把“无可用上下文”的边界写进 prompt。
             String emptyContext = EMPTY_RETRIEVAL_CONTEXT;
             HashMap<String, Object> emptyRetrievalContext = new HashMap<>(unmodifiedContext);
+            putRewriteObservations(emptyRetrievalContext, rewriteResult, queryVariants);
+            emptyRetrievalContext.put(Qa.PRE_RERANK_DOCUMENTS, List.of());
             emptyRetrievalContext.put(Qa.RETRIEVED_DOCUMENTS, List.of());
             emptyRetrievalContext.put(Qa.RETRIEVAL_EMPTY, true);
             emptyRetrievalContext.put(AdvisorContext.QUESTION_ANSWER_CONTEXT, emptyContext);
@@ -214,6 +228,7 @@ public class RagAnswerAdvisor implements BaseAdvisor {
         Double minScore = minScore(rerankDocuments);
         Double maxScore = maxScore(rerankDocuments);
         Map<String, Object> advisedUserParams = new HashMap<>(unmodifiedContext);
+        putRewriteObservations(advisedUserParams, rewriteResult, queryVariants);
         //给LLM看
         advisedUserParams.put(AdvisorContext.QUESTION_ANSWER_CONTEXT, documentContext);
         advisedUserParams.put(Qa.CONTEXT_MAX_CHARS, DEFAULT_MAX_CONTEXT_CHARS);
@@ -235,6 +250,7 @@ public class RagAnswerAdvisor implements BaseAdvisor {
 
 
         //给人看 便于看到引用的文本
+        advisedUserParams.put(Qa.PRE_RERANK_DOCUMENTS, documents);
         advisedUserParams.put(Qa.RETRIEVED_DOCUMENTS, rerankDocuments);
         advisedUserParams.put(Qa.RETRIEVED_DOCUMENT_COUNT, rerankDocuments.size());
         advisedUserParams.put(Qa.RETRIEVAL_EMPTY, false);
@@ -242,8 +258,9 @@ public class RagAnswerAdvisor implements BaseAdvisor {
         PromptTemplate promptTemplate = new PromptTemplate(advisedUserText);
         String rendered = promptTemplate.render(Map.of(AdvisorContext.QUESTION_ANSWER_CONTEXT, documentContext));
 
-        log.info("RAG检索结果: query={}, retrieved={}, selected={}, dropped={}, truncated={}, empty={}, similarityThreshold={}, minScore={}, maxScore={}",
+        log.info("RAG检索结果: query={}, queryVariants={}, retrieved={}, selected={}, dropped={}, truncated={}, empty={}, similarityThreshold={}, minScore={}, maxScore={}",
                 userText,
+                queryVariants.size(),
                 documents.size(),
                 renderedContext.selectedCount(),
                 renderedContext.droppedCount(),
@@ -264,6 +281,151 @@ public class RagAnswerAdvisor implements BaseAdvisor {
                         .build())
                 .context(advisedUserParams)
                 .build();
+    }
+
+    private SearchRequest buildSearchRequest(String userText, Map<String, Object> context) {
+        return SearchRequest.from(searchRequest).query(userText)
+                .topK(retrievalTopKPlan.finalTopK())
+                .filterExpression(doGetFilterExpression(context)).build();
+    }
+
+    private RewriteResult rewriteQuery(String userText) {
+        try {
+            RewriteResult rewriteResult = queryRewriter.rewrite(userText);
+            if (rewriteResult != null) {
+                return rewriteResult;
+            }
+        } catch (Exception e) {
+            log.warn("query rewrite failed, fallback to passthrough: query={}, rewriter={}",
+                    userText, queryRewriter.getClass().getSimpleName(), e);
+        }
+        return passthroughRewriteResult(userText);
+    }
+
+    private RewriteResult passthroughRewriteResult(String userText) {
+        return RewriteResult.builder()
+                .originUserText(userText)
+                .queryVariantTexts(List.of(userText))
+                .rewriteMode(RewritePolicy.PASSTHROUGH.getPolicyName())
+                .build();
+    }
+
+    private List<String> normalizeQueryVariants(RewriteResult rewriteResult, String userText) {
+        Set<String> variants = new LinkedHashSet<>();
+        addQueryVariant(variants, userText);
+        if (rewriteResult != null && CollectionUtils.isNotEmpty(rewriteResult.getQueryVariantTexts())) {
+            for (String variant : rewriteResult.getQueryVariantTexts()) {
+                addQueryVariant(variants, variant);
+            }
+        }
+        return List.copyOf(variants);
+    }
+
+    private void addQueryVariant(Set<String> variants, String variant) {
+        if (StringUtils.isBlank(variant)) {
+            return;
+        }
+        variants.add(variant.trim());
+    }
+
+    private void putRewriteObservations(Map<String, Object> params, RewriteResult rewriteResult, List<String> queryVariants) {
+        String rewriteMode = rewriteResult == null
+                ? RewritePolicy.PASSTHROUGH.getPolicyName()
+                : StringUtils.defaultIfBlank(rewriteResult.getRewriteMode(), RewritePolicy.PASSTHROUGH.getPolicyName());
+        params.put(Qa.QUERY_REWRITE_MODE, rewriteMode);
+        params.put(Qa.QUERY_VARIANT_COUNT, queryVariants.size());
+        params.put(Qa.QUERY_VARIANT_TEXTS, queryVariants);
+    }
+
+    private List<Document> tagBeforeRerankRank(List<Document> documents) {
+        if (CollectionUtils.isEmpty(documents)) {
+            return List.of();
+        }
+
+        List<Document> taggedDocuments = new ArrayList<>(documents.size());
+        for (int i = 0; i < documents.size(); i++) {
+            Document document = documents.get(i);
+            Map<String, Object> metadata = new HashMap<>(document.getMetadata());
+            metadata.put(DocumentMetadata.BEFORE_RERANK_RANK, i + 1);
+            taggedDocuments.add(document.mutate()
+                    .metadata(metadata)
+                    .build());
+        }
+        return taggedDocuments;
+    }
+
+    private List<Document> retrieveDocuments(List<String> queryVariants, SearchRequest request) {
+        if (CollectionUtils.isEmpty(queryVariants)) {
+            return List.of();
+        }
+
+        List<List<Document>> variantResults = new ArrayList<>(queryVariants.size());
+        for (int i = 0; i < queryVariants.size(); i++) {
+            String queryVariant = queryVariants.get(i);
+            SearchRequest variantRequest = SearchRequest.from(request)
+                    .query(queryVariant)
+                    .build();
+            List<Document> variantDocuments = retrieveDocuments(queryVariant, variantRequest);
+            variantResults.add(tagQueryVariant(variantDocuments, i + 1, queryVariant));
+        }
+
+        return mergeQueryVariantResults(variantResults, retrievalTopKPlan.candidateTopK());
+    }
+
+    private List<Document> tagQueryVariant(List<Document> documents, int variantIndex, String variantText) {
+        if (CollectionUtils.isEmpty(documents)) {
+            return List.of();
+        }
+
+        List<Document> taggedDocuments = new ArrayList<>(documents.size());
+        for (int i = 0; i < documents.size(); i++) {
+            Document document = documents.get(i);
+            Map<String, Object> metadata = new HashMap<>(document.getMetadata());
+            metadata.put(DocumentMetadata.QUERY_VARIANT_INDEX, variantIndex);
+            metadata.put(DocumentMetadata.QUERY_VARIANT_TEXT, variantText);
+            metadata.put(DocumentMetadata.QUERY_VARIANT_RANK, i + 1);
+            taggedDocuments.add(document.mutate()
+                    .metadata(metadata)
+                    .build());
+        }
+        return taggedDocuments;
+    }
+
+    private List<Document> mergeQueryVariantResults(List<List<Document>> variantResults, int topK) {
+        if (CollectionUtils.isEmpty(variantResults) || topK <= 0) {
+            return List.of();
+        }
+
+        int maxSize = 0;
+        for (List<Document> documents : variantResults) {
+            if (documents != null) {
+                maxSize = Math.max(maxSize, documents.size());
+            }
+        }
+
+        Map<String, Document> mergedDocuments = new LinkedHashMap<>();
+        for (int rank = 0; rank < maxSize && mergedDocuments.size() < topK; rank++) {
+            for (List<Document> documents : variantResults) {
+                if (CollectionUtils.isEmpty(documents) || rank >= documents.size()) {
+                    continue;
+                }
+                Document document = documents.get(rank);
+                String key = mergedDocumentKey(document, rank);
+                mergedDocuments.putIfAbsent(key, document);
+                if (mergedDocuments.size() >= topK) {
+                    break;
+                }
+            }
+        }
+        return new ArrayList<>(mergedDocuments.values());
+    }
+
+    private String mergedDocumentKey(Document document, int rank) {
+        String key = documentKey(document);
+        if (StringUtils.isNotBlank(key)) {
+            return key;
+        }
+        return "rank:" + rank + ":text:" + StringUtils.defaultString(document.getText()).hashCode();
     }
 
     private List<Document> retrieveDocuments(String userText, SearchRequest request) {

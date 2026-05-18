@@ -40,6 +40,11 @@ public final class RagObservationKeys {
         public static final String RETRIEVED_DOCUMENTS = "qa_retrieved_documents";
 
         /**
+         * rerank 前的候选文档列表，用于诊断候选池覆盖与 rerank 淘汰原因。
+         */
+        public static final String PRE_RERANK_DOCUMENTS = "qa_pre_rerank_documents";
+
+        /**
          * 最终进入上下文的文档数量。
          */
         public static final String RETRIEVED_DOCUMENT_COUNT = "qa_retrieved_document_count";
@@ -128,6 +133,21 @@ public final class RagObservationKeys {
          * 本次 rerank 调用的服务端点，用于排查本地服务和远端服务配置。
          */
         public static final String RERANK_ENDPOINT = "qa_rerank_endpoint";
+
+        /**
+         * query rewrite 模式，例如 PASSTHROUGH / HEURISTIC_MULTI_QUERY。
+         */
+        public static final String QUERY_REWRITE_MODE = "qa_query_rewrite_mode";
+
+        /**
+         * 本次实际参与检索的 query variant 数量。
+         */
+        public static final String QUERY_VARIANT_COUNT = "qa_query_variant_count";
+
+        /**
+         * 本次实际参与检索的 query variant 文本列表。
+         */
+        public static final String QUERY_VARIANT_TEXTS = "qa_query_variant_texts";
 
         private Qa() {
         }
@@ -244,6 +264,21 @@ public final class RagObservationKeys {
          * rerank 模型对当前文档和查询相关性的打分。
          */
         public static final String RERANK_SCORE = "rerankScore";
+
+        /**
+         * 当前 chunk 最先由第几个 query variant 召回，1 表示原始 query。
+         */
+        public static final String QUERY_VARIANT_INDEX = "queryVariantIndex";
+
+        /**
+         * 当前 chunk 最先由哪个 query variant 文本召回。
+         */
+        public static final String QUERY_VARIANT_TEXT = "queryVariantText";
+
+        /**
+         * 当前 chunk 在对应 query variant 召回结果内的排序。
+         */
+        public static final String QUERY_VARIANT_RANK = "queryVariantRank";
 
         private DocumentMetadata() {
         }

@@ -22,6 +22,7 @@ from urllib.request import Request, urlopen
 DEFAULT_API_URL = "http://localhost:8099/api/v1/agent/auto_agent"
 
 QA_RETRIEVED_DOCUMENTS = "qa_retrieved_documents"
+QA_PRE_RERANK_DOCUMENTS = "qa_pre_rerank_documents"
 QA_RETRIEVED_DOCUMENT_COUNT = "qa_retrieved_document_count"
 QA_RETRIEVAL_EMPTY = "qa_retrieval_empty"
 QA_SIMILARITY_THRESHOLD = "qa_similarity_threshold"
@@ -40,6 +41,9 @@ QA_RERANK_FINAL_COUNT = "qa_rerank_final_count"
 QA_RERANK_FAILURE_REASON = "qa_rerank_failure_reason"
 QA_RERANK_MODEL_NAME = "qa_rerank_model_name"
 QA_RERANK_ENDPOINT = "qa_rerank_endpoint"
+QA_QUERY_REWRITE_MODE = "qa_query_rewrite_mode"
+QA_QUERY_VARIANT_COUNT = "qa_query_variant_count"
+QA_QUERY_VARIANT_TEXTS = "qa_query_variant_texts"
 
 DOC_SOURCE_PATH = "sourcePath"
 DOC_CHUNK_INDEX = "chunkIndex"
@@ -55,6 +59,9 @@ DOC_RERANK_RANK = "rerankRank"
 DOC_RERANK_SCORE = "rerankScore"
 DOC_RERANK_APPLIED = "rerankApplied"
 DOC_RERANK_MODE = "rerankMode"
+DOC_QUERY_VARIANT_INDEX = "queryVariantIndex"
+DOC_QUERY_VARIANT_TEXT = "queryVariantText"
+DOC_QUERY_VARIANT_RANK = "queryVariantRank"
 
 
 def load_cases(path: Path) -> list[dict[str, Any]]:
@@ -228,12 +235,12 @@ def _document_preview(document: dict[str, Any], limit: int = 180) -> str:
     return answer_preview(str(text), limit)
 
 
-def _append_retrieved_documents(lines: list[str], data: dict[str, Any]) -> None:
-    documents = data.get(QA_RETRIEVED_DOCUMENTS) or []
+def _append_document_list(lines: list[str], data: dict[str, Any], documents_key: str, title: str) -> None:
+    documents = data.get(documents_key) or []
     if not documents:
         return
 
-    lines.append("  - documents:")
+    lines.append(f"  - {title}:")
     for doc_index, document in enumerate(documents, start=1):
         if not isinstance(document, dict):
             lines.append(f"    - #{doc_index}: `{md_escape(document)}`")
@@ -252,7 +259,8 @@ def _append_retrieved_documents(lines: list[str], data: dict[str, Any]) -> None:
                 "keywordSkippedReason=`{keyword_skipped_reason}`, "
                 "beforeRerankRank=`{before_rerank_rank}`, rerankRank=`{rerank_rank}`, "
                 "rerankScore=`{rerank_score}`, rerankApplied=`{rerank_applied}`, "
-                "rerankMode=`{rerank_mode}`"
+                "rerankMode=`{rerank_mode}`, queryVariantIndex=`{query_variant_index}`, "
+                "queryVariantRank=`{query_variant_rank}`, queryVariantText=`{query_variant_text}`"
             ).format(
                 idx=doc_index,
                 score=_fmt_score(document.get("score")),
@@ -270,11 +278,22 @@ def _append_retrieved_documents(lines: list[str], data: dict[str, Any]) -> None:
                 rerank_score=_fmt_score(metadata.get(DOC_RERANK_SCORE)),
                 rerank_applied=md_escape(_metadata_value(metadata, DOC_RERANK_APPLIED)),
                 rerank_mode=md_escape(_metadata_value(metadata, DOC_RERANK_MODE)),
+                query_variant_index=md_escape(_metadata_value(metadata, DOC_QUERY_VARIANT_INDEX)),
+                query_variant_rank=md_escape(_metadata_value(metadata, DOC_QUERY_VARIANT_RANK)),
+                query_variant_text=md_escape(_metadata_value(metadata, DOC_QUERY_VARIANT_TEXT)),
             )
         )
         preview = _document_preview(document)
         if preview:
             lines.append(f"      - preview: {md_escape(preview)}")
+
+
+def _append_pre_rerank_documents(lines: list[str], data: dict[str, Any]) -> None:
+    _append_document_list(lines, data, QA_PRE_RERANK_DOCUMENTS, "pre_rerank_documents")
+
+
+def _append_retrieved_documents(lines: list[str], data: dict[str, Any]) -> None:
+    _append_document_list(lines, data, QA_RETRIEVED_DOCUMENTS, "documents")
 
 
 def write_markdown(path: Path, results: list[dict[str, Any]], api_url: str, agent_id: str) -> None:
@@ -292,7 +311,7 @@ def write_markdown(path: Path, results: list[dict[str, Any]], api_url: str, agen
     lines.append(">")
     lines.append("> `retrieved` / `score` / `empty` 三列的 `—` 表示**没拿到成功的 ChatResponse metadata**，不等价于\"无检索\"。当前实现把 retrieval SSE 帧放在 `.call().chatResponse()` 返回之后才发，所以 LLM 调用失败时（即使 RAG 检索本身成功）三列都会是 `—`。要区分\"检索失败\"和\"生成失败\"，对照 `error` 列 / details 区 / backend log。")
     lines.append(">")
-    lines.append("> Details 区的 `documents` 会展开 top-K chunk attribution；HYBRID 模式下 `score` 是 RRF score，原始向量分与关键词分分别看 `vectorScore` / `keywordScore`；真实 rerank 分数看 `rerankScore`；rerank 服务状态看 `rerank_runtime` 的 model / endpoint / failure_reason；keyword 分支未参与时看 `keywordSkippedReason`。")
+    lines.append("> Details 区的 `pre_rerank_documents` 展开 rerank 前候选池，`documents` 展开最终 top-K chunk attribution；HYBRID 模式下 `score` 是 RRF score，原始向量分与关键词分分别看 `vectorScore` / `keywordScore`；真实 rerank 分数看 `rerankScore`；rerank 服务状态看 `rerank_runtime` 的 model / endpoint / failure_reason；keyword 分支未参与时看 `keywordSkippedReason`。")
     lines.append("")
     lines.append("| id | type | completed | duration_ms | should_answer | retrieved | score | empty | literal_hit | missed_points | answer_preview | manual_pass |")
     lines.append("|---|---|---:|---:|---:|---:|---|---:|---:|---|---|---|")
@@ -392,6 +411,17 @@ def write_markdown(path: Path, results: list[dict[str, Any]], api_url: str, agen
                         reason=data.get(QA_RERANK_FAILURE_REASON),
                     )
                 )
+                query_variants = data.get(QA_QUERY_VARIANT_TEXTS) or []
+                if not isinstance(query_variants, list):
+                    query_variants = [query_variants]
+                lines.append(
+                    "  - query_rewrite: mode `{mode}` / variants `{count}` / texts `{texts}`".format(
+                        mode=data.get(QA_QUERY_REWRITE_MODE),
+                        count=data.get(QA_QUERY_VARIANT_COUNT),
+                        texts=md_escape(" | ".join(str(item) for item in query_variants)),
+                    )
+                )
+                _append_pre_rerank_documents(lines, data)
                 _append_retrieved_documents(lines, data)
         lines.append("")
         lines.append("answer:")
