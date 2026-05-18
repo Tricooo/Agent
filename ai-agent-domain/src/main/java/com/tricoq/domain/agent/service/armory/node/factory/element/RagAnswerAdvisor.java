@@ -406,36 +406,53 @@ public class RagAnswerAdvisor implements BaseAdvisor {
             return List.of();
         }
 
-        int maxSize = 0;
+        Map<String, QueryFusionDocumentCandidate> candidates = new HashMap<>();
         for (List<Document> documents : variantResults) {
-            if (documents != null) {
-                maxSize = Math.max(maxSize, documents.size());
+            if (CollectionUtils.isEmpty(documents)) {
+                continue;
             }
-        }
-
-        Map<String, Document> mergedDocuments = new LinkedHashMap<>();
-        for (int rank = 0; rank < maxSize && mergedDocuments.size() < topK; rank++) {
-            for (List<Document> documents : variantResults) {
-                if (CollectionUtils.isEmpty(documents) || rank >= documents.size()) {
+            for (int i = 0; i < documents.size(); i++) {
+                Document document = documents.get(i);
+                String key = mergedDocumentKey(document);
+                if (StringUtils.isBlank(key)) {
                     continue;
                 }
-                Document document = documents.get(rank);
-                String key = mergedDocumentKey(document, rank);
-                mergedDocuments.putIfAbsent(key, document);
-                if (mergedDocuments.size() >= topK) {
-                    break;
+                QueryFusionDocumentCandidate candidate = candidates.get(key);
+                if (candidate == null) {
+                    candidate = new QueryFusionDocumentCandidate(key, document);
+                    candidates.put(key, candidate);
                 }
+                int rank = i + 1;
+                candidate.addScore(calculateScore(rank));
+                candidate.recordHit(document, rank);
             }
         }
-        return new ArrayList<>(mergedDocuments.values());
+
+        if (MapUtils.isEmpty(candidates)) {
+            return List.of();
+        }
+
+        List<QueryFusionDocumentCandidate> candidateList = new ArrayList<>(candidates.values());
+        candidateList.sort(
+                Comparator.comparing(QueryFusionDocumentCandidate::getScore).reversed()
+                        .thenComparing(QueryFusionDocumentCandidate::getBestQueryVariantRank)
+                        .thenComparing(QueryFusionDocumentCandidate::getFirstQueryVariantIndex)
+                        .thenComparing(QueryFusionDocumentCandidate::getKey)
+        );
+
+        List<Document> fusedDocuments = new ArrayList<>(Math.min(topK, candidateList.size()));
+        for (int i = 0; i < candidateList.size() && fusedDocuments.size() < topK; i++) {
+            fusedDocuments.add(toQueryFusionDocument(candidateList.get(i), i + 1));
+        }
+        return fusedDocuments;
     }
 
-    private String mergedDocumentKey(Document document, int rank) {
+    private String mergedDocumentKey(Document document) {
         String key = documentKey(document);
         if (StringUtils.isNotBlank(key)) {
             return key;
         }
-        return "rank:" + rank + ":text:" + StringUtils.defaultString(document.getText()).hashCode();
+        return "text:" + StringUtils.defaultString(document.getText()).hashCode();
     }
 
     private List<Document> retrieveDocuments(String userText, SearchRequest request) {
@@ -676,6 +693,21 @@ public class RagAnswerAdvisor implements BaseAdvisor {
                 .build();
     }
 
+    private Document toQueryFusionDocument(QueryFusionDocumentCandidate candidate, int fusionRank) {
+        Document document = candidate.getDocument();
+        Map<String, Object> metadata = new HashMap<>(document.getMetadata());
+        metadata.put(DocumentMetadata.QUERY_FUSION_SCORE, candidate.getScore());
+        metadata.put(DocumentMetadata.QUERY_FUSION_RANK, fusionRank);
+        metadata.put(DocumentMetadata.QUERY_VARIANT_HIT_COUNT, candidate.getHitCount());
+        metadata.put(DocumentMetadata.BEST_QUERY_VARIANT_RANK, candidate.getBestQueryVariantRank());
+        metadata.put(DocumentMetadata.QUERY_VARIANT_INDEXES, candidate.getQueryVariantIndexes());
+
+        return document.mutate()
+                .metadata(metadata)
+                .score(candidate.getScore())
+                .build();
+    }
+
     private void addMetadataIfPresent(Map<String, Object> metadata, String key, Object value) {
         if (value != null) {
             metadata.put(key, value);
@@ -732,6 +764,65 @@ public class RagAnswerAdvisor implements BaseAdvisor {
             boolean applied,
             int addedCount
     ) {
+    }
+
+    private static class QueryFusionDocumentCandidate {
+        private final String key;
+        private final Document document;
+        private final Set<Integer> queryVariantIndexes = new LinkedHashSet<>();
+        private double score;
+        private int bestQueryVariantRank = Integer.MAX_VALUE;
+        private int firstQueryVariantIndex = Integer.MAX_VALUE;
+
+        private QueryFusionDocumentCandidate(String key, Document document) {
+            this.key = key;
+            this.document = document;
+        }
+
+        private String getKey() {
+            return key;
+        }
+
+        private Document getDocument() {
+            return document;
+        }
+
+        private double getScore() {
+            return score;
+        }
+
+        private int getBestQueryVariantRank() {
+            return bestQueryVariantRank;
+        }
+
+        private int getFirstQueryVariantIndex() {
+            return firstQueryVariantIndex;
+        }
+
+        private int getHitCount() {
+            return queryVariantIndexes.size();
+        }
+
+        private List<Integer> getQueryVariantIndexes() {
+            return List.copyOf(queryVariantIndexes);
+        }
+
+        private void addScore(double score) {
+            this.score += score;
+        }
+
+        private void recordHit(Document document, int fallbackRank) {
+            Map<String, Object> metadata = document.getMetadata();
+            Integer variantIndex = metadataInteger(metadata, DocumentMetadata.QUERY_VARIANT_INDEX);
+            Integer variantRank = metadataInteger(metadata, DocumentMetadata.QUERY_VARIANT_RANK);
+            int effectiveRank = variantRank == null ? fallbackRank : variantRank;
+
+            if (variantIndex != null) {
+                queryVariantIndexes.add(variantIndex);
+                firstQueryVariantIndex = Math.min(firstQueryVariantIndex, variantIndex);
+            }
+            bestQueryVariantRank = Math.min(bestQueryVariantRank, effectiveRank);
+        }
     }
 
     private static class RrfDocumentCandidate {
@@ -794,6 +885,24 @@ public class RagAnswerAdvisor implements BaseAdvisor {
                 return RETRIEVAL_SOURCE_VECTOR;
             }
             return RETRIEVAL_SOURCE_KEYWORD;
+        }
+    }
+
+    private static Integer metadataInteger(Map<String, Object> metadata, String key) {
+        if (MapUtils.isEmpty(metadata)) {
+            return null;
+        }
+        Object value = metadata.get(key);
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        if (value == null || StringUtils.isBlank(value.toString())) {
+            return null;
+        }
+        try {
+            return Integer.parseInt(value.toString());
+        } catch (NumberFormatException e) {
+            return null;
         }
     }
 

@@ -1,7 +1,7 @@
 # RAG Eval 自动化 — 计划与状态
 
 > 这份文档是 RAG 评测链路工作的 single source of truth。任何接手会话先读这里。
-> 最后更新：2026-05-18（D17：Step 6.1 multi-query live smoke 已完成）
+> 最后更新：2026-05-18（D19：Step 6.3 RAG-fusion 窄回归通过）
 
 ## 目录组织
 
@@ -33,7 +33,9 @@ docs/dev-ops/rag-eval/
     ├── step5.2-http-rerank-live/   ← 本地 bge reranker HTTP 接入 smoke（May 14）
     ├── step5.3-rerank-ab/          ← PASSTHROUGH vs LOCAL_BGE 全量 A/B（May 14）
     ├── step5.4-rerank-engineering/ ← 配置化 / fallback smoke / 生产化口径（May 14）
-    └── step6.1-multi-query/        ← Query rewrite 首轮 RAG-10 smoke（May 18）
+    ├── step6.1-multi-query/        ← Query rewrite 首轮 RAG-10 smoke（May 18）
+    ├── step6.2-coverage-guard/     ← Rerank coverage guard RAG-10 smoke + 窄回归（May 18）
+    └── step6.3-rag-fusion/         ← Query-variant RRF / RAG-fusion 窄回归（May 18）
 ```
 
 > 归档原则：按"评测口径是否一致"分。F-fix 是 schema 硬边界——之前的产物没有 `retrieved/score/empty` 三列，永久不可与之后互比 score。
@@ -156,7 +158,43 @@ docs/dev-ops/rag-eval/
   - 验证产物：`results/step6.2-coverage-guard/rag-eval-result-step6.2-rag10-guard.md`
   - 窄回归：RAG-04 / RAG-07 / RAG-10 / RAG-14 completed=true；RAG-04 仍 `3/3` 且 guard=false；RAG-07 保持拒答且 guard=false；RAG-10 `5/5` 且 guard=true added=1；RAG-14 保持英文负证据拒答且 guard=false。
   - 回归产物：`results/step6.2-coverage-guard/rag-eval-result-step6.2-narrow-regression.md`
-  - 下一步：做 diff review 后提交 Step 6.2；后续若要从验证方案升级为通用方案，再比较 query-aware rerank / variant RRF / 更细 coverage 策略。
+  - 提交状态：已提交到 `main`，commit `1555cfb feat(rag): 增加 rerank coverage guard`。
+  - 当前边界：`HeuristicMultiQueryRewriter` 是针对 RAG-10 失败模式的启发式验证器，证明的是 query rewrite / multi-query / pre-rerank 观测 / coverage guard 链路可用，不等于已经具备强通用 rewrite 能力。
+- **Step 6.3 Query-variant RRF / RAG-fusion — 窄回归通过（May 18）**：
+  - 总目标：把 Step 6 从“启发式验证 query rewrite 猜想”升级为“可配置、可观测、可回退、可评测的 query rewrite + multi-query fusion 闭环”。
+  - 已实现 `RAG-fusion / query-variant RRF`：
+    - 触发场景：多路 query 已能召回候选，但结果重复、排序不稳定，或补充 query 找回的关键 chunk 容易在 candidate pool / rerank 阶段被挤掉。
+    - 原缺口：`mergeQueryVariantResults(...)` 只是 round-robin 去重，能验证 multi-query 链路，但不能表达“多路 query 共识越强，chunk 越应该靠前”。
+    - 解决问题：按 query variant 维度做 RRF，同一 chunk 被多路召回时累加 `1 / (rrfK + rank)`；输出融合后的 candidate pool，再进入现有 rerank / context assembly。
+    - 验证标准：RAG-10 关键 chunk 仍进入 pre-rerank candidate pool；RAG-04 不退；RAG-07 / RAG-14 拒答边界不破；报告能解释 chunk 是多路共识前移还是补充 query 单路带入。
+    - 窄回归产物：`results/step6.3-rag-fusion/rag-eval-result-step6.3-rag-fusion-narrow.md`。
+    - 窄回归结果：RAG-04 completed=true 且 literal_hit=`3/3`；RAG-10 completed=true 且 literal_hit=`5/5`；RAG-07 / RAG-14 仍保持拒答方向。
+    - 关键证据：RAG-10 中 `grafana-mcp-tools-guide.md#2` 从 Step 6.2 pre-rerank 第 7 位前移到 Step 6.3 pre-rerank 第 1 位，metadata 显示 `queryFusionScore=0.0313`、`queryVariantHitCount=2`、`queryVariantIndexes=[1, 2]`。
+    - 当前边界：RAG-fusion 改善的是 rerank 前 candidate pool；最终 `documents` 仍由 LOCAL_BGE rerank 与 coverage guard 决定。RAG-10 中 `chunk=2` 虽被 fusion 提到 pre-rerank 第 1，但未进入最终 topK，说明下一步应看 query-aware rerank / guard 配置化，而不是继续单纯堆 query。
+  - 已实现 `fusion metadata`：
+    - 触发场景：功能跑通但无法解释哪个 query variant 起作用、为什么某个 chunk 被前移或保留。
+    - 解决问题：在 document metadata 和 runner 报告中展示 `queryFusionScore`、`queryFusionRank`、`queryVariantHitCount`、`bestQueryVariantRank`、`queryVariantIndexes`。
+    - 验证标准：`pre_rerank_documents` / `documents` 都能展示 fusion 字段，且不破坏既有 `queryVariantIndex/queryVariantRank/rerankScore/coverageGuardAdded`。
+  - 后续 P0 `LLMQueryRewriter` 最小版：
+    - 触发场景：启发式规则覆盖不足，例如问题不包含固定意图词，或业务主题不在内存 / CPU / 磁盘 / 延迟 / 错误率列表里。
+    - 解决问题：由 LLM 只生成检索 query，不直接生成答案；输出 JSON `{"queries":["原问题","补充检索 query 1","补充检索 query 2"]}`，限制最多 3 条，做去重、长度限制、空 query 过滤。
+    - 降级链路：JSON 解析失败、超时、空结果或输出质量不合格时，按 `LLM_MULTI_QUERY -> HEURISTIC_MULTI_QUERY -> PASSTHROUGH` 回退，并写入 rewrite failure reason。
+    - 验证标准：RAG-10 不低于现有结果；RAG-07 / RAG-14 不因 query 扩展误答；报告展示 rewrite mode、query 数量、query 文本、failure reason 和耗时。
+  - 后续 P0 `rewrite A/B`：
+    - 触发场景：新 rewrite 策略接上后，需要证明不是只为 RAG-10 单样本调参。
+    - 对照策略：`PASSTHROUGH` / `HEURISTIC_MULTI_QUERY` / `LLM_MULTI_QUERY`。
+    - 验证顺序：先跑 RAG-04 / RAG-07 / RAG-10 / RAG-14 窄回归，通过后再跑 14 条全量。
+    - 观察指标：literal_hit / manual_pass、retrieved count、pre-rerank candidates、final documents、coverage guard 是否触发、延迟、rewrite failure reason。
+  - 后续 P1 `coverage guard 配置化`：
+    - 触发场景：coverage guard 已证明有用，但保护前 2 个非原始 query variant 候选仍是实验参数，不适合长期硬编码。
+    - 配置建议：`coverageGuardEnabled`、`coverageGuardProtectedVariantRank`、`coverageGuardMaxAdded`。
+    - 验证标准：默认兼容；关闭 guard 后回到纯 rerank；开启 guard 后能复现 RAG-10 on/off 差异并展示配置与触发结果。
+  - 后续 P1 `query-aware rerank`：
+    - 触发场景：补充 query 找回的 chunk 很好，但 reranker 仍用原始 user query 打分，导致补充证据被低估并排出 final topK。
+    - 可选策略：`ORIGINAL`、`BEST_VARIANT`、`ORIGINAL_PLUS_VARIANT`、原始 query 分数 + variant query 分数融合。
+    - 验证标准：RAG-10 不再依赖 coverage guard 或 guard 触发减少；RAG-07 / RAG-14 不误答；rerank latency 可接受；报告展示 `rerankQueryPolicy`。
+  - HyDE 定位：HyDE 是让 LLM 先写一段“假想答案 / 假想文档”，再用这段文本 embedding 检索真实 chunk。它可能让检索输入更接近知识库正文，但会引入编造方向、延迟、成本和归因复杂度；当前排在 P0/P1 之后，不作为下一步最小闭环。
+  - 面试主线：Step 6.1 证明 multi-query 能把缺失 chunk 拉进候选池；Step 6.2 证明 final context 缺关键 chunk 才导致 RAG-10 2/5；Step 6.3 证明 multi-query 不是“多搜几次”，而是可以通过 RAG-fusion 形成可解释 candidate pool；下一步要证明 rerank 如何消费这些 fusion 信号，再补 LLMQueryRewriter + A/B 证明通用 rewrite 雏形。
 
 ### 2.2 关键认知（必读，否则会重复踩坑）
 
@@ -779,16 +817,19 @@ fc49eb4 docs: RAG eval 接力计划 + 历史评测产物归档
 6da727e feature: RAG eval - F-fix 链路 SSE 下发 type=retrieval 事件
 ```
 
-## 4. 延期话题（用户上一会话明确说"后续讨论"，不要主动开工）
+## 4. 后续计划（Step 6 P0/P1 已确认想做，实施仍小步触发）
 
 按下一步时机排序：
 
-1. Step 6 Query rewrite（multi-query / RAG-fusion / HyDE，重点处理 RAG-10 这类候选覆盖 / 生成展开问题）
-2. RAG-09 / RAG-10 paraphrase regression
-3. RAGAS 集成（faithfulness / context precision / answer relevance）
-4. embedding 模型迁移
+1. Step 6.3 query-variant RRF / RAG-fusion：已完成窄回归，待 review / commit。
+2. Step 6.4 query-aware rerank 最小验证：让 reranker 能消费 query variant / fusion 信号，观察 RAG-10 是否减少对 coverage guard 的依赖。
+3. Step 6.5 coverage guard 配置化：把实验参数变为可配置策略，而不是长期硬编码。
+4. Step 6.6 LLMQueryRewriter 最小版 + `PASSTHROUGH / HEURISTIC_MULTI_QUERY / LLM_MULTI_QUERY` A/B。
+5. RAG-09 / RAG-10 paraphrase regression。
+6. RAGAS 集成（faithfulness / context precision / answer relevance）。
+7. embedding 模型迁移。
 
-**触发原则**：等用户点哪个就做哪个，不批量推进。
+**执行原则**：本轮用户已确认 P0/P1 都想纳入计划；具体实现仍按小步推进，不批量同时改 RAG-fusion、LLM rewrite、rerank policy 和评测口径。
 
 ## 5. 关键约束 / 隐藏陷阱
 
@@ -817,7 +858,7 @@ fc49eb4 docs: RAG eval 接力计划 + 历史评测产物归档
 
 1. Read 这份 `PLAN.md` 全文（特别是 §3 D10-D16：Hybrid、Rerank、A/B 归因与 Step 5.4 工程化收口）
 2. 确认 §3 commit 范围是否已落地（`git log --oneline -10` 看 `cc20ba4`、`176abc5`、`c95aabd`、`631ffd2` 等 Step 5 提交）
-3. 当前游标：**Step 6.2 coverage guard 窄回归已通过**。下一步不要直接扩大成 LLM rewrite，先做 diff review 并提交当前 Step 6.2；后续再讨论 query-aware rerank / variant RRF / RAG-fusion / HyDE。
+3. 当前游标：**Step 6.3 query-variant RRF / RAG-fusion 窄回归已通过，待 review / commit**。下一步不要直接跳 HyDE；优先拆 query-aware rerank 的最小验证，再做 coverage guard 配置化和 LLMQueryRewriter A/B。
 4. 如果改 yml / 重启 backend / 重灌向量库后再跑 eval：必须先预热 `POST http://localhost:8099/api/v1/agent/armory_agent` body `{"agentId":"rag_demo"}`（未预热直接打 auto_agent 会 HTTP 500，duration ~5ms，看似 endpoint 死了）
 5. **不要**自行重跑 v1/v2/v3 中任何一轮——Phase A 已锁定参数 250/109，重跑只会消耗 LLM 配额且 score 必然飘动（embedding 不变 score 应稳定，LLM 输出会因 sampling 飘）
 

@@ -65,6 +65,11 @@ DOC_COVERAGE_GUARD_ADDED = "coverageGuardAdded"
 DOC_QUERY_VARIANT_INDEX = "queryVariantIndex"
 DOC_QUERY_VARIANT_TEXT = "queryVariantText"
 DOC_QUERY_VARIANT_RANK = "queryVariantRank"
+DOC_QUERY_FUSION_SCORE = "queryFusionScore"
+DOC_QUERY_FUSION_RANK = "queryFusionRank"
+DOC_QUERY_VARIANT_HIT_COUNT = "queryVariantHitCount"
+DOC_BEST_QUERY_VARIANT_RANK = "bestQueryVariantRank"
+DOC_QUERY_VARIANT_INDEXES = "queryVariantIndexes"
 
 
 def load_cases(path: Path) -> list[dict[str, Any]]:
@@ -264,7 +269,11 @@ def _append_document_list(lines: list[str], data: dict[str, Any], documents_key:
                 "rerankScore=`{rerank_score}`, rerankApplied=`{rerank_applied}`, "
                 "rerankMode=`{rerank_mode}`, coverageGuardAdded=`{coverage_guard_added}`, "
                 "queryVariantIndex=`{query_variant_index}`, "
-                "queryVariantRank=`{query_variant_rank}`, queryVariantText=`{query_variant_text}`"
+                "queryVariantRank=`{query_variant_rank}`, queryVariantText=`{query_variant_text}`, "
+                "queryFusionScore=`{query_fusion_score}`, queryFusionRank=`{query_fusion_rank}`, "
+                "queryVariantHitCount=`{query_variant_hit_count}`, "
+                "bestQueryVariantRank=`{best_query_variant_rank}`, "
+                "queryVariantIndexes=`{query_variant_indexes}`"
             ).format(
                 idx=doc_index,
                 score=_fmt_score(document.get("score")),
@@ -286,6 +295,11 @@ def _append_document_list(lines: list[str], data: dict[str, Any], documents_key:
                 query_variant_index=md_escape(_metadata_value(metadata, DOC_QUERY_VARIANT_INDEX)),
                 query_variant_rank=md_escape(_metadata_value(metadata, DOC_QUERY_VARIANT_RANK)),
                 query_variant_text=md_escape(_metadata_value(metadata, DOC_QUERY_VARIANT_TEXT)),
+                query_fusion_score=_fmt_score(metadata.get(DOC_QUERY_FUSION_SCORE)),
+                query_fusion_rank=md_escape(_metadata_value(metadata, DOC_QUERY_FUSION_RANK)),
+                query_variant_hit_count=md_escape(_metadata_value(metadata, DOC_QUERY_VARIANT_HIT_COUNT)),
+                best_query_variant_rank=md_escape(_metadata_value(metadata, DOC_BEST_QUERY_VARIANT_RANK)),
+                query_variant_indexes=md_escape(_metadata_value(metadata, DOC_QUERY_VARIANT_INDEXES)),
             )
         )
         preview = _document_preview(document)
@@ -316,7 +330,7 @@ def write_markdown(path: Path, results: list[dict[str, Any]], api_url: str, agen
     lines.append(">")
     lines.append("> `retrieved` / `score` / `empty` 三列的 `—` 表示**没拿到成功的 ChatResponse metadata**，不等价于\"无检索\"。当前实现把 retrieval SSE 帧放在 `.call().chatResponse()` 返回之后才发，所以 LLM 调用失败时（即使 RAG 检索本身成功）三列都会是 `—`。要区分\"检索失败\"和\"生成失败\"，对照 `error` 列 / details 区 / backend log。")
     lines.append(">")
-    lines.append("> Details 区的 `pre_rerank_documents` 展开 rerank 前候选池，`documents` 展开最终 top-K chunk attribution；HYBRID 模式下 `score` 是 RRF score，原始向量分与关键词分分别看 `vectorScore` / `keywordScore`；真实 rerank 分数看 `rerankScore`；rerank 服务状态看 `rerank_runtime` 的 model / endpoint / failure_reason；keyword 分支未参与时看 `keywordSkippedReason`。")
+    lines.append("> Details 区的 `pre_rerank_documents` 展开 rerank 前候选池，`documents` 展开最终 top-K chunk attribution；document 行的 `score` 是当前阶段写回的候选分，可能来自 HYBRID RRF 或 query-variant fusion；原始向量分与关键词分分别看 `vectorScore` / `keywordScore`，多 query 融合看 `queryFusionScore/queryFusionRank/queryVariantHitCount`；真实 rerank 分数看 `rerankScore`；rerank 服务状态看 `rerank_runtime` 的 model / endpoint / failure_reason；keyword 分支未参与时看 `keywordSkippedReason`。")
     lines.append("")
     lines.append("| id | type | completed | duration_ms | should_answer | retrieved | score | empty | literal_hit | missed_points | answer_preview | manual_pass |")
     lines.append("|---|---|---:|---:|---:|---:|---|---:|---:|---|---|---|")

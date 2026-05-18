@@ -295,6 +295,31 @@ public final class RagObservationKeys {
          */
         public static final String QUERY_VARIANT_RANK = "queryVariantRank";
 
+        /**
+         * 多 query variant 融合后的 RRF 分数。
+         */
+        public static final String QUERY_FUSION_SCORE = "queryFusionScore";
+
+        /**
+         * 多 query variant 融合后的候选池排序。
+         */
+        public static final String QUERY_FUSION_RANK = "queryFusionRank";
+
+        /**
+         * 当前 chunk 被多少个 query variant 命中。
+         */
+        public static final String QUERY_VARIANT_HIT_COUNT = "queryVariantHitCount";
+
+        /**
+         * 当前 chunk 在所有命中 query variant 中的最佳排名。
+         */
+        public static final String BEST_QUERY_VARIANT_RANK = "bestQueryVariantRank";
+
+        /**
+         * 当前 chunk 命中的 query variant 编号列表。
+         */
+        public static final String QUERY_VARIANT_INDEXES = "queryVariantIndexes";
+
         private DocumentMetadata() {
         }
     }
