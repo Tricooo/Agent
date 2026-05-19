@@ -135,6 +135,16 @@ public final class RagObservationKeys {
         public static final String RERANK_ENDPOINT = "qa_rerank_endpoint";
 
         /**
+         * 本次 rerank query 构造策略，例如 ORIGINAL / ORIGINAL_PLUS_VARIANT / PER_VARIANT_RERANK_RRF。
+         */
+        public static final String RERANK_QUERY_POLICY = "qa_rerank_query_policy";
+
+        /**
+         * 本次实际传给 reranker 的 query 文本。
+         */
+        public static final String RERANK_QUERY_TEXT = "qa_rerank_query_text";
+
+        /**
          * rerank 后是否触发 final context coverage guard。
          */
         public static final String RERANK_COVERAGE_GUARD_APPLIED = "qa_rerank_coverage_guard_applied";
@@ -276,6 +286,31 @@ public final class RagObservationKeys {
         public static final String RERANK_SCORE = "rerankScore";
 
         /**
+         * 多 query variant 独立 rerank 后的 RRF 融合分数。
+         */
+        public static final String RERANK_FUSION_SCORE = "rerankFusionScore";
+
+        /**
+         * 当前 chunk 被多少个 rerank query variant 命中。
+         */
+        public static final String RERANK_VARIANT_HIT_COUNT = "rerankVariantHitCount";
+
+        /**
+         * 当前 chunk 在所有 rerank query variant 结果中的最佳排名。
+         */
+        public static final String BEST_RERANK_VARIANT_RANK = "bestRerankVariantRank";
+
+        /**
+         * 当前 chunk 命中的 rerank query variant 编号列表。
+         */
+        public static final String RERANK_VARIANT_INDEXES = "rerankVariantIndexes";
+
+        /**
+         * 当前 chunk 命中的 rerank query variant 详情列表，元素包含 index / rank。
+         */
+        public static final String RERANK_VARIANT_HITS = "rerankVariantHits";
+
+        /**
          * 当前文档是否由 rerank coverage guard 补回最终上下文。
          */
         public static final String COVERAGE_GUARD_ADDED = "coverageGuardAdded";
@@ -319,6 +354,11 @@ public final class RagObservationKeys {
          * 当前 chunk 命中的 query variant 编号列表。
          */
         public static final String QUERY_VARIANT_INDEXES = "queryVariantIndexes";
+
+        /**
+         * 当前 chunk 命中的 query variant 详情列表，元素包含 index / rank / text。
+         */
+        public static final String QUERY_VARIANT_HITS = "queryVariantHits";
 
         private DocumentMetadata() {
         }

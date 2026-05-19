@@ -2,6 +2,7 @@ package com.tricoq.domain.agent.model.valobj;
 
 import com.tricoq.domain.agent.model.dto.AiClientAdvisorDTO;
 import com.tricoq.domain.agent.model.enums.KeyWordPolicy;
+import com.tricoq.domain.agent.service.rag.rerank.enums.RerankQueryPolicy;
 import lombok.Data;
 import org.apache.commons.lang3.StringUtils;
 
@@ -41,6 +42,11 @@ public class RetrievalOptionsVO {
 
     private KeyWordPolicy keyWordPolicy = KeyWordPolicy.STRONG;
 
+    /**
+     * rerank 使用的 query 构造策略。默认只用原始用户问题。
+     */
+    private RerankQueryPolicy rerankQueryPolicy = RerankQueryPolicy.ORIGINAL;
+
     public static RetrievalOptionsVO from(AiClientAdvisorDTO.RagAnswer ragAnswer, int topK) {
         return from(ragAnswer, topK, null);
     }
@@ -57,6 +63,7 @@ public class RetrievalOptionsVO {
         options.setKeywordTopK(positiveOrDefault(ragAnswer.getKeywordTopK(), effectiveTopK));
         options.setRrfK(positiveOrDefault(ragAnswer.getRrfK(), DEFAULT_RRF_K));
         options.setCandidateSimilarityThreshold(ragAnswer.getCandidateSimilarityThreshold());
+        options.setRerankQueryPolicy(RerankQueryPolicy.getByPolicyOrDefault(ragAnswer.getRerankQueryPolicy()));
         if (null != keyWordPolicy) {
             options.setKeyWordPolicy(keyWordPolicy);
         }
@@ -81,6 +88,10 @@ public class RetrievalOptionsVO {
 
     public int effectiveRrfK() {
         return positiveOrDefault(rrfK, DEFAULT_RRF_K);
+    }
+
+    public RerankQueryPolicy effectiveRerankQueryPolicy() {
+        return rerankQueryPolicy == null ? RerankQueryPolicy.ORIGINAL : rerankQueryPolicy;
     }
 
     private static String normalizeRetrievalMode(String retrievalMode) {

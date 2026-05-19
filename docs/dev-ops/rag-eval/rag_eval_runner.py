@@ -41,6 +41,8 @@ QA_RERANK_FINAL_COUNT = "qa_rerank_final_count"
 QA_RERANK_FAILURE_REASON = "qa_rerank_failure_reason"
 QA_RERANK_MODEL_NAME = "qa_rerank_model_name"
 QA_RERANK_ENDPOINT = "qa_rerank_endpoint"
+QA_RERANK_QUERY_POLICY = "qa_rerank_query_policy"
+QA_RERANK_QUERY_TEXT = "qa_rerank_query_text"
 QA_RERANK_COVERAGE_GUARD_APPLIED = "qa_rerank_coverage_guard_applied"
 QA_RERANK_COVERAGE_GUARD_ADDED_COUNT = "qa_rerank_coverage_guard_added_count"
 QA_QUERY_REWRITE_MODE = "qa_query_rewrite_mode"
@@ -59,9 +61,14 @@ DOC_KEYWORD_SKIPPED_REASON = "keywordSkippedReason"
 DOC_BEFORE_RERANK_RANK = "beforeRerankRank"
 DOC_RERANK_RANK = "rerankRank"
 DOC_RERANK_SCORE = "rerankScore"
+DOC_RERANK_FUSION_SCORE = "rerankFusionScore"
 DOC_RERANK_APPLIED = "rerankApplied"
 DOC_RERANK_MODE = "rerankMode"
 DOC_COVERAGE_GUARD_ADDED = "coverageGuardAdded"
+DOC_RERANK_VARIANT_HIT_COUNT = "rerankVariantHitCount"
+DOC_BEST_RERANK_VARIANT_RANK = "bestRerankVariantRank"
+DOC_RERANK_VARIANT_INDEXES = "rerankVariantIndexes"
+DOC_RERANK_VARIANT_HITS = "rerankVariantHits"
 DOC_QUERY_VARIANT_INDEX = "queryVariantIndex"
 DOC_QUERY_VARIANT_TEXT = "queryVariantText"
 DOC_QUERY_VARIANT_RANK = "queryVariantRank"
@@ -70,6 +77,7 @@ DOC_QUERY_FUSION_RANK = "queryFusionRank"
 DOC_QUERY_VARIANT_HIT_COUNT = "queryVariantHitCount"
 DOC_BEST_QUERY_VARIANT_RANK = "bestQueryVariantRank"
 DOC_QUERY_VARIANT_INDEXES = "queryVariantIndexes"
+DOC_QUERY_VARIANT_HITS = "queryVariantHits"
 
 
 def load_cases(path: Path) -> list[dict[str, Any]]:
@@ -238,6 +246,13 @@ def _metadata_value(metadata: dict[str, Any], key: str) -> Any:
     return "—" if value is None else value
 
 
+def _metadata_json_value(metadata: dict[str, Any], key: str) -> str:
+    value = metadata.get(key)
+    if value is None:
+        return "—"
+    return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+
+
 def _document_preview(document: dict[str, Any], limit: int = 180) -> str:
     text = document.get("text") or document.get("content") or ""
     return answer_preview(str(text), limit)
@@ -266,14 +281,20 @@ def _append_document_list(lines: list[str], data: dict[str, Any], documents_key:
                 "keywordRank=`{keyword_rank}`, keywordScore=`{keyword_score}`, "
                 "keywordSkippedReason=`{keyword_skipped_reason}`, "
                 "beforeRerankRank=`{before_rerank_rank}`, rerankRank=`{rerank_rank}`, "
-                "rerankScore=`{rerank_score}`, rerankApplied=`{rerank_applied}`, "
+                "rerankScore=`{rerank_score}`, rerankFusionScore=`{rerank_fusion_score}`, "
+                "rerankApplied=`{rerank_applied}`, "
                 "rerankMode=`{rerank_mode}`, coverageGuardAdded=`{coverage_guard_added}`, "
+                "rerankVariantHitCount=`{rerank_variant_hit_count}`, "
+                "bestRerankVariantRank=`{best_rerank_variant_rank}`, "
+                "rerankVariantIndexes=`{rerank_variant_indexes}`, "
+                "rerankVariantHits=`{rerank_variant_hits}`, "
                 "queryVariantIndex=`{query_variant_index}`, "
                 "queryVariantRank=`{query_variant_rank}`, queryVariantText=`{query_variant_text}`, "
                 "queryFusionScore=`{query_fusion_score}`, queryFusionRank=`{query_fusion_rank}`, "
                 "queryVariantHitCount=`{query_variant_hit_count}`, "
                 "bestQueryVariantRank=`{best_query_variant_rank}`, "
-                "queryVariantIndexes=`{query_variant_indexes}`"
+                "queryVariantIndexes=`{query_variant_indexes}`, "
+                "queryVariantHits=`{query_variant_hits}`"
             ).format(
                 idx=doc_index,
                 score=_fmt_score(document.get("score")),
@@ -289,9 +310,14 @@ def _append_document_list(lines: list[str], data: dict[str, Any], documents_key:
                 before_rerank_rank=md_escape(_metadata_value(metadata, DOC_BEFORE_RERANK_RANK)),
                 rerank_rank=md_escape(_metadata_value(metadata, DOC_RERANK_RANK)),
                 rerank_score=_fmt_score(metadata.get(DOC_RERANK_SCORE)),
+                rerank_fusion_score=_fmt_score(metadata.get(DOC_RERANK_FUSION_SCORE)),
                 rerank_applied=md_escape(_metadata_value(metadata, DOC_RERANK_APPLIED)),
                 rerank_mode=md_escape(_metadata_value(metadata, DOC_RERANK_MODE)),
                 coverage_guard_added=md_escape(_metadata_value(metadata, DOC_COVERAGE_GUARD_ADDED)),
+                rerank_variant_hit_count=md_escape(_metadata_value(metadata, DOC_RERANK_VARIANT_HIT_COUNT)),
+                best_rerank_variant_rank=md_escape(_metadata_value(metadata, DOC_BEST_RERANK_VARIANT_RANK)),
+                rerank_variant_indexes=md_escape(_metadata_value(metadata, DOC_RERANK_VARIANT_INDEXES)),
+                rerank_variant_hits=md_escape(_metadata_json_value(metadata, DOC_RERANK_VARIANT_HITS)),
                 query_variant_index=md_escape(_metadata_value(metadata, DOC_QUERY_VARIANT_INDEX)),
                 query_variant_rank=md_escape(_metadata_value(metadata, DOC_QUERY_VARIANT_RANK)),
                 query_variant_text=md_escape(_metadata_value(metadata, DOC_QUERY_VARIANT_TEXT)),
@@ -300,6 +326,7 @@ def _append_document_list(lines: list[str], data: dict[str, Any], documents_key:
                 query_variant_hit_count=md_escape(_metadata_value(metadata, DOC_QUERY_VARIANT_HIT_COUNT)),
                 best_query_variant_rank=md_escape(_metadata_value(metadata, DOC_BEST_QUERY_VARIANT_RANK)),
                 query_variant_indexes=md_escape(_metadata_value(metadata, DOC_QUERY_VARIANT_INDEXES)),
+                query_variant_hits=md_escape(_metadata_json_value(metadata, DOC_QUERY_VARIANT_HITS)),
             )
         )
         preview = _document_preview(document)
@@ -330,7 +357,7 @@ def write_markdown(path: Path, results: list[dict[str, Any]], api_url: str, agen
     lines.append(">")
     lines.append("> `retrieved` / `score` / `empty` 三列的 `—` 表示**没拿到成功的 ChatResponse metadata**，不等价于\"无检索\"。当前实现把 retrieval SSE 帧放在 `.call().chatResponse()` 返回之后才发，所以 LLM 调用失败时（即使 RAG 检索本身成功）三列都会是 `—`。要区分\"检索失败\"和\"生成失败\"，对照 `error` 列 / details 区 / backend log。")
     lines.append(">")
-    lines.append("> Details 区的 `pre_rerank_documents` 展开 rerank 前候选池，`documents` 展开最终 top-K chunk attribution；document 行的 `score` 是当前阶段写回的候选分，可能来自 HYBRID RRF 或 query-variant fusion；原始向量分与关键词分分别看 `vectorScore` / `keywordScore`，多 query 融合看 `queryFusionScore/queryFusionRank/queryVariantHitCount`；真实 rerank 分数看 `rerankScore`；rerank 服务状态看 `rerank_runtime` 的 model / endpoint / failure_reason；keyword 分支未参与时看 `keywordSkippedReason`。")
+    lines.append("> Details 区的 `pre_rerank_documents` 展开 rerank 前候选池，`documents` 展开最终 top-K chunk attribution；document 行的 `score` 是当前阶段写回的候选分，可能来自 HYBRID RRF、query-variant fusion 或 per-variant rerank RRF；原始向量分与关键词分分别看 `vectorScore` / `keywordScore`，多 query 召回融合看 `queryFusionScore/queryFusionRank/queryVariantHitCount`；rerank 单次分数看 `rerankScore`，多路 rerank 融合分看 `rerankFusionScore/rerankVariantHitCount`；rerank 服务状态看 `rerank_runtime` 的 model / endpoint / failure_reason；keyword 分支未参与时看 `keywordSkippedReason`。")
     lines.append("")
     lines.append("| id | type | completed | duration_ms | should_answer | retrieved | score | empty | literal_hit | missed_points | answer_preview | manual_pass |")
     lines.append("|---|---|---:|---:|---:|---:|---|---:|---:|---|---|---|")
@@ -428,6 +455,12 @@ def write_markdown(path: Path, results: list[dict[str, Any]], api_url: str, agen
                         model=data.get(QA_RERANK_MODEL_NAME),
                         endpoint=data.get(QA_RERANK_ENDPOINT),
                         reason=data.get(QA_RERANK_FAILURE_REASON),
+                    )
+                )
+                lines.append(
+                    "  - rerank_query: policy `{policy}` / text `{text}`".format(
+                        policy=data.get(QA_RERANK_QUERY_POLICY) or "—",
+                        text=md_escape(data.get(QA_RERANK_QUERY_TEXT) or "—"),
                     )
                 )
                 lines.append(

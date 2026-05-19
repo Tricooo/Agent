@@ -13,9 +13,11 @@ import com.tricoq.domain.agent.model.valobj.RagObservationKeys.Qa;
 import com.tricoq.domain.agent.model.valobj.RetrievalOptionsVO;
 import com.tricoq.domain.agent.service.rag.rerank.DocumentReranker;
 import com.tricoq.domain.agent.service.rag.rerank.PassthroughDocumentReranker;
+import com.tricoq.domain.agent.service.rag.rerank.enums.RerankQueryPolicy;
 import com.tricoq.domain.agent.service.rag.rewrite.PassthroughQueryRewriter;
 import com.tricoq.domain.agent.service.rag.rewrite.QueryRewriter;
 import com.tricoq.domain.agent.service.rag.rewrite.enums.RewritePolicy;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.collections4.MapUtils;
@@ -73,6 +75,7 @@ public class RagAnswerAdvisor implements BaseAdvisor {
     private final QueryRewriter queryRewriter;
 
     private static final int DEFAULT_MAX_CONTEXT_CHARS = 6000;
+    private static final int DEFAULT_MAX_RERANK_QUERY_CHARS = 1000;
     private static final String CHUNK_TRUNCATED_NOTICE = "\n...[chunk truncated]...\n";
     private static final int MIN_CHUNK_HEAD_CHARS = 1000;
     private static final String EMPTY_RETRIEVAL_CONTEXT =
@@ -173,6 +176,7 @@ public class RagAnswerAdvisor implements BaseAdvisor {
         double candidateSimilarityThreshold = candidateSimilarityThreshold(request);
         RewriteResult rewriteResult = rewriteQuery(userText);
         List<String> queryVariants = normalizeQueryVariants(rewriteResult, userText);
+        RerankQueryPlan rerankQueryPlan = buildRerankQueryPlan(userText, queryVariants);
 
         List<Document> documents = tagBeforeRerankRank(retrieveDocuments(queryVariants, request));
 
@@ -200,6 +204,8 @@ public class RagAnswerAdvisor implements BaseAdvisor {
             emptyRetrievalContext.put(Qa.RERANK_FAILURE_REASON, "");
             emptyRetrievalContext.put(Qa.RERANK_MODEL_NAME, "");
             emptyRetrievalContext.put(Qa.RERANK_ENDPOINT, "");
+            emptyRetrievalContext.put(Qa.RERANK_QUERY_POLICY, rerankQueryPlan.getPolicy());
+            emptyRetrievalContext.put(Qa.RERANK_QUERY_TEXT, rerankQueryPlan.getOriginQueryText());
             emptyRetrievalContext.put(Qa.RERANK_COVERAGE_GUARD_APPLIED, false);
             emptyRetrievalContext.put(Qa.RERANK_COVERAGE_GUARD_ADDED_COUNT, 0);
 
@@ -222,7 +228,7 @@ public class RagAnswerAdvisor implements BaseAdvisor {
         }
 
         int finalTopK = retrievalTopKPlan.finalTopK();
-        RerankResult rerankResult = rerankDocuments(userText, documents, finalTopK);
+        RerankResult rerankResult = rerankDocuments(rerankQueryPlan, documents, retrievalTopKPlan);
         CoverageGuardResult coverageGuardResult = applyRerankCoverageGuard(
                 rerankResult.getDocuments(), documents, rerankResult, finalTopK);
         List<Document> rerankDocuments = coverageGuardResult.documents();
@@ -253,6 +259,10 @@ public class RagAnswerAdvisor implements BaseAdvisor {
         advisedUserParams.put(Qa.RERANK_FAILURE_REASON, StringUtils.defaultString(rerankResult.getFailureReason()));
         advisedUserParams.put(Qa.RERANK_MODEL_NAME, StringUtils.defaultString(rerankResult.getModelName()));
         advisedUserParams.put(Qa.RERANK_ENDPOINT, StringUtils.defaultString(rerankResult.getEndpoint()));
+        advisedUserParams.put(Qa.RERANK_QUERY_POLICY, rerankQueryPlan.getPolicy());
+        advisedUserParams.put(Qa.RERANK_QUERY_TEXT, CollectionUtils.isEmpty(rerankQueryPlan.getQueryTextSet()) ?
+                rerankQueryPlan.getOriginQueryText() :
+                StringUtils.join(rerankQueryPlan.getQueryTextSet(), System.lineSeparator()));
         advisedUserParams.put(Qa.RERANK_COVERAGE_GUARD_APPLIED, coverageGuardResult.applied());
         advisedUserParams.put(Qa.RERANK_COVERAGE_GUARD_ADDED_COUNT, coverageGuardResult.addedCount());
 
@@ -331,7 +341,7 @@ public class RagAnswerAdvisor implements BaseAdvisor {
         return List.copyOf(variants);
     }
 
-    private void addQueryVariant(Set<String> variants, String variant) {
+    private static void addQueryVariant(Set<String> variants, String variant) {
         if (StringUtils.isBlank(variant)) {
             return;
         }
@@ -345,6 +355,40 @@ public class RagAnswerAdvisor implements BaseAdvisor {
         params.put(Qa.QUERY_REWRITE_MODE, rewriteMode);
         params.put(Qa.QUERY_VARIANT_COUNT, queryVariants.size());
         params.put(Qa.QUERY_VARIANT_TEXTS, queryVariants);
+    }
+
+    private RerankQueryPlan buildRerankQueryPlan(String userText, List<String> queryVariants) {
+        RerankQueryPolicy policy = retrievalOptions.effectiveRerankQueryPolicy();
+        return switch (policy) {
+            case ORIGINAL -> new RerankQueryPlan(policy.getPolicyName(), userText);
+            case ORIGINAL_PLUS_VARIANT -> {
+                Set<String> rerankQueries = buildRerankQueries(userText, queryVariants);
+                String rerankQueryText = limitRerankQuery(String.join(System.lineSeparator(), rerankQueries));
+                yield new RerankQueryPlan(policy.getPolicyName(), rerankQueryText);
+            }
+            case PER_VARIANT_RERANK_RRF -> {
+                Set<String> rerankQueries = buildRerankQueries(userText, queryVariants);
+                yield new RerankQueryPlan(policy.getPolicyName(), userText, rerankQueries);
+            }
+        };
+    }
+
+    private Set<String> buildRerankQueries(String userText, List<String> queryVariants) {
+        Set<String> rerankQueries = new LinkedHashSet<>();
+        addQueryVariant(rerankQueries, userText);
+        if (CollectionUtils.isNotEmpty(queryVariants)) {
+            for (String queryVariant : queryVariants) {
+                addQueryVariant(rerankQueries, queryVariant);
+            }
+        }
+        return rerankQueries;
+    }
+
+    private String limitRerankQuery(String rerankQueryText) {
+        if (StringUtils.length(rerankQueryText) <= DEFAULT_MAX_RERANK_QUERY_CHARS) {
+            return rerankQueryText;
+        }
+        return StringUtils.substring(rerankQueryText, 0, DEFAULT_MAX_RERANK_QUERY_CHARS);
     }
 
     private List<Document> tagBeforeRerankRank(List<Document> documents) {
@@ -530,8 +574,150 @@ public class RagAnswerAdvisor implements BaseAdvisor {
         }
     }
 
-    private RerankResult rerankDocuments(String query, List<Document> candidates, int topK) {
-        return documentReranker.rerank(query, candidates, topK);
+    private RerankResult rerankDocuments(RerankQueryPlan plan, List<Document> candidates,
+                                         RetrievalTopKPlan retrievalTopKPlan) {
+        RerankQueryPolicy rerankQueryPolicy = RerankQueryPolicy.getByPolicyOrDefault(plan.getPolicy());
+        return switch (rerankQueryPolicy) {
+            case ORIGINAL, ORIGINAL_PLUS_VARIANT ->
+                    documentReranker.rerank(plan.getOriginQueryText(), candidates, retrievalTopKPlan.finalTopK());
+            case PER_VARIANT_RERANK_RRF -> rerankPerVariantWithRrf(plan, candidates, retrievalTopKPlan);
+        };
+    }
+
+    private RerankResult rerankPerVariantWithRrf(RerankQueryPlan plan, List<Document> candidates,
+                                                 RetrievalTopKPlan retrievalTopKPlan) {
+        int finalTopK = retrievalTopKPlan.finalTopK();
+        if (CollectionUtils.isEmpty(candidates) || finalTopK <= 0) {
+            return documentReranker.rerank(plan.getOriginQueryText(), candidates, finalTopK);
+        }
+
+        List<String> queryTexts = new ArrayList<>(plan.getQueryTextSet());
+        if (CollectionUtils.isEmpty(queryTexts)) {
+            return documentReranker.rerank(plan.getOriginQueryText(), candidates, finalTopK);
+        }
+
+        Map<String, RerankFusionDocumentCandidate> fusionCandidates = new HashMap<>();
+        List<RerankResult> rerankResults = new ArrayList<>(queryTexts.size());
+        for (int i = 0; i < queryTexts.size(); i++) {
+            RerankResult rerankResult = documentReranker.rerank(
+                    queryTexts.get(i),
+                    candidates,
+                    retrievalTopKPlan.candidateTopK()
+            );
+            if (rerankResult == null) {
+                continue;
+            }
+            rerankResults.add(rerankResult);
+            if (!rerankResult.isApplied()) {
+                continue;
+            }
+            addRerankFusionScores(fusionCandidates, rerankResult.getDocuments(), i + 1);
+        }
+
+        if (MapUtils.isEmpty(fusionCandidates)) {
+            return documentReranker.rerank(plan.getOriginQueryText(), candidates, finalTopK);
+        }
+
+        List<RerankFusionDocumentCandidate> candidateList = new ArrayList<>(fusionCandidates.values());
+        candidateList.sort(Comparator.comparing(RerankFusionDocumentCandidate::getScore).reversed()
+                .thenComparing(RerankFusionDocumentCandidate::getBestRerankRank)
+                .thenComparing(RerankFusionDocumentCandidate::getFirstQueryVariantIndex)
+                .thenComparing(RerankFusionDocumentCandidate::getKey));
+
+        int limit = Math.min(finalTopK, candidateList.size());
+        List<Document> fusedDocuments = new ArrayList<>(limit);
+        for (int i = 0; i < limit; i++) {
+            fusedDocuments.add(toRerankFusionDocument(candidateList.get(i), i + 1));
+        }
+
+        return RerankResult.builder()
+                .documents(fusedDocuments)
+                .applied(true)
+                .mode(RerankQueryPolicy.PER_VARIANT_RERANK_RRF.getPolicyName())
+                .candidateCount(candidates.size())
+                .finalCount(fusedDocuments.size())
+                .failureReason(firstRerankFailureReason(rerankResults))
+                .modelName(firstRerankModelName(rerankResults))
+                .endpoint(firstRerankEndpoint(rerankResults))
+                .build();
+    }
+
+    private void addRerankFusionScores(Map<String, RerankFusionDocumentCandidate> candidates,
+                                       List<Document> documents,
+                                       int queryVariantIndex) {
+        if (CollectionUtils.isEmpty(documents)) {
+            return;
+        }
+        for (int i = 0; i < documents.size(); i++) {
+            Document document = documents.get(i);
+            String key = documentKey(document);
+            if (StringUtils.isBlank(key)) {
+                continue;
+            }
+            RerankFusionDocumentCandidate candidate = candidates.get(key);
+            if (candidate == null) {
+                candidate = new RerankFusionDocumentCandidate(key, document);
+                candidates.put(key, candidate);
+            }
+            int rerankRank = i + 1;
+            candidate.addScore(calculateScore(rerankRank));
+            candidate.recordHit(document, queryVariantIndex, rerankRank);
+        }
+    }
+
+    private Document toRerankFusionDocument(RerankFusionDocumentCandidate candidate, int rerankRank) {
+        Document document = candidate.getDocument();
+        Map<String, Object> metadata = new HashMap<>(document.getMetadata());
+        metadata.put(DocumentMetadata.RERANK_RANK, rerankRank);
+        metadata.put(DocumentMetadata.RERANK_APPLIED, true);
+        metadata.put(DocumentMetadata.RERANK_MODE, RerankQueryPolicy.PER_VARIANT_RERANK_RRF.getPolicyName());
+        metadata.put(DocumentMetadata.RERANK_SCORE, candidate.getScore());
+        metadata.put(DocumentMetadata.RERANK_FUSION_SCORE, candidate.getScore());
+        metadata.put(DocumentMetadata.RERANK_VARIANT_HIT_COUNT, candidate.getHitCount());
+        metadata.put(DocumentMetadata.BEST_RERANK_VARIANT_RANK, candidate.getBestRerankRank());
+        metadata.put(DocumentMetadata.RERANK_VARIANT_INDEXES, candidate.getQueryVariantIndexes());
+        metadata.put(DocumentMetadata.RERANK_VARIANT_HITS, candidate.getRerankVariantHits());
+
+        return document.mutate()
+                .metadata(metadata)
+                .score(candidate.getScore())
+                .build();
+    }
+
+    private String firstRerankFailureReason(List<RerankResult> rerankResults) {
+        if (CollectionUtils.isEmpty(rerankResults)) {
+            return null;
+        }
+        for (RerankResult rerankResult : rerankResults) {
+            if (rerankResult != null && StringUtils.isNotBlank(rerankResult.getFailureReason())) {
+                return rerankResult.getFailureReason();
+            }
+        }
+        return null;
+    }
+
+    private String firstRerankModelName(List<RerankResult> rerankResults) {
+        if (CollectionUtils.isEmpty(rerankResults)) {
+            return null;
+        }
+        for (RerankResult rerankResult : rerankResults) {
+            if (rerankResult != null && StringUtils.isNotBlank(rerankResult.getModelName())) {
+                return rerankResult.getModelName();
+            }
+        }
+        return null;
+    }
+
+    private String firstRerankEndpoint(List<RerankResult> rerankResults) {
+        if (CollectionUtils.isEmpty(rerankResults)) {
+            return null;
+        }
+        for (RerankResult rerankResult : rerankResults) {
+            if (rerankResult != null && StringUtils.isNotBlank(rerankResult.getEndpoint())) {
+                return rerankResult.getEndpoint();
+            }
+        }
+        return null;
     }
 
     private CoverageGuardResult applyRerankCoverageGuard(
@@ -701,6 +887,7 @@ public class RagAnswerAdvisor implements BaseAdvisor {
         metadata.put(DocumentMetadata.QUERY_VARIANT_HIT_COUNT, candidate.getHitCount());
         metadata.put(DocumentMetadata.BEST_QUERY_VARIANT_RANK, candidate.getBestQueryVariantRank());
         metadata.put(DocumentMetadata.QUERY_VARIANT_INDEXES, candidate.getQueryVariantIndexes());
+        metadata.put(DocumentMetadata.QUERY_VARIANT_HITS, candidate.getQueryVariantHits());
 
         return document.mutate()
                 .metadata(metadata)
@@ -766,10 +953,29 @@ public class RagAnswerAdvisor implements BaseAdvisor {
     ) {
     }
 
+    @Getter
+    private static class RerankQueryPlan {
+        private final String policy;
+        private final String originQueryText;
+        private final Set<String> queryTextSet;
+
+        private RerankQueryPlan(String policy, String originQueryText) {
+            this(policy, originQueryText, Collections.emptySet());
+        }
+
+        private RerankQueryPlan(String policy, String originQueryText, Set<String> queryTextSet) {
+            this.policy = policy;
+            this.originQueryText = originQueryText;
+            this.queryTextSet = new LinkedHashSet<>();
+            addQueryVariant(this.queryTextSet, this.originQueryText);
+            this.queryTextSet.addAll(queryTextSet);
+        }
+    }
+
     private static class QueryFusionDocumentCandidate {
         private final String key;
         private final Document document;
-        private final Set<Integer> queryVariantIndexes = new LinkedHashSet<>();
+        private final Map<Integer, QueryVariantHit> queryVariantHits = new LinkedHashMap<>();
         private double score;
         private int bestQueryVariantRank = Integer.MAX_VALUE;
         private int firstQueryVariantIndex = Integer.MAX_VALUE;
@@ -800,11 +1006,23 @@ public class RagAnswerAdvisor implements BaseAdvisor {
         }
 
         private int getHitCount() {
-            return queryVariantIndexes.size();
+            return queryVariantHits.size();
         }
 
         private List<Integer> getQueryVariantIndexes() {
-            return List.copyOf(queryVariantIndexes);
+            return List.copyOf(queryVariantHits.keySet());
+        }
+
+        private List<Map<String, Object>> getQueryVariantHits() {
+            List<Map<String, Object>> hits = new ArrayList<>(queryVariantHits.size());
+            for (QueryVariantHit hit : queryVariantHits.values()) {
+                Map<String, Object> values = new LinkedHashMap<>();
+                values.put("index", hit.index());
+                values.put("rank", hit.rank());
+                values.put("text", hit.text());
+                hits.add(values);
+            }
+            return hits;
         }
 
         private void addScore(double score) {
@@ -815,13 +1033,93 @@ public class RagAnswerAdvisor implements BaseAdvisor {
             Map<String, Object> metadata = document.getMetadata();
             Integer variantIndex = metadataInteger(metadata, DocumentMetadata.QUERY_VARIANT_INDEX);
             Integer variantRank = metadataInteger(metadata, DocumentMetadata.QUERY_VARIANT_RANK);
+            String variantText = metadataText(metadata, DocumentMetadata.QUERY_VARIANT_TEXT);
             int effectiveRank = variantRank == null ? fallbackRank : variantRank;
 
             if (variantIndex != null) {
-                queryVariantIndexes.add(variantIndex);
+                QueryVariantHit existing = queryVariantHits.get(variantIndex);
+                if (existing == null || effectiveRank < existing.rank()) {
+                    queryVariantHits.put(variantIndex, new QueryVariantHit(variantIndex, effectiveRank, variantText));
+                }
                 firstQueryVariantIndex = Math.min(firstQueryVariantIndex, variantIndex);
             }
             bestQueryVariantRank = Math.min(bestQueryVariantRank, effectiveRank);
+        }
+    }
+
+    private record QueryVariantHit(
+            int index,
+            int rank,
+            String text
+    ) {
+    }
+
+    private static class RerankFusionDocumentCandidate {
+        private final String key;
+        private Document document;
+        private final Map<Integer, Integer> rerankVariantRanks = new LinkedHashMap<>();
+        private double score;
+        private int bestRerankRank = Integer.MAX_VALUE;
+        private int firstQueryVariantIndex = Integer.MAX_VALUE;
+
+        private RerankFusionDocumentCandidate(String key, Document document) {
+            this.key = key;
+            this.document = document;
+        }
+
+        private String getKey() {
+            return key;
+        }
+
+        private Document getDocument() {
+            return document;
+        }
+
+        private double getScore() {
+            return score;
+        }
+
+        private int getBestRerankRank() {
+            return bestRerankRank;
+        }
+
+        private int getFirstQueryVariantIndex() {
+            return firstQueryVariantIndex;
+        }
+
+        private int getHitCount() {
+            return rerankVariantRanks.size();
+        }
+
+        private List<Integer> getQueryVariantIndexes() {
+            return List.copyOf(rerankVariantRanks.keySet());
+        }
+
+        private List<Map<String, Object>> getRerankVariantHits() {
+            List<Map<String, Object>> hits = new ArrayList<>(rerankVariantRanks.size());
+            for (Map.Entry<Integer, Integer> entry : rerankVariantRanks.entrySet()) {
+                Map<String, Object> values = new LinkedHashMap<>();
+                values.put("index", entry.getKey());
+                values.put("rank", entry.getValue());
+                hits.add(values);
+            }
+            return hits;
+        }
+
+        private void addScore(double score) {
+            this.score += score;
+        }
+
+        private void recordHit(Document document, int queryVariantIndex, int rerankRank) {
+            Integer existingRank = rerankVariantRanks.get(queryVariantIndex);
+            if (existingRank == null || rerankRank < existingRank) {
+                rerankVariantRanks.put(queryVariantIndex, rerankRank);
+            }
+            firstQueryVariantIndex = Math.min(firstQueryVariantIndex, queryVariantIndex);
+            if (rerankRank < bestRerankRank) {
+                bestRerankRank = rerankRank;
+                this.document = document;
+            }
         }
     }
 
@@ -886,6 +1184,14 @@ public class RagAnswerAdvisor implements BaseAdvisor {
             }
             return RETRIEVAL_SOURCE_KEYWORD;
         }
+    }
+
+    private static String metadataText(Map<String, Object> metadata, String key) {
+        if (MapUtils.isEmpty(metadata)) {
+            return StringUtils.EMPTY;
+        }
+        Object value = metadata.get(key);
+        return value == null ? StringUtils.EMPTY : value.toString();
     }
 
     private static Integer metadataInteger(Map<String, Object> metadata, String key) {
