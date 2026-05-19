@@ -62,6 +62,9 @@ DOC_BEFORE_RERANK_RANK = "beforeRerankRank"
 DOC_RERANK_RANK = "rerankRank"
 DOC_RERANK_SCORE = "rerankScore"
 DOC_RERANK_FUSION_SCORE = "rerankFusionScore"
+DOC_QUERY_FUSION_BOOST_SCORE = "queryFusionBoostScore"
+DOC_FUSION_AWARE_SCORE = "fusionAwareScore"
+DOC_FUSION_AWARE_WEIGHT = "fusionAwareWeight"
 DOC_RERANK_APPLIED = "rerankApplied"
 DOC_RERANK_MODE = "rerankMode"
 DOC_COVERAGE_GUARD_ADDED = "coverageGuardAdded"
@@ -282,6 +285,8 @@ def _append_document_list(lines: list[str], data: dict[str, Any], documents_key:
                 "keywordSkippedReason=`{keyword_skipped_reason}`, "
                 "beforeRerankRank=`{before_rerank_rank}`, rerankRank=`{rerank_rank}`, "
                 "rerankScore=`{rerank_score}`, rerankFusionScore=`{rerank_fusion_score}`, "
+                "queryFusionBoostScore=`{query_fusion_boost_score}`, "
+                "fusionAwareScore=`{fusion_aware_score}`, fusionAwareWeight=`{fusion_aware_weight}`, "
                 "rerankApplied=`{rerank_applied}`, "
                 "rerankMode=`{rerank_mode}`, coverageGuardAdded=`{coverage_guard_added}`, "
                 "rerankVariantHitCount=`{rerank_variant_hit_count}`, "
@@ -311,6 +316,9 @@ def _append_document_list(lines: list[str], data: dict[str, Any], documents_key:
                 rerank_rank=md_escape(_metadata_value(metadata, DOC_RERANK_RANK)),
                 rerank_score=_fmt_score(metadata.get(DOC_RERANK_SCORE)),
                 rerank_fusion_score=_fmt_score(metadata.get(DOC_RERANK_FUSION_SCORE)),
+                query_fusion_boost_score=_fmt_score(metadata.get(DOC_QUERY_FUSION_BOOST_SCORE)),
+                fusion_aware_score=_fmt_score(metadata.get(DOC_FUSION_AWARE_SCORE)),
+                fusion_aware_weight=_fmt_score(metadata.get(DOC_FUSION_AWARE_WEIGHT)),
                 rerank_applied=md_escape(_metadata_value(metadata, DOC_RERANK_APPLIED)),
                 rerank_mode=md_escape(_metadata_value(metadata, DOC_RERANK_MODE)),
                 coverage_guard_added=md_escape(_metadata_value(metadata, DOC_COVERAGE_GUARD_ADDED)),
@@ -357,7 +365,7 @@ def write_markdown(path: Path, results: list[dict[str, Any]], api_url: str, agen
     lines.append(">")
     lines.append("> `retrieved` / `score` / `empty` 三列的 `—` 表示**没拿到成功的 ChatResponse metadata**，不等价于\"无检索\"。当前实现把 retrieval SSE 帧放在 `.call().chatResponse()` 返回之后才发，所以 LLM 调用失败时（即使 RAG 检索本身成功）三列都会是 `—`。要区分\"检索失败\"和\"生成失败\"，对照 `error` 列 / details 区 / backend log。")
     lines.append(">")
-    lines.append("> Details 区的 `pre_rerank_documents` 展开 rerank 前候选池，`documents` 展开最终 top-K chunk attribution；document 行的 `score` 是当前阶段写回的候选分，可能来自 HYBRID RRF、query-variant fusion 或 per-variant rerank RRF；原始向量分与关键词分分别看 `vectorScore` / `keywordScore`，多 query 召回融合看 `queryFusionScore/queryFusionRank/queryVariantHitCount`；rerank 单次分数看 `rerankScore`，多路 rerank 融合分看 `rerankFusionScore/rerankVariantHitCount`；rerank 服务状态看 `rerank_runtime` 的 model / endpoint / failure_reason；keyword 分支未参与时看 `keywordSkippedReason`。")
+    lines.append("> Details 区的 `pre_rerank_documents` 展开 rerank 前候选池，`documents` 展开最终 top-K chunk attribution；document 行的 `score` 是当前阶段写回的候选分，可能来自 HYBRID RRF、query-variant fusion、per-variant rerank RRF 或 fusion-aware rerank；原始向量分与关键词分分别看 `vectorScore` / `keywordScore`，多 query 召回融合看 `queryFusionScore/queryFusionRank/queryVariantHitCount`；最终 rerank 写回分看 `rerankScore`，多路 rerank 融合分看 `rerankFusionScore/rerankVariantHitCount`，fusion-aware 弱加成看 `queryFusionBoostScore/fusionAwareScore`；rerank 服务状态看 `rerank_runtime` 的 model / endpoint / failure_reason；keyword 分支未参与时看 `keywordSkippedReason`。")
     lines.append("")
     lines.append("| id | type | completed | duration_ms | should_answer | retrieved | score | empty | literal_hit | missed_points | answer_preview | manual_pass |")
     lines.append("|---|---|---:|---:|---:|---:|---|---:|---:|---|---|---|")

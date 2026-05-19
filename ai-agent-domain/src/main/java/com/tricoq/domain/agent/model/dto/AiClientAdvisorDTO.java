@@ -109,7 +109,8 @@ public class AiClientAdvisorDTO {
         private String rerankPolicy;
 
         /**
-         * rerank query 构造策略：ORIGINAL / ORIGINAL_PLUS_VARIANT / PER_VARIANT_RERANK_RRF。
+         * rerank query 构造策略：ORIGINAL / ORIGINAL_PLUS_VARIANT / PER_VARIANT_RERANK_RRF /
+         * FUSION_AWARE_RERANK_RRF。
          * 默认 ORIGINAL，保证旧行为不漂移。
          */
         private String rerankQueryPolicy;

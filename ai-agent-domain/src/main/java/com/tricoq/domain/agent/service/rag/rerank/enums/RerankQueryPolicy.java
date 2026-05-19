@@ -18,7 +18,10 @@ public enum RerankQueryPolicy {
 
     ORIGINAL("ORIGINAL"),
     ORIGINAL_PLUS_VARIANT("ORIGINAL_PLUS_VARIANT"),
-    PER_VARIANT_RERANK_RRF("PER_VARIANT_RERANK_RRF");
+    //同一批候选，不同 query variant 分别精排，再用 RRF 融合精排名次。
+    PER_VARIANT_RERANK_RRF("PER_VARIANT_RERANK_RRF"),
+    //在 per-variant rerank RRF 基础上，弱融合 query-fusion 阶段的候选排名。
+    FUSION_AWARE_RERANK_RRF("FUSION_AWARE_RERANK_RRF");
 
     private final String policyName;
 

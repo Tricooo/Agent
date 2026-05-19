@@ -135,7 +135,8 @@ public final class RagObservationKeys {
         public static final String RERANK_ENDPOINT = "qa_rerank_endpoint";
 
         /**
-         * 本次 rerank query 构造策略，例如 ORIGINAL / ORIGINAL_PLUS_VARIANT / PER_VARIANT_RERANK_RRF。
+         * 本次 rerank query 构造策略，例如 ORIGINAL / ORIGINAL_PLUS_VARIANT / PER_VARIANT_RERANK_RRF /
+         * FUSION_AWARE_RERANK_RRF。
          */
         public static final String RERANK_QUERY_POLICY = "qa_rerank_query_policy";
 
@@ -289,6 +290,21 @@ public final class RagObservationKeys {
          * 多 query variant 独立 rerank 后的 RRF 融合分数。
          */
         public static final String RERANK_FUSION_SCORE = "rerankFusionScore";
+
+        /**
+         * fusion-aware rerank 中，query-fusion 排名贡献的弱加成分数。
+         */
+        public static final String QUERY_FUSION_BOOST_SCORE = "queryFusionBoostScore";
+
+        /**
+         * fusion-aware rerank 最终排序分数。
+         */
+        public static final String FUSION_AWARE_SCORE = "fusionAwareScore";
+
+        /**
+         * fusion-aware rerank 使用的 query-fusion 加成权重。
+         */
+        public static final String FUSION_AWARE_WEIGHT = "fusionAwareWeight";
 
         /**
          * 当前 chunk 被多少个 rerank query variant 命中。
