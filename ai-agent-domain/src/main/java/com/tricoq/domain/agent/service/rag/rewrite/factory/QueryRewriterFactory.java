@@ -2,10 +2,14 @@ package com.tricoq.domain.agent.service.rag.rewrite.factory;
 
 import com.tricoq.domain.agent.service.rag.rewrite.QueryRewriter;
 import com.tricoq.domain.agent.service.rag.rewrite.enums.RewritePolicy;
+import com.tricoq.domain.agent.service.rag.rewrite.pipeline.RewritePipeline;
+import com.tricoq.domain.agent.service.rag.rewrite.strategy.QueryRewriteStrategy;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * @description:
@@ -16,19 +20,25 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class QueryRewriterFactory {
 
-    private final Map<String, QueryRewriter> queryRewriters;
+    private final Map<String, QueryRewriteStrategy> queryRewriteStrategies;
 
     public QueryRewriter getQueryRewriter(String policy) {
         RewritePolicy rewritePolicy = RewritePolicy.getByPolicyOrDefault(policy);
-        QueryRewriter rewriter = queryRewriters.get(rewritePolicy.getBeanName());
-        if (rewriter != null) {
-            return rewriter;
+        List<QueryRewriteStrategy> strategies = rewritePolicy.getStrategyBeanNames().stream()
+                .map(queryRewriteStrategies::get)
+                .filter(Objects::nonNull)
+                .toList();
+
+        if (!strategies.isEmpty()) {
+            return new RewritePipeline(rewritePolicy, strategies);
         }
 
-        QueryRewriter fallback = queryRewriters.get(RewritePolicy.PASSTHROUGH.getBeanName());
-        if (fallback == null) {
-            throw new IllegalStateException("PassthroughQueryRewriter bean not found");
+        QueryRewriteStrategy passthrough = queryRewriteStrategies.get(
+                RewritePolicy.PASSTHROUGH.getStrategyBeanNames().getFirst()
+        );
+        if (passthrough == null) {
+            throw new IllegalStateException("PassthroughQueryRewriter strategy not found");
         }
-        return fallback;
+        return new RewritePipeline(RewritePolicy.PASSTHROUGH, List.of(passthrough));
     }
 }

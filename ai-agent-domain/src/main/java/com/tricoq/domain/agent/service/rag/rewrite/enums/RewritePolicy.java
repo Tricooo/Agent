@@ -5,6 +5,8 @@ import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 
+import java.util.List;
+
 /**
  * @description:
  * @author：trico qiang
@@ -15,11 +17,21 @@ import org.apache.commons.lang3.StringUtils;
 @Slf4j
 public enum RewritePolicy {
 
-    HEURISTIC_MULTI_QUERY("heuristicMultiQueryRewriter", "HEURISTIC_MULTI_QUERY"),
-    PASSTHROUGH("passthroughQueryRewriter", "PASSTHROUGH");
+    LLM_MULTI_QUERY("LLM_MULTI_QUERY", List.of(
+            "llmQueryRewriter",
+            "heuristicMultiQueryRewriter",
+            "passthroughQueryRewriter"
+    )),
+    HEURISTIC_MULTI_QUERY("HEURISTIC_MULTI_QUERY", List.of(
+            "heuristicMultiQueryRewriter",
+            "passthroughQueryRewriter"
+    )),
+    PASSTHROUGH("PASSTHROUGH", List.of(
+            "passthroughQueryRewriter"
+    ));
 
-    private final String beanName;
     private final String policyName;
+    private final List<String> strategyBeanNames;
 
     public static RewritePolicy getByPolicyOrDefault(String policyName) {
         if (StringUtils.isBlank(policyName)) {

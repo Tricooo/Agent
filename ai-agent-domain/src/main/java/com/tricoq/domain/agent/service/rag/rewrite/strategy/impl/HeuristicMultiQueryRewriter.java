@@ -1,15 +1,13 @@
-package com.tricoq.domain.agent.service.rag.rewrite;
+package com.tricoq.domain.agent.service.rag.rewrite.strategy.impl;
 
-import com.tricoq.domain.agent.model.dto.RewriteResult;
 import com.tricoq.domain.agent.service.rag.rewrite.enums.RewritePolicy;
+import com.tricoq.domain.agent.service.rag.rewrite.strategy.AbstractQueryRewriter;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * @description: 基于启发式规则的多查询重写器
@@ -17,7 +15,7 @@ import java.util.Set;
  * @date: 5/15/26
  */
 @Component
-public class HeuristicMultiQueryRewriter implements QueryRewriter {
+public class HeuristicMultiQueryRewriter extends AbstractQueryRewriter {
 
     private static final List<String> EXPLANATION_INTENT_WORDS = List.of(
             "压力", "异常", "健康", "是否正常", "怎么判断", "判断", "查询思路", "告警", "阈值", "范围"
@@ -37,27 +35,25 @@ public class HeuristicMultiQueryRewriter implements QueryRewriter {
     }
 
     @Override
-    public RewriteResult rewrite(String userText) {
-        Set<String> variants = new LinkedHashSet<>();
-        addVariant(variants, userText);
+    protected RewritePolicy rewritePolicy() {
+        return RewritePolicy.HEURISTIC_MULTI_QUERY;
+    }
 
+    @Override
+    protected List<String> doRewrite(String userText) {
         if (hasExplanationIntent(userText)) {
             for (Map.Entry<String, String> entry : METRIC_TOPIC_EXPANSIONS.entrySet()) {
                 if (StringUtils.containsIgnoreCase(userText, entry.getKey())) {
-                    addVariant(variants, entry.getValue());
-                    break;
+                    return List.of(entry.getValue());
                 }
             }
         }
+        return List.of();
+    }
 
-        String rewriteMode = variants.size() > 1
-                ? RewritePolicy.HEURISTIC_MULTI_QUERY.getPolicyName()
-                : RewritePolicy.PASSTHROUGH.getPolicyName();
-        return RewriteResult.builder()
-                .originUserText(userText)
-                .queryVariantTexts(List.copyOf(variants))
-                .rewriteMode(rewriteMode)
-                .build();
+    @Override
+    protected String noRewriteVariantReason(String userText) {
+        return StringUtils.isBlank(userText) ? "BLANK_QUERY" : "NO_HEURISTIC_MATCH";
     }
 
     private boolean hasExplanationIntent(String userText) {
@@ -70,12 +66,5 @@ public class HeuristicMultiQueryRewriter implements QueryRewriter {
             }
         }
         return false;
-    }
-
-    private void addVariant(Set<String> variants, String text) {
-        if (StringUtils.isBlank(text)) {
-            return;
-        }
-        variants.add(text.trim());
     }
 }

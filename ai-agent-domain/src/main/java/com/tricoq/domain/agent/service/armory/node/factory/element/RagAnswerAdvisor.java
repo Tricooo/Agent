@@ -14,9 +14,10 @@ import com.tricoq.domain.agent.model.valobj.RetrievalOptionsVO;
 import com.tricoq.domain.agent.service.rag.rerank.DocumentReranker;
 import com.tricoq.domain.agent.service.rag.rerank.PassthroughDocumentReranker;
 import com.tricoq.domain.agent.service.rag.rerank.enums.RerankQueryPolicy;
-import com.tricoq.domain.agent.service.rag.rewrite.PassthroughQueryRewriter;
 import com.tricoq.domain.agent.service.rag.rewrite.QueryRewriter;
 import com.tricoq.domain.agent.service.rag.rewrite.enums.RewritePolicy;
+import com.tricoq.domain.agent.service.rag.rewrite.pipeline.RewritePipeline;
+import com.tricoq.domain.agent.service.rag.rewrite.strategy.impl.PassthroughQueryRewriter;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
@@ -116,7 +117,7 @@ public class RagAnswerAdvisor implements BaseAdvisor {
 
     public RagAnswerAdvisor(VectorStore vectorStore, SearchRequest searchRequest,
                             RetrievalOptionsVO retrievalOptions, DocumentReranker documentReranker) {
-        this(vectorStore, searchRequest, retrievalOptions, documentReranker, new PassthroughQueryRewriter());
+        this(vectorStore, searchRequest, retrievalOptions, documentReranker, passthroughQueryRewriter());
     }
 
     public RagAnswerAdvisor(VectorStore vectorStore, SearchRequest searchRequest,
@@ -126,7 +127,7 @@ public class RagAnswerAdvisor implements BaseAdvisor {
         this.searchRequest = searchRequest;
         this.retrievalOptions = retrievalOptions == null ? new RetrievalOptionsVO() : retrievalOptions;
         this.documentReranker = documentReranker == null ? new PassthroughDocumentReranker() : documentReranker;
-        this.queryRewriter = queryRewriter == null ? new PassthroughQueryRewriter() : queryRewriter;
+        this.queryRewriter = queryRewriter == null ? passthroughQueryRewriter() : queryRewriter;
         this.retrievalTopKPlan = buildTopKPlan(searchRequest.getTopK());
         this.userTextAdvisor = """
                 
@@ -143,6 +144,10 @@ public class RagAnswerAdvisor implements BaseAdvisor {
                 the user that you can't answer the question.
                 """.formatted(AdvisorContext.QUESTION_ANSWER_CONTEXT);
 
+    }
+
+    private static QueryRewriter passthroughQueryRewriter() {
+        return new RewritePipeline(RewritePolicy.PASSTHROUGH, List.of(new PassthroughQueryRewriter()));
     }
 
     private RetrievalTopKPlan buildTopKPlan(int topK) {
@@ -327,7 +332,11 @@ public class RagAnswerAdvisor implements BaseAdvisor {
         return RewriteResult.builder()
                 .originUserText(userText)
                 .queryVariantTexts(List.of(userText))
+                .requestedPolicy(RewritePolicy.PASSTHROUGH.getPolicyName())
                 .rewriteMode(RewritePolicy.PASSTHROUGH.getPolicyName())
+                .failureReason("REWRITE_FALLBACK_PASSTHROUGH")
+                .elapsedMs(0L)
+                .attemptTrace("PASSTHROUGH:PASSTHROUGH(REWRITE_FALLBACK_PASSTHROUGH)")
                 .build();
     }
 
@@ -354,8 +363,20 @@ public class RagAnswerAdvisor implements BaseAdvisor {
                 ? RewritePolicy.PASSTHROUGH.getPolicyName()
                 : StringUtils.defaultIfBlank(rewriteResult.getRewriteMode(), RewritePolicy.PASSTHROUGH.getPolicyName());
         params.put(Qa.QUERY_REWRITE_MODE, rewriteMode);
+        params.put(Qa.QUERY_REWRITE_REQUESTED_POLICY, rewriteResult == null
+                ? RewritePolicy.PASSTHROUGH.getPolicyName()
+                : StringUtils.defaultIfBlank(rewriteResult.getRequestedPolicy(), rewriteMode));
         params.put(Qa.QUERY_VARIANT_COUNT, queryVariants.size());
         params.put(Qa.QUERY_VARIANT_TEXTS, queryVariants);
+        params.put(Qa.QUERY_REWRITE_FAILURE_REASON, rewriteResult == null
+                ? ""
+                : StringUtils.defaultString(rewriteResult.getFailureReason()));
+        params.put(Qa.QUERY_REWRITE_ELAPSED_MS, rewriteResult == null || rewriteResult.getElapsedMs() == null
+                ? 0L
+                : rewriteResult.getElapsedMs());
+        params.put(Qa.QUERY_REWRITE_ATTEMPT_TRACE, rewriteResult == null
+                ? ""
+                : StringUtils.defaultString(rewriteResult.getAttemptTrace()));
     }
 
     private RerankQueryPlan buildRerankQueryPlan(String userText, List<String> queryVariants) {

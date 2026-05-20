@@ -161,6 +161,11 @@ public final class RagObservationKeys {
         public static final String QUERY_REWRITE_MODE = "qa_query_rewrite_mode";
 
         /**
+         * 配置请求的 query rewrite 策略，例如 LLM_MULTI_QUERY。
+         */
+        public static final String QUERY_REWRITE_REQUESTED_POLICY = "qa_query_rewrite_requested_policy";
+
+        /**
          * 本次实际参与检索的 query variant 数量。
          */
         public static final String QUERY_VARIANT_COUNT = "qa_query_variant_count";
@@ -169,6 +174,21 @@ public final class RagObservationKeys {
          * 本次实际参与检索的 query variant 文本列表。
          */
         public static final String QUERY_VARIANT_TEXTS = "qa_query_variant_texts";
+
+        /**
+         * query rewrite 降级或失败原因。
+         */
+        public static final String QUERY_REWRITE_FAILURE_REASON = "qa_query_rewrite_failure_reason";
+
+        /**
+         * query rewrite 总耗时，单位毫秒。
+         */
+        public static final String QUERY_REWRITE_ELAPSED_MS = "qa_query_rewrite_elapsed_ms";
+
+        /**
+         * query rewrite 策略尝试轨迹。
+         */
+        public static final String QUERY_REWRITE_ATTEMPT_TRACE = "qa_query_rewrite_attempt_trace";
 
         private Qa() {
         }

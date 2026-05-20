@@ -18,6 +18,14 @@ public class RewriteResult {
 
     private List<String> queryVariantTexts;
 
+    private String requestedPolicy;
+
     private String rewriteMode;
+
+    private String failureReason;
+
+    private Long elapsedMs;
+
+    private String attemptTrace;
 
 }

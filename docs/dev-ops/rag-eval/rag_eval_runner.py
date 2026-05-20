@@ -46,6 +46,10 @@ QA_RERANK_QUERY_TEXT = "qa_rerank_query_text"
 QA_RERANK_COVERAGE_GUARD_APPLIED = "qa_rerank_coverage_guard_applied"
 QA_RERANK_COVERAGE_GUARD_ADDED_COUNT = "qa_rerank_coverage_guard_added_count"
 QA_QUERY_REWRITE_MODE = "qa_query_rewrite_mode"
+QA_QUERY_REWRITE_REQUESTED_POLICY = "qa_query_rewrite_requested_policy"
+QA_QUERY_REWRITE_FAILURE_REASON = "qa_query_rewrite_failure_reason"
+QA_QUERY_REWRITE_ELAPSED_MS = "qa_query_rewrite_elapsed_ms"
+QA_QUERY_REWRITE_ATTEMPT_TRACE = "qa_query_rewrite_attempt_trace"
 QA_QUERY_VARIANT_COUNT = "qa_query_variant_count"
 QA_QUERY_VARIANT_TEXTS = "qa_query_variant_texts"
 
@@ -481,9 +485,13 @@ def write_markdown(path: Path, results: list[dict[str, Any]], api_url: str, agen
                 if not isinstance(query_variants, list):
                     query_variants = [query_variants]
                 lines.append(
-                    "  - query_rewrite: mode `{mode}` / variants `{count}` / texts `{texts}`".format(
+                    "  - query_rewrite: requested `{requested}` / mode `{mode}` / variants `{count}` / elapsed_ms `{elapsed}` / failure `{failure}` / attempts `{attempts}` / texts `{texts}`".format(
+                        requested=data.get(QA_QUERY_REWRITE_REQUESTED_POLICY) or "—",
                         mode=data.get(QA_QUERY_REWRITE_MODE),
                         count=data.get(QA_QUERY_VARIANT_COUNT),
+                        elapsed=data.get(QA_QUERY_REWRITE_ELAPSED_MS),
+                        failure=md_escape(data.get(QA_QUERY_REWRITE_FAILURE_REASON) or "—"),
+                        attempts=md_escape(data.get(QA_QUERY_REWRITE_ATTEMPT_TRACE) or "—"),
                         texts=md_escape(" | ".join(str(item) for item in query_variants)),
                     )
                 )
