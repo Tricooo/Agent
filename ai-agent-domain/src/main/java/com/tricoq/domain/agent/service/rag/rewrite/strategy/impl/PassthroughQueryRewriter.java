@@ -1,6 +1,7 @@
 package com.tricoq.domain.agent.service.rag.rewrite.strategy.impl;
 
 import com.tricoq.domain.agent.service.rag.rewrite.enums.RewritePolicy;
+import com.tricoq.domain.agent.service.rag.rewrite.model.RewriteContext;
 import com.tricoq.domain.agent.service.rag.rewrite.strategy.AbstractQueryRewriter;
 import org.springframework.stereotype.Component;
 
@@ -20,7 +21,7 @@ public class PassthroughQueryRewriter extends AbstractQueryRewriter {
     }
 
     @Override
-    protected List<String> doRewrite(String userText) {
+    protected List<String> doRewrite(String userText, RewriteContext context) {
         return List.of();
     }
 

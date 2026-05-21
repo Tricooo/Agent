@@ -5,6 +5,7 @@ import com.tricoq.domain.agent.service.rag.rewrite.QueryRewriter;
 import com.tricoq.domain.agent.service.rag.rewrite.enums.RewritePolicy;
 import com.tricoq.domain.agent.service.rag.rewrite.enums.RewriteStatus;
 import com.tricoq.domain.agent.service.rag.rewrite.model.RewriteAttempt;
+import com.tricoq.domain.agent.service.rag.rewrite.model.RewriteContext;
 import com.tricoq.domain.agent.service.rag.rewrite.strategy.QueryRewriteStrategy;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -22,10 +23,17 @@ public class RewritePipeline implements QueryRewriter {
 
     private final RewritePolicy requestedPolicy;
     private final List<QueryRewriteStrategy> strategies;
+    private final RewriteContext rewriteContext;
 
     public RewritePipeline(RewritePolicy requestedPolicy, List<QueryRewriteStrategy> strategies) {
+        this(requestedPolicy, strategies, null);
+    }
+
+    public RewritePipeline(RewritePolicy requestedPolicy, List<QueryRewriteStrategy> strategies,
+                           RewriteContext rewriteContext) {
         this.requestedPolicy = requestedPolicy == null ? RewritePolicy.PASSTHROUGH : requestedPolicy;
         this.strategies = strategies == null ? List.of() : List.copyOf(strategies);
+        this.rewriteContext = rewriteContext;
     }
 
     @Override
@@ -37,7 +45,7 @@ public class RewritePipeline implements QueryRewriter {
             if (strategy == null) {
                 continue;
             }
-            RewriteAttempt attempt = strategy.attempt(userText);
+            RewriteAttempt attempt = strategy.attempt(userText, rewriteContext);
             if (attempt == null) {
                 continue;
             }

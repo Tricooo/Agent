@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 顾问配置，值对象
@@ -116,6 +117,13 @@ public class AiClientAdvisorDTO {
         private String rerankQueryPolicy;
 
         private String rewritePolicy;
+
+        private String queryRewriterClientId;
+
+        /**
+         * LLM query rewrite 的知识库领域提示词；例如指标名、术语、函数名、证据类型。
+         */
+        private List<String> queryRewriteDomainHints;
     }
 
 }

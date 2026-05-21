@@ -11,12 +11,19 @@ import com.tricoq.domain.agent.model.dto.AiClientToolMcpDTO;
 import com.tricoq.domain.agent.model.dto.AiClientDTO;
 import com.tricoq.domain.agent.service.armory.business.data.ILoadDataStrategy;
 import com.tricoq.domain.agent.service.armory.node.factory.DefaultArmoryStrategyFactory;
+import com.tricoq.domain.agent.service.rag.rewrite.enums.RewritePolicy;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -43,7 +50,19 @@ public class AiClientLoadDataStrategy implements ILoadDataStrategy {
 
     @Override
     public void loadData(ArmoryCommandEntity entity, DefaultArmoryStrategyFactory.DynamicContext dynamicContext) {
-        List<String> clientIds = entity.getCommandIdList();
+        List<String> requestedClientIds = distinctClientIds(entity.getCommandIdList());
+
+        CompletableFuture<List<AiClientAdvisorDTO>> aiClientAdvisorListFuture = CompletableFuture.supplyAsync(() -> {
+            log.info("查询配置数据(ai_client_advisor) {}", requestedClientIds);
+            return clientRepository.queryAiClientAdvisorsByClientIds(requestedClientIds);
+        }, threadPoolExecutor);
+
+        List<AiClientAdvisorDTO> advisors = aiClientAdvisorListFuture.orTimeout(5, TimeUnit.SECONDS).join();
+        if (CollectionUtils.isNotEmpty(advisors)) {
+            dynamicContext.setAdvisorConfigs(advisors);
+        }
+
+        List<String> clientIds = resolveLoadClientIds(requestedClientIds, advisors);
 
         CompletableFuture<List<AiClientApiDTO>> aiClientApiListFuture = CompletableFuture.supplyAsync(() -> {
             log.info("查询配置数据(ai_client_api) {}", clientIds);
@@ -65,31 +84,68 @@ public class AiClientLoadDataStrategy implements ILoadDataStrategy {
             return clientRepository.queryAiClientSystemPromptsByClientIds(clientIds);
         }, threadPoolExecutor);
 
-        CompletableFuture<List<AiClientAdvisorDTO>> aiClientAdvisorListFuture = CompletableFuture.supplyAsync(() -> {
-            log.info("查询配置数据(ai_client_advisor) {}", clientIds);
-            return clientRepository.queryAiClientAdvisorsByClientIds(clientIds);
-        }, threadPoolExecutor);
-
         CompletableFuture<List<AiClientDTO>> aiClientListFuture = CompletableFuture.supplyAsync(() -> {
             log.info("查询配置数据(ai_client) {}", clientIds);
             return clientRepository.queryAiClientsByClientIds(clientIds);
         }, threadPoolExecutor);
 
-        CompletableFuture<Void> all = CompletableFuture.allOf(aiClientApiListFuture,
+        CompletableFuture<Void> configFutures = CompletableFuture.allOf(aiClientApiListFuture,
                 aiClientModelListFuture,
                 aiClientToolMcpListFuture,
                 aiClientSystemPromptListFuture,
-                aiClientAdvisorListFuture,
                 aiClientListFuture).orTimeout(5, TimeUnit.SECONDS);
-        //这里还是使用之前的线程
-        all.thenRun(() -> {
+
+        configFutures.thenRun(() -> {
             dynamicContext.setClientApis(aiClientApiListFuture.join());
             dynamicContext.setClientModels(aiClientModelListFuture.join());
             dynamicContext.setSystemPromptMap(aiClientSystemPromptListFuture.join());
             dynamicContext.setToolMcps(aiClientToolMcpListFuture.join());
-            dynamicContext.setAdvisorConfigs(aiClientAdvisorListFuture.join());
             dynamicContext.setClients(aiClientListFuture.join());
         }).join();
+    }
+
+    private List<String> distinctClientIds(Collection<String> clientIds) {
+        Set<String> distinctIds = new LinkedHashSet<>();
+        addClientIds(distinctIds, clientIds);
+        return new ArrayList<>(distinctIds);
+    }
+
+    private List<String> resolveLoadClientIds(List<String> requestedClientIds, List<AiClientAdvisorDTO> advisors) {
+        Set<String> clientIds = new LinkedHashSet<>();
+        addClientIds(clientIds, requestedClientIds);
+        addClientIds(clientIds, extractRagRewriteClientIds(advisors));
+        return new ArrayList<>(clientIds);
+    }
+
+    private void addClientIds(Set<String> target, Collection<String> clientIds) {
+        if (CollectionUtils.isEmpty(clientIds)) {
+            return;
+        }
+        for (String clientId : clientIds) {
+            if (StringUtils.isNotBlank(clientId)) {
+                target.add(clientId);
+            }
+        }
+    }
+
+    private List<String> extractRagRewriteClientIds(List<AiClientAdvisorDTO> advisors) {
+        if (CollectionUtils.isEmpty(advisors)) {
+            return List.of();
+        }
+        List<String> addClients = new ArrayList<>();
+        for (AiClientAdvisorDTO advisor : advisors) {
+            AiClientAdvisorDTO.RagAnswer ragAnswer = advisor.getRagAnswer();
+            if (ragAnswer == null) {
+                continue;
+            }
+            String rewritePolicy = ragAnswer.getRewritePolicy();
+            if (RewritePolicy.getByPolicyOrDefault(rewritePolicy).equals(RewritePolicy.LLM_MULTI_QUERY) &&
+                    StringUtils.isNotBlank(ragAnswer.getQueryRewriterClientId())) {
+                String clientId = ragAnswer.getQueryRewriterClientId();
+                addClients.add(clientId);
+            }
+        }
+        return addClients;
     }
 
     @Override

@@ -2,6 +2,7 @@ package com.tricoq.domain.agent.service.rag.rewrite.strategy;
 
 import com.tricoq.domain.agent.service.rag.rewrite.enums.RewritePolicy;
 import com.tricoq.domain.agent.service.rag.rewrite.model.RewriteAttempt;
+import com.tricoq.domain.agent.service.rag.rewrite.model.RewriteContext;
 
 /**
  * @description: 单个 query rewrite 策略，只负责一次尝试，不负责降级编排。
@@ -12,5 +13,5 @@ public interface QueryRewriteStrategy {
 
     RewritePolicy policy();
 
-    RewriteAttempt attempt(String userText);
+    RewriteAttempt attempt(String userText, RewriteContext context);
 }

@@ -2,6 +2,7 @@ package com.tricoq.domain.agent.service.armory.node;
 
 import com.alibaba.fastjson.JSON;
 import com.tricoq.domain.agent.model.dto.AiClientAdvisorDTO;
+import com.tricoq.domain.agent.model.dto.AiClientDTO;
 import com.tricoq.domain.agent.model.entity.ArmoryCommandEntity;
 import com.tricoq.domain.agent.model.enums.AiAgentEnumVO;
 import com.tricoq.domain.agent.model.enums.AiClientAdvisorTypeEnumVO;
@@ -9,10 +10,13 @@ import com.tricoq.domain.agent.service.armory.node.factory.DefaultArmoryStrategy
 import com.tricoq.domain.agent.service.rag.rerank.DocumentReranker;
 import com.tricoq.domain.agent.service.rag.rerank.factory.DocumentRerankerFactory;
 import com.tricoq.domain.agent.service.rag.rewrite.QueryRewriter;
+import com.tricoq.domain.agent.service.rag.rewrite.enums.RewritePolicy;
 import com.tricoq.domain.agent.service.rag.rewrite.factory.QueryRewriterFactory;
+import com.tricoq.domain.agent.service.rag.rewrite.model.RewriteContext;
 import com.tricoq.types.framework.chain.StrategyHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.stereotype.Component;
@@ -56,23 +60,40 @@ public class AiClientAdvisorNode extends AbstractArmorySupport {
         }
 
         for (AiClientAdvisorDTO advisorVO : advisors) {
-            Advisor advisor = createClientAdvisor(advisorVO);
+            Advisor advisor = createClientAdvisor(advisorVO, dynamicContext);
             registerBean(beanName(advisorVO.getAdvisorId()), Advisor.class, advisor);
         }
         return router(requestParam, dynamicContext);
     }
 
-    private Advisor createClientAdvisor(AiClientAdvisorDTO advisorVO) {
+    private Advisor createClientAdvisor(AiClientAdvisorDTO advisorVO,
+                                        DefaultArmoryStrategyFactory.DynamicContext dynamicContext) {
         AiClientAdvisorTypeEnumVO vo = AiClientAdvisorTypeEnumVO.getByCode(advisorVO.getAdvisorType());
-        if (vo != AiClientAdvisorTypeEnumVO.RAG_ANSWER || advisorVO.getRagAnswer() == null) {
+        AiClientAdvisorDTO.RagAnswer ragAnswer = advisorVO.getRagAnswer();
+        if (vo != AiClientAdvisorTypeEnumVO.RAG_ANSWER || ragAnswer == null) {
             return vo.createAdvisor(advisorVO, vectorStore);
         }
 
         DocumentReranker reranker = documentRerankerFactory.getDocumentReranker(
-                advisorVO.getRagAnswer().getRerankPolicy()
+                ragAnswer.getRerankPolicy()
         );
+
+        RewriteContext.RewriteContextBuilder rewriteContextBuilder = RewriteContext.builder();
+        if (RewritePolicy.LLM_MULTI_QUERY.getPolicyName().equals(ragAnswer.getRewritePolicy())) {
+            String queryRewriterClientId = ragAnswer.getQueryRewriterClientId();
+            if (StringUtils.isBlank(queryRewriterClientId)) {
+                throw new IllegalArgumentException("Query rewriter client id is empty");
+            }
+            AiClientDTO queryRewriterClient = dynamicContext.getClientMap().get(queryRewriterClientId);
+            if (queryRewriterClient == null) {
+                throw new IllegalArgumentException("Query rewriter client is not loaded: " + queryRewriterClientId);
+            }
+            rewriteContextBuilder.extraClientId(queryRewriterClientId);
+            rewriteContextBuilder.queryRewriteDomainHints(ragAnswer.getQueryRewriteDomainHints());
+        }
+
         QueryRewriter queryRewriter = queryRewriterFactory.getQueryRewriter(
-                advisorVO.getRagAnswer().getRewritePolicy()
+                ragAnswer.getRewritePolicy(), rewriteContextBuilder.build()
         );
         return vo.createAdvisor(advisorVO, vectorStore, reranker, queryRewriter);
     }

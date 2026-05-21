@@ -3,6 +3,7 @@ package com.tricoq.domain.agent.service.rag.rewrite.strategy;
 import com.tricoq.domain.agent.service.rag.rewrite.enums.RewritePolicy;
 import com.tricoq.domain.agent.service.rag.rewrite.enums.RewriteStatus;
 import com.tricoq.domain.agent.service.rag.rewrite.model.RewriteAttempt;
+import com.tricoq.domain.agent.service.rag.rewrite.model.RewriteContext;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 
@@ -27,12 +28,12 @@ public abstract class AbstractQueryRewriter implements QueryRewriteStrategy {
     }
 
     @Override
-    public final RewriteAttempt attempt(String userText) {
+    public final RewriteAttempt attempt(String userText, RewriteContext context) {
         long start = System.nanoTime();
         String originUserText = StringUtils.trimToEmpty(userText);
 
         try {
-            List<String> rewrittenQueries = doRewrite(originUserText);
+            List<String> rewrittenQueries = doRewrite(originUserText, context);
             List<String> queryVariants = normalizeQueryVariants(originUserText, rewrittenQueries);
             RewriteStatus status = resolveStatus(queryVariants);
             String failureReason = status == RewriteStatus.REWRITTEN ? null : noRewriteVariantReason(originUserText);
@@ -52,7 +53,7 @@ public abstract class AbstractQueryRewriter implements QueryRewriteStrategy {
     /**
      * 单个策略只负责尝试生成补充检索 query；原始问题由模板统一放在第一位。
      */
-    protected abstract List<String> doRewrite(String userText);
+    protected abstract List<String> doRewrite(String userText, RewriteContext context);
 
     protected String noRewriteVariantReason(String userText) {
         return StringUtils.isBlank(userText) ? "BLANK_QUERY" : "NO_REWRITE_VARIANT";

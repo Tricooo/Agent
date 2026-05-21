@@ -2,9 +2,11 @@ package com.tricoq.domain.agent.service.rag.rewrite.factory;
 
 import com.tricoq.domain.agent.service.rag.rewrite.QueryRewriter;
 import com.tricoq.domain.agent.service.rag.rewrite.enums.RewritePolicy;
+import com.tricoq.domain.agent.service.rag.rewrite.model.RewriteContext;
 import com.tricoq.domain.agent.service.rag.rewrite.pipeline.RewritePipeline;
 import com.tricoq.domain.agent.service.rag.rewrite.strategy.QueryRewriteStrategy;
 import lombok.RequiredArgsConstructor;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -23,14 +25,17 @@ public class QueryRewriterFactory {
     private final Map<String, QueryRewriteStrategy> queryRewriteStrategies;
 
     public QueryRewriter getQueryRewriter(String policy) {
+        return getQueryRewriter(policy, null);
+    }
+
+    public QueryRewriter getQueryRewriter(String policy, RewriteContext context) {
         RewritePolicy rewritePolicy = RewritePolicy.getByPolicyOrDefault(policy);
         List<QueryRewriteStrategy> strategies = rewritePolicy.getStrategyBeanNames().stream()
                 .map(queryRewriteStrategies::get)
                 .filter(Objects::nonNull)
                 .toList();
-
         if (!strategies.isEmpty()) {
-            return new RewritePipeline(rewritePolicy, strategies);
+            return new RewritePipeline(rewritePolicy, strategies, context);
         }
 
         QueryRewriteStrategy passthrough = queryRewriteStrategies.get(

@@ -1,6 +1,7 @@
 package com.tricoq.domain.agent.service.rag.rewrite.strategy.impl;
 
 import com.tricoq.domain.agent.service.rag.rewrite.enums.RewritePolicy;
+import com.tricoq.domain.agent.service.rag.rewrite.model.RewriteContext;
 import com.tricoq.domain.agent.service.rag.rewrite.strategy.AbstractQueryRewriter;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Component;
@@ -40,7 +41,7 @@ public class HeuristicMultiQueryRewriter extends AbstractQueryRewriter {
     }
 
     @Override
-    protected List<String> doRewrite(String userText) {
+    protected List<String> doRewrite(String userText, RewriteContext context) {
         if (hasExplanationIntent(userText)) {
             for (Map.Entry<String, String> entry : METRIC_TOPIC_EXPANSIONS.entrySet()) {
                 if (StringUtils.containsIgnoreCase(userText, entry.getKey())) {
