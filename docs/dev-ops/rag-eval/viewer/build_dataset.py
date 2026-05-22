@@ -158,6 +158,14 @@ GROUP_META: dict[str, dict[str, str]] = {
     "step5.2-http-rerank-live": {"label": "Step 5.2 HTTP rerank live", "phase": "Step 5 Rerank", "color": "#8e24aa", "note": "本地 bge HTTP 接入"},
     "step5.3-rerank-ab": {"label": "Step 5.3 rerank A/B", "phase": "Step 5 Rerank", "color": "#6a1b9a", "note": "LOCAL_BGE vs PASSTHROUGH 全量"},
     "step5.4-rerank-engineering": {"label": "Step 5.4 rerank engineering", "phase": "Step 5 Rerank", "color": "#4527a0", "note": "enabled/fallback/disabled"},
+    "step6.0-rewrite-pipeline": {"label": "Step 6.0 rewrite pipeline", "phase": "Step 6 Query Rewrite", "color": "#3949ab", "note": "降级链 / pipeline smoke"},
+    "step6.1-multi-query": {"label": "Step 6.1 multi-query", "phase": "Step 6 Query Rewrite", "color": "#1e88e5", "note": "启发式 multi-query 首轮验证"},
+    "step6.2-coverage-guard": {"label": "Step 6.2 coverage guard", "phase": "Step 6 Query Rewrite", "color": "#039be5", "note": "保护 rewrite variant 关键候选"},
+    "step6.3-rag-fusion": {"label": "Step 6.3 RAG-fusion", "phase": "Step 6 Query Rewrite", "color": "#00acc1", "note": "query-variant RRF candidate fusion"},
+    "step6.4-query-aware-rerank": {"label": "Step 6.4 query-aware rerank", "phase": "Step 6 Query Rewrite", "color": "#00897b", "note": "all-hit 观测 + rerank query policy"},
+    "step6.5-per-variant-rerank-rrf": {"label": "Step 6.5 per-variant rerank RRF", "phase": "Step 6 Query Rewrite", "color": "#43a047", "note": "每路 query 独立 rerank 后 RRF"},
+    "step6.6-fusion-aware-rerank-rrf": {"label": "Step 6.6 fusion-aware rerank RRF", "phase": "Step 6 Query Rewrite", "color": "#7cb342", "note": "rerank RRF 弱融合 queryFusionRank"},
+    "step6.7-llm-query-rewrite": {"label": "Step 6.7 LLM query rewrite", "phase": "Step 6 Query Rewrite", "color": "#c0ca33", "note": "LLM rewrite + domain hints 实验"},
     "phase-a5-control": {"label": "Phase A.5 control (empty)", "phase": "Step 3 A.5", "color": "#bdbdbd", "note": "空目录"},
 }
 
@@ -166,6 +174,103 @@ def run_label_from_file(group: str, filename: str) -> str:
     stem = filename.rsplit(".", 1)[0]
     base = stem.replace("rag-eval-retrievalContext-", "").replace("rag-eval-retrievalContext", "retrievalContext")
     return base
+
+
+def display_label_from_file(group: str, filename: str) -> str:
+    stem = filename.rsplit(".", 1)[0].lower()
+    stem = stem.removeprefix("rag-eval-result-")
+
+    if group == "_archive":
+        if "bsymmetric" in stem:
+            return "archive · auto-chain dead path"
+        if "t060" in stem:
+            return "archive · threshold 0.60"
+        if "t065" in stem:
+            return "archive · threshold 0.65"
+        return "archive · legacy baseline"
+    if group == "ffix":
+        if "baseline" in stem:
+            return "F-fix baseline · full"
+        if "t055" in stem:
+            return "F-fix threshold 0.55"
+        if "rag05" in stem:
+            return "F-fix RAG-05 timeout"
+        return "F-fix first run"
+    if group == "step3-chunker-v1":
+        return "3.1 chunker v1 · 800"
+    if group == "step3-chunker-v2":
+        return "3.2 chunker v2 · 400"
+    if group == "step3-chunker-v3":
+        return "3.3 chunker v3 · 250"
+    if group == "step3-control-v3":
+        return "3.A control-only"
+    if group == "step3-full-v3-with-control":
+        return "3.A full + control"
+    if group == "step4-hybrid-rrf":
+        if "attribution" in stem:
+            return "4.0 Hybrid RRF · attribution"
+        return "4.0 Hybrid RRF · full"
+    if group == "step4-vector-ablation":
+        return "4.0 VECTOR ablation"
+    if group == "step4.1-hybrid-calibrated":
+        return "4.1 Hybrid calibrated"
+    if group == "step5-rerank-observe":
+        return "5.0 rerank observe"
+    if group == "step5.1-rerank-abstraction":
+        return "5.1 rerank abstraction"
+    if group == "step5.2-http-rerank-live":
+        return "5.2 LOCAL_BGE · RAG-07" if "rag07" in stem else "5.2 LOCAL_BGE · RAG-04"
+    if group == "step5.3-rerank-ab":
+        if stem.startswith("probe-local-bge"):
+            return "5.3 probe LOCAL_BGE · RAG-04"
+        if stem.startswith("probe-passthrough"):
+            return "5.3 probe PASSTHROUGH · RAG-04"
+        if "local-bge" in stem:
+            return "5.3 LOCAL_BGE · full"
+        return "5.3 PASSTHROUGH · full"
+    if group == "step5.4-rerank-engineering":
+        if "fallback" in stem:
+            return "5.4 fallback · RAG-04"
+        if "disabled" in stem:
+            return "5.4 disabled · RAG-04"
+        return "5.4 live · RAG-04"
+
+    if group == "step6.0-rewrite-pipeline":
+        return "6.0 fallback smoke" if "fallback" in stem else "6.0 pipeline smoke"
+    if group == "step6.1-multi-query":
+        if "passthrough-seq" in stem:
+            return "6.1 PASSTHROUGH 对照"
+        if "pre-rerank" in stem:
+            return "6.1 pre-rerank 观测"
+        return "6.1 multi-query · RAG-10"
+    if group == "step6.2-coverage-guard":
+        return "6.2 guard · narrow" if "narrow" in stem else "6.2 guard · RAG-10"
+    if group == "step6.3-rag-fusion":
+        return "6.3 RAG-fusion · narrow"
+    if group == "step6.4-query-aware-rerank":
+        if "original-plus-variant-narrow" in stem:
+            return "6.4 ORIGINAL+VARIANT · narrow"
+        if "original-plus-variant-rag10" in stem:
+            return "6.4 ORIGINAL+VARIANT · RAG-10"
+        return "6.4 ORIGINAL · RAG-10"
+    if group == "step6.5-per-variant-rerank-rrf":
+        return "6.5 per-variant RRF · full" if "full" in stem else "6.5 per-variant RRF · narrow"
+    if group == "step6.6-fusion-aware-rerank-rrf":
+        if "full" in stem:
+            return "6.6 fusion-aware · full"
+        if "narrow" in stem:
+            return "6.6 fusion-aware · narrow"
+        return "6.6 fusion-aware · RAG-10"
+    if group == "step6.7-llm-query-rewrite":
+        if "config-hints" in stem:
+            return "6.7 LLM + config hints · narrow"
+        if "prompt-v2" in stem:
+            return "6.7 LLM prompt v2 · narrow"
+        if "llm-list-narrow" in stem:
+            return "6.7 LLM List DTO · narrow"
+        return "6.7 LLM List DTO · RAG-10"
+
+    return run_label_from_file(group, filename)
 
 
 # ---------- markdown parsing ----------
@@ -571,6 +676,37 @@ def derive_config_hint(group: str, run_id: str, parsed: dict | None = None) -> s
     g = group
     r = run_id.lower()
 
+    if g == "step6.0-rewrite-pipeline":
+        if "fallback" in r:
+            return "rewrite pipeline fallback smoke"
+        return "rewrite pipeline smoke"
+    if g == "step6.1-multi-query":
+        if "passthrough" in r:
+            return "rewrite=HEURISTIC_MULTI_QUERY; rerank=PASSTHROUGH 对照"
+        if "pre-rerank" in r:
+            return "rewrite=HEURISTIC_MULTI_QUERY; 观察 pre_rerank_documents"
+        return "rewrite=HEURISTIC_MULTI_QUERY; RAG-10 smoke"
+    if g == "step6.2-coverage-guard":
+        return "rewrite=HEURISTIC_MULTI_QUERY; coverage_guard enabled"
+    if g == "step6.3-rag-fusion":
+        return "query-variant RRF / RAG-fusion; all-hit metadata"
+    if g == "step6.4-query-aware-rerank":
+        if "original-plus-variant" in r:
+            return "rerankQuery=ORIGINAL_PLUS_VARIANT; all-hit observability"
+        return "rerankQuery=ORIGINAL baseline"
+    if g == "step6.5-per-variant-rerank-rrf":
+        return "rerankQuery=PER_VARIANT_RERANK_RRF; per-query rerank + RRF"
+    if g == "step6.6-fusion-aware-rerank-rrf":
+        return "rerankQuery=FUSION_AWARE_RERANK_RRF; +0.3*RRF(queryFusionRank)"
+    if g == "step6.7-llm-query-rewrite":
+        if "config-hints" in r:
+            return "rewrite=LLM_MULTI_QUERY; config domain hints; per-variant rerank RRF"
+        if "prompt-v2" in r:
+            return "rewrite=LLM_MULTI_QUERY; generic prompt v2"
+        if "llm-list" in r:
+            return "rewrite=LLM_MULTI_QUERY; structured List<String> output"
+        return "rewrite=LLM_MULTI_QUERY"
+
     # Content-derived rerank signal (preferred over naming when present)
     if parsed:
         modes: set[str] = set()
@@ -667,6 +803,7 @@ def main() -> None:
         parsed = parse_report(f)
         run_id = f"{group}/{f.stem}"
         run_label = run_label_from_file(group, f.name)
+        display_label = display_label_from_file(group, f.name)
         meta = GROUP_META.get(group, {"label": group, "phase": group, "color": "#888", "note": ""})
         case_count = len(parsed["summary"])
         run = {
@@ -677,6 +814,7 @@ def main() -> None:
             "group_color": meta["color"],
             "group_note": meta["note"],
             "file_label": run_label,
+            "display_label": display_label,
             "file_path": str(f.relative_to(EVAL_ROOT)),
             "generated_at": parsed["header"].get("generated_at", ""),
             "api_url": parsed["header"].get("api_url", ""),

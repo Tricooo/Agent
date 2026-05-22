@@ -1,7 +1,7 @@
 # RAG Eval 自动化 — 计划与状态
 
 > 这份文档是 RAG 评测链路工作的 single source of truth。任何接手会话先读这里。
-> 最后更新：2026-05-19（D22：Step 6.6 fusion-aware rerank RRF 实验收口）
+> 最后更新：2026-05-22（D25：KnowledgeBaseProfile 后续计划）
 
 ## 目录组织
 
@@ -10,6 +10,7 @@ docs/dev-ops/rag-eval/
 ├── PLAN.md                      ← 本文（single source of truth）
 ├── rag_eval_runner.py           ← 评测脚本
 ├── cases.json                   ← 14 条评测用例（脚本与 cases 同目录是 Path(__file__).with_name 硬约定）
+├── viewer/                      ← 单页评测看板；读取 results/** 后生成 viewer/data/dataset.{json,js}
 └── results/
     ├── _archive/                ← F-fix 之前，旧 schema 无 retrieved/score/empty 三列，不可与 ffix 互比 score
     │   ├── rag-eval-result.md                ← Apr 28，0.65 误杀证据（answer 文本可证）
@@ -33,15 +34,19 @@ docs/dev-ops/rag-eval/
     ├── step5.2-http-rerank-live/   ← 本地 bge reranker HTTP 接入 smoke（May 14）
     ├── step5.3-rerank-ab/          ← PASSTHROUGH vs LOCAL_BGE 全量 A/B（May 14）
     ├── step5.4-rerank-engineering/ ← 配置化 / fallback smoke / 生产化口径（May 14）
+    ├── step6.0-rewrite-pipeline/   ← Query rewrite pipeline / fallback smoke（May 20）
     ├── step6.1-multi-query/        ← Query rewrite 首轮 RAG-10 smoke（May 18）
     ├── step6.2-coverage-guard/     ← Rerank coverage guard RAG-10 smoke + 窄回归（May 18）
     ├── step6.3-rag-fusion/         ← Query-variant RRF / RAG-fusion 窄回归（May 18）
     ├── step6.4-query-aware-rerank/ ← all-hit 观测 + ORIGINAL_PLUS_VARIANT smoke（May 19）
     ├── step6.5-per-variant-rerank-rrf/ ← PER_VARIANT_RERANK_RRF 全量验证（May 19）
-    └── step6.6-fusion-aware-rerank-rrf/ ← FUSION_AWARE_RERANK_RRF 实验收口（May 19）
+    ├── step6.6-fusion-aware-rerank-rrf/ ← FUSION_AWARE_RERANK_RRF 实验收口（May 19）
+    └── step6.7-llm-query-rewrite/  ← LLM_MULTI_QUERY / domain hints 实验（May 21）
 ```
 
 > 归档原则：按"评测口径是否一致"分。F-fix 是 schema 硬边界——之前的产物没有 `retrieved/score/empty` 三列，永久不可与之后互比 score。
+>
+> Viewer 更新原则：新增 / 移动 results 下报告后，运行 `cd docs/dev-ops/rag-eval/viewer && python3 build_dataset.py` 重新生成 `data/dataset.json` 与 `data/dataset.js`。`viewer/data/` 是派生产物，报告真相源仍是 `results/` 下 markdown。
 
 ## 1. 总目标
 
@@ -226,6 +231,23 @@ docs/dev-ops/rag-eval/
     - 归因：RAG-10 全量漏项更像生成表达波动，不是 ranking/context 断裂；同一策略下单跑与窄回归 RAG-10 均为 `5/5`，且最终上下文仍包含公式与阈值证据。
     - chunk2 结论：`grafana-mcp-tools-guide.md#2` 很重要但不是唯一必要证据。它承载内存公式证据；但 chunk3 也包含同类公式，chunk5/6 包含阈值证据。RAG-10 的真正验收对象应是“答案证据集是否完整”，而不是单个期待 chunk 必须进 final topK。
     - 当前决策：保留 `FUSION_AWARE_RERANK_RRF` 作为可配置实验策略与面试讲解素材，但不宣称它优于 `PER_VARIANT_RERANK_RRF`；默认策略恢复到 Step 6.5 的 `PER_VARIANT_RERANK_RRF`，下一步进入 `LLMQueryRewriter` 最小版。
+- **Step 6.7 LLM Query Rewrite 配置化实验（2026-05-21）**：
+  - 实现方向：新增 `LLM_MULTI_QUERY` rewrite 策略，使用专用 rewrite client 调 `invokeStructured`，返回 `LlmRewriteResponse.rewrittenQueries`；失败后按 `LLM_MULTI_QUERY -> HEURISTIC_MULTI_QUERY -> PASSTHROUGH` 降级。
+  - 配置入口：`RagAnswer.ext_param.queryRewriterClientId` 指定专用 rewrite client，`queryRewriteDomainHints` 作为当前知识库的可选领域提示。
+  - 工程修正：Armory 先加载 advisor，再从 RAG advisor 中解析 rewrite client id，把专用 client 一起加载进 Spring 运行时，避免 `LlmQueryRewriter` 单例 Bean 初始化早于 DB client 装配的问题。
+  - 验证产物：`results/step6.7-llm-query-rewrite/rag-eval-result-step6.7-llm-list-rag10.md`、`rag-eval-result-step6.7-llm-list-narrow.md`、`rag-eval-result-step6.7-llm-prompt-v2-narrow.md`、`rag-eval-result-step6.7-config-hints-narrow.md`。
+  - 当前结论：LLM rewrite 工程骨架可用；`config-hints-narrow` 中 RAG-04 保持 `3/3`，RAG-07 保持拒答，RAG-10 仍为 `2/5` 但 rewrite query 已显式覆盖指标、判断标准和阈值范围，关键证据进入 final documents。
+  - 重要边界：手工 `queryRewriteDomainHints` 只是验证链路，不是长期方案；如果 hints 过细，LLM 容易退化成 hints 拼接器。后续 rewrite 泛化应做自动 `KnowledgeBaseProfile` 与 query-time hints selection；短期若只追 RAG-10 答案完整性，应转向 answer generation / context salience，不要和 profile 自动化混成一个实验。
+- **Viewer / results 整理（2026-05-21）**：
+  - `results/step6-rewrite-pipeline*.md` 已移动到 `results/step6.0-rewrite-pipeline/` 并改为 `rag-eval-result-*` 命名，使 viewer 能自动收录。
+  - `viewer/build_dataset.py` 已补 Step 6.0-6.7 的 group metadata、短展示名和 config hint；`viewer/index.html` 优先使用 `display_label`，避免矩阵列头只显示冗长路径。
+  - `viewer/data/dataset.json` / `dataset.js` 已重新生成；当前 viewer 数据覆盖 48 个 runs、14 个 cases、245 条 summary rows。
+- **2026-05-22 决策：如果继续补 LLM Rewrite 能力闭环，优先做 KnowledgeBaseProfile 面试版**：
+  - 背景：Step 6.7 证明 LLM rewrite 工程骨架可用，但只看用户问题时 rewrite 泛化，手工 `queryRewriteDomainHints` 又容易让模型退化成 hints 拼接器。
+  - 目标：不再手写 hints，而是在入库阶段自动生成知识库画像，并在查询时动态选择少量相关 hints 给 LLM rewrite。
+  - 范围：做面试版闭环，不做完整产品化 profile 平台；预计 1.5-2 天。
+  - 验收：清空手工 hints 后，auto profile 仍能让 RAG-10 的 rewrite query 带出关键领域词；RAG-04 不退，RAG-07/RAG-14 不误答；报告展示 selectedProfileHints。
+  - 边界：如果关键证据已进入 final documents 但答案仍漏点，归因到 Answer Generation / Context Salience，不继续硬调 rewrite prompt。
 
 ### 2.2 关键认知（必读，否则会重复踩坑）
 
@@ -848,20 +870,21 @@ fc49eb4 docs: RAG eval 接力计划 + 历史评测产物归档
 6da727e feature: RAG eval - F-fix 链路 SSE 下发 type=retrieval 事件
 ```
 
-## 4. 后续计划（Step 6 P0/P1 已确认想做，实施仍小步触发）
+## 4. 后续计划（Step 6.8 KnowledgeBaseProfile 面试版）
 
 按下一步时机排序：
 
-1. Step 6.3 query-variant RRF / RAG-fusion：已完成窄回归并提交（`7e604c3`）。
-2. Step 6.4 query-aware rerank 最小验证：all-hit 观测与 `ORIGINAL_PLUS_VARIANT` smoke 已完成；实验策略未减少 RAG-10 的 coverage guard 依赖，但未破坏窄回归边界。
-3. Step 6.5 per-variant rerank RRF：已完成窄回归与全量验证，并提交为 `4508b56`。
-4. Step 6.6 fusion-aware rerank 小实验：已完成 RAG-10 单跑、窄回归、全量回归；策略链路安全可观测，但未证明优于 `PER_VARIANT_RERANK_RRF`，因此保留为实验策略，不作为默认。
-5. Step 6.7 LLMQueryRewriter 最小版 + `PASSTHROUGH / HEURISTIC_MULTI_QUERY / LLM_MULTI_QUERY` A/B。
-6. RAG-09 / RAG-10 paraphrase regression。
-7. RAGAS 集成（faithfulness / context precision / answer relevance）。
-8. embedding 模型迁移。
+1. Step 6.3-6.7 已阶段性收口：RAG-fusion、per-variant rerank RRF、fusion-aware rerank、LLM rewrite 工程骨架和 Step 6.7 eval 产物均已落地。当前不继续硬调 `LlmQueryRewriter` prompt。
+2. Step 6.8 KnowledgeBaseProfile 面试版（预计 1.5-2 天）：
+   - 入库阶段：在 `RagService.storeRagFile()` 的 Tika 解析 / TokenTextSplitter 切分之后，自动抽取 profile hints。第一版优先规则抽取，不接离线 LLM：heading、反引号词、代码块 token、带 `_` / `-` / `.` / `/` 的技术标识符、英文数字混合词、参数/示例/判断标准/阈值/范围/排查步骤等证据类型词。
+   - 存储阶段：保存知识库级 profile JSON。实现时再根据现有表结构决定是轻量新表，还是挂到现有知识库记录的扩展字段；不要把 profile 塞进回答 prompt 当事实依据。
+   - 查询阶段：根据 user query 从 profile 中选择 topN 相关 hints，替代手工 `queryRewriteDomainHints`，再进入现有 `LLM_MULTI_QUERY` rewrite pipeline。
+   - 观测阶段：报告新增 `selectedProfileHints` / profile source，使 eval 能解释本次 rewrite 用了哪些自动 hints。
+   - 验证阶段：先跑 RAG-04 / RAG-07 / RAG-10 / RAG-14 窄回归，再跑 14 条全量；对比 no hints / manual hints / auto profile hints。
+3. Step 7 Answer Generation / Context Salience：仅当 Step 6.8 证明关键证据已经进入 final documents 但最终答案仍漏点时启动。它解决“找到了会不会用”，不要和 profile 自动化混成一个实验。
+4. 延期话题：RAG-09 / RAG-10 paraphrase regression、RAGAS 集成、embedding 模型迁移、profile 管理端、profile 版本管理、多知识库 profile merge、离线 LLM 生成 summary/questionsAnswered。
 
-**执行原则**：本轮用户已确认 P0/P1 都想纳入计划；具体实现仍按小步推进，不批量同时改 RAG-fusion、LLM rewrite、rerank policy 和评测口径。
+**执行原则**：Step 6.8 只证明一件事：`queryRewriteDomainHints` 能从手工配置升级为自动 profile + query-time selection。不要同时改 rerank policy、answer prompt、embedding 或评测口径。
 
 ## 5. 关键约束 / 隐藏陷阱
 
@@ -890,7 +913,7 @@ fc49eb4 docs: RAG eval 接力计划 + 历史评测产物归档
 
 1. Read 这份 `PLAN.md` 全文（特别是 §3 D10-D16：Hybrid、Rerank、A/B 归因与 Step 5.4 工程化收口）
 2. 确认 §3 commit 范围是否已落地（`git log --oneline -10` 看 `cc20ba4`、`176abc5`、`c95aabd`、`631ffd2` 等 Step 5 提交）
-3. 当前游标：**Step 6.6 fusion-aware rerank RRF 实验已收口**。`FUSION_AWARE_RERANK_RRF` 保留为可配置实验策略，默认回到 Step 6.5 的 `PER_VARIANT_RERANK_RRF`；下一步进入 Step 6.7 `LLMQueryRewriter` 最小版 + `PASSTHROUGH / HEURISTIC_MULTI_QUERY / LLM_MULTI_QUERY` A/B。注意不要把 RAG-10 `chunk=2` 没进 final topK 简化为失败：它重要但不是唯一必要证据，真正评估对象是公式证据 + 阈值证据组成的答案证据集。
+3. 当前游标：**Step 6.7 LLM Query Rewrite 工程骨架已收口**。如果继续补 rewrite 能力闭环，下一步是 Step 6.8 KnowledgeBaseProfile 面试版：入库自动抽取 profile hints、查询时动态选择 hints、接入现有 `LLM_MULTI_QUERY`，并在 report 中展示 selectedProfileHints。不要继续把 Grafana/PromQL 词硬写进 prompt，也不要把 profile 当作回答事实依据。
 4. 如果改 yml / 重启 backend / 重灌向量库后再跑 eval：必须先预热 `POST http://localhost:8099/api/v1/agent/armory_agent` body `{"agentId":"rag_demo"}`（未预热直接打 auto_agent 会 HTTP 500，duration ~5ms，看似 endpoint 死了）
 5. **不要**自行重跑 v1/v2/v3 中任何一轮——Phase A 已锁定参数 250/109，重跑只会消耗 LLM 配额且 score 必然飘动（embedding 不变 score 应稳定，LLM 输出会因 sampling 飘）
 

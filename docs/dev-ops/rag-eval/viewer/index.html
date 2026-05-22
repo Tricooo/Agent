@@ -1036,7 +1036,7 @@ function stateFromRatio(s){
 }
 (function normalize(){
   DATA.runs.forEach(run=>{
-    run.label = shortLabel(run.run_id);
+    run.label = run.display_label || shortLabel(run.run_id);
     // flatten documents across retrieval_events and inject runtime fields onto details
     Object.entries(run.details || {}).forEach(([cid, det])=>{
       const events = det.retrieval_events || [];
