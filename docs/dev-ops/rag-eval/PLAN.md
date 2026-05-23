@@ -1,7 +1,7 @@
 # RAG Eval 自动化 — 计划与状态
 
 > 这份文档是 RAG 评测链路工作的 single source of truth。任何接手会话先读这里。
-> 最后更新：2026-05-23（D26：外部样本消融验证计划）
+> 最后更新：2026-05-24（D28：RAG Eval Experiment Workbench MVP）
 
 ## 目录组织
 
@@ -11,6 +11,7 @@ docs/dev-ops/rag-eval/
 ├── rag_eval_runner.py           ← 评测脚本
 ├── cases.json                   ← 14 条评测用例（脚本与 cases 同目录是 Path(__file__).with_name 硬约定）
 ├── viewer/                      ← 单页评测看板；读取 results/** 后生成 viewer/data/dataset.{json,js}
+├── experiment-workbench/         ← FastAPI + SQLite 实验分析台；统一索引 internal/external cases 与 results/**/*.md
 └── results/
     ├── _archive/                ← F-fix 之前，旧 schema 无 retrieved/score/empty 三列，不可与 ffix 互比 score
     │   ├── rag-eval-result.md                ← Apr 28，0.65 误杀证据（answer 文本可证）
@@ -283,6 +284,11 @@ docs/dev-ops/rag-eval/
   - 归因标签：当前最小标签包括 `section_in_final_context`、`section_lost_before_final`、`source_file_in_final_context`、`source_file_lost_before_final`、`source_file_not_in_candidates`、`no_retrieval_metadata`、`answer_generation_or_literal_mismatch`。
   - 边界：manual case 的 expected points 多是中文语义判分口径，不做 exact coverage 结论；报告显示为 `manual`。literal case 如果 expected points 已在 final context 但 answer literal 没命中，则归为 `answer_generation_or_literal_mismatch`，避免误调 retrieval/rerank。
   - 验证：`python3 -m py_compile docs/dev-ops/rag-eval/rag_eval_runner.py docs/dev-ops/rag-eval/viewer/build_dataset.py` 通过；synthetic report smoke 能输出 `source_coverage` 与 `expected_points_exact`，并正确标记 `answer_generation_or_literal_mismatch`。
+- **D28 RAG Eval Experiment Workbench MVP（2026-05-24）**：
+  - 目标：不破坏旧 `viewer/`，新增独立 `experiment-workbench/`，把 `results/**/*.md` 与 internal / external case registry 统一索引到 SQLite，解决旧 viewer 对 `EXT-*` case 的矩阵缺口。
+  - 实现：FastAPI + SQLite + 原生 JS/CSS；支持 Report Index、Case Registry、Experiment Matrix、Ablation Compare、Attribution Drilldown、Insight Summary。
+  - 关键修正：旧 viewer 的 `build_dataset.py` 只接受 `RAG-*` summary/detail，因此 `external-ablation` runs 在旧 dataset 中 `case_count=0`；新 workbench parser 接受 `RAG-*` 与 `EXT-*`，并保留 parse warnings。
+  - 验证：`experiment-workbench` reindex 当前得到 69 runs / 14 internal cases / 31 external cases / 391 case_results / 1923 document_hits；`external-ablation-06-l5-current-best` 已能显示 8 个 external case；浏览器点击 Dashboard/Runs/Cases/Matrix/Drilldown/Compare/Insights 通过。
 
 ### 2.2 关键认知（必读，否则会重复踩坑）
 

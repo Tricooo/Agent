@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RAG Eval Experiment Workbench</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">R</div>
+      <div>
+        <div class="brand-title">RAG Eval Experiment Workbench</div>
+        <div class="brand-meta" id="health-line">loading</div>
+      </div>
+    </div>
+    <nav class="tabs" aria-label="Workbench views">
+      <button class="tab active" data-view="dashboard">Dashboard</button>
+      <button class="tab" data-view="runs">Runs</button>
+      <button class="tab" data-view="cases">Cases</button>
+      <button class="tab" data-view="matrix">Matrix</button>
+      <button class="tab" data-view="compare">Compare</button>
+      <button class="tab" data-view="insights">Insights</button>
+    </nav>
+  </header>
+
+  <main class="page">
+    <section class="view active" id="view-dashboard">
+      <div class="section-head">
+        <h1>实验索引总览</h1>
+        <button class="primary" id="reindex-btn">Reindex</button>
+      </div>
+      <div class="metrics" id="dashboard-metrics"></div>
+      <div class="split">
+        <section>
+          <h2>Recent Runs</h2>
+          <div id="recent-runs" class="list"></div>
+        </section>
+        <section>
+          <h2>Parse Warnings</h2>
+          <div id="warning-list" class="list"></div>
+        </section>
+      </div>
+    </section>
+
+    <section class="view" id="view-runs">
+      <div class="section-head">
+        <h1>Report Index</h1>
+        <div class="filters">
+          <select id="run-group-filter"></select>
+          <select id="run-agent-filter"></select>
+        </div>
+      </div>
+      <div class="table-wrap"><table id="runs-table"></table></div>
+    </section>
+
+    <section class="view" id="view-cases">
+      <div class="section-head">
+        <h1>Case Registry</h1>
+        <div class="filters">
+          <select id="case-origin-filter">
+            <option value="">all origins</option>
+            <option value="internal">internal</option>
+            <option value="external">external</option>
+          </select>
+          <select id="case-family-filter"></select>
+          <select id="case-score-filter">
+            <option value="">all score modes</option>
+            <option value="literal">literal</option>
+            <option value="manual">manual</option>
+          </select>
+        </div>
+      </div>
+      <div class="table-wrap"><table id="cases-table"></table></div>
+    </section>
+
+    <section class="view" id="view-matrix">
+      <div class="section-head">
+        <h1>Experiment Matrix</h1>
+        <div class="filters">
+          <select id="matrix-origin-filter">
+            <option value="">all cases</option>
+            <option value="internal">internal</option>
+            <option value="external">external</option>
+          </select>
+          <select id="matrix-family-filter"></select>
+          <select id="matrix-group-filter"></select>
+          <select id="matrix-agent-filter"></select>
+        </div>
+      </div>
+      <div class="legend">
+        <span><i class="sw ok"></i>pass</span>
+        <span><i class="sw warn"></i>partial</span>
+        <span><i class="sw bad"></i>fail</span>
+        <span><i class="sw manual"></i>manual/coverage</span>
+      </div>
+      <div class="matrix-wrap"><table id="matrix-table"></table></div>
+    </section>
+
+    <section class="view" id="view-compare">
+      <div class="section-head">
+        <h1>Ablation Compare</h1>
+        <div class="filters compare-controls">
+          <select id="compare-a"></select>
+          <select id="compare-b"></select>
+        </div>
+      </div>
+      <div class="preset-row" id="preset-row"></div>
+      <div id="compare-summary" class="metrics"></div>
+      <div class="table-wrap"><table id="compare-table"></table></div>
+    </section>
+
+    <section class="view" id="view-insights">
+      <div class="section-head">
+        <h1>Insight Summary</h1>
+      </div>
+      <div class="split">
+        <section>
+          <h2>Run Summary</h2>
+          <div class="table-wrap"><table id="insight-runs-table"></table></div>
+        </section>
+        <section>
+          <h2>Case Summary</h2>
+          <div class="table-wrap"><table id="insight-cases-table"></table></div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <div class="modal-backdrop" id="modal-backdrop" hidden>
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <header class="modal-head">
+        <div>
+          <h2 id="modal-title">Drilldown</h2>
+          <p id="modal-subtitle"></p>
+        </div>
+        <button id="modal-close" class="icon-button" aria-label="Close">×</button>
+      </header>
+      <div class="modal-body" id="modal-body"></div>
+    </section>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
