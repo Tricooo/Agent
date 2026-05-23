@@ -92,6 +92,10 @@ DOC_QUERY_VARIANT_INDEXES = "queryVariantIndexes"
 DOC_QUERY_VARIANT_HITS = "queryVariantHits"
 
 
+def normalize_text(value: Any) -> str:
+    return " ".join(str(value or "").lower().split())
+
+
 def load_cases(path: Path) -> list[dict[str, Any]]:
     with path.open("r", encoding="utf-8") as f:
         data = json.load(f)
@@ -169,6 +173,136 @@ def keyword_check(answer: str, expected_points: list[str]) -> tuple[int, list[st
     return len(expected_points) - len(missed), missed
 
 
+def _doc_metadata(document: dict[str, Any]) -> dict[str, Any]:
+    metadata = document.get("metadata") or {}
+    return metadata if isinstance(metadata, dict) else {}
+
+
+def _doc_text(document: dict[str, Any]) -> str:
+    return str(document.get("text") or document.get("content") or document.get("preview") or "")
+
+
+def _doc_source_candidates(document: dict[str, Any]) -> list[str]:
+    metadata = _doc_metadata(document)
+    candidates = [
+        metadata.get("sourcePath"),
+        metadata.get("source"),
+        metadata.get("file_name"),
+        metadata.get("filename"),
+        metadata.get("ragName"),
+    ]
+    return [str(item) for item in candidates if item]
+
+
+def _source_file_matches(document: dict[str, Any], expected_source_file: str) -> bool:
+    if not expected_source_file:
+        return False
+    expected = expected_source_file.replace("\\", "/")
+    expected_name = Path(expected).name
+    for candidate in _doc_source_candidates(document):
+        normalized = candidate.replace("\\", "/")
+        if normalized == expected or normalized.endswith("/" + expected) or Path(normalized).name == expected_name:
+            return True
+    return False
+
+
+def _section_matches(document: dict[str, Any], expected_section: str) -> bool:
+    if not expected_section:
+        return False
+    section = normalize_text(expected_section)
+    metadata = _doc_metadata(document)
+    haystacks = [
+        _doc_text(document),
+        metadata.get("headingPath"),
+        metadata.get("parentSection"),
+        metadata.get("section"),
+    ]
+    return any(section and section in normalize_text(item) for item in haystacks)
+
+
+def _count_points_in_documents(documents: list[dict[str, Any]], expected_points: list[str]) -> tuple[int, list[str]]:
+    if not expected_points:
+        return 0, []
+    context_text = "\n".join(_doc_text(document) for document in documents)
+    missed = [point for point in expected_points if point and point not in context_text]
+    return len(expected_points) - len(missed), missed
+
+
+def _coverage_layer(source_file: str,
+                    source_file_pre: bool,
+                    source_file_final: bool,
+                    section: str,
+                    section_pre: bool,
+                    section_final: bool) -> str:
+    if section:
+        if section_final:
+            return "section_in_final_context"
+        if section_pre:
+            return "section_lost_before_final"
+    if source_file:
+        if source_file_final:
+            return "source_file_in_final_context"
+        if source_file_pre:
+            return "source_file_lost_before_final"
+        return "source_file_not_in_candidates"
+    return "source_not_configured"
+
+
+def build_coverage(case: dict[str, Any],
+                   retrievals: list[dict[str, Any]],
+                   expected_points: list[str],
+                   score_mode: str,
+                   answer_matched_count: int) -> dict[str, Any]:
+    expected_source_file = str(case.get("source_file") or "")
+    expected_section = str(case.get("expected_source_section") or "")
+    first_retrieval = retrievals[0].get("data") if retrievals else {}
+    if not isinstance(first_retrieval, dict):
+        first_retrieval = {}
+    pre_documents = first_retrieval.get(QA_PRE_RERANK_DOCUMENTS) or []
+    final_documents = first_retrieval.get(QA_RETRIEVED_DOCUMENTS) or []
+    if not isinstance(pre_documents, list):
+        pre_documents = []
+    if not isinstance(final_documents, list):
+        final_documents = []
+
+    source_file_pre = any(isinstance(doc, dict) and _source_file_matches(doc, expected_source_file) for doc in pre_documents)
+    source_file_final = any(isinstance(doc, dict) and _source_file_matches(doc, expected_source_file) for doc in final_documents)
+    section_pre = any(isinstance(doc, dict) and _section_matches(doc, expected_section) for doc in pre_documents)
+    section_final = any(isinstance(doc, dict) and _section_matches(doc, expected_section) for doc in final_documents)
+    pre_point_count, pre_missed_points = _count_points_in_documents(pre_documents, expected_points)
+    final_point_count, final_missed_points = _count_points_in_documents(final_documents, expected_points)
+
+    layer = _coverage_layer(
+        expected_source_file,
+        source_file_pre,
+        source_file_final,
+        expected_section,
+        section_pre,
+        section_final,
+    )
+    if not retrievals:
+        layer = "no_retrieval_metadata"
+    if score_mode == "literal" and expected_points and final_point_count == len(expected_points) and answer_matched_count < len(expected_points):
+        layer = "answer_generation_or_literal_mismatch"
+
+    return {
+        "expected_source_file": expected_source_file,
+        "expected_source_section": expected_section,
+        "pre_rerank_document_count": len(pre_documents),
+        "final_document_count": len(final_documents),
+        "source_file_in_pre_rerank": source_file_pre,
+        "source_file_in_final_context": source_file_final,
+        "section_in_pre_rerank": section_pre,
+        "section_in_final_context": section_final,
+        "expected_points_in_pre_rerank": pre_point_count,
+        "expected_points_in_final_context": final_point_count,
+        "expected_points_total": len(expected_points),
+        "expected_points_missing_pre_rerank": pre_missed_points,
+        "expected_points_missing_final_context": final_missed_points,
+        "coverage_layer": layer,
+    }
+
+
 def run_case(api_url: str, agent_id: str, session_prefix: str, max_step: int, timeout: int, case: dict[str, Any]) -> dict[str, Any]:
     case_id = str(case["id"])
     payload = {
@@ -188,14 +322,17 @@ def run_case(api_url: str, agent_id: str, session_prefix: str, max_step: int, ti
         error = sse_error
     expected_points = list(case.get("expected_points", []))
     matched_count, missed_points = keyword_check(answer, expected_points)
+    score_mode = case.get("score_mode", "literal")
+    coverage = build_coverage(case, retrievals, expected_points, score_mode, matched_count)
 
     return {
         "id": case_id,
         "case_type": case.get("case_type", ""),
-        "score_mode": case.get("score_mode", "literal"),
+        "score_mode": score_mode,
         "question": case.get("question", ""),
         "should_answer": case.get("should_answer"),
         "expected_source_section": case.get("expected_source_section", ""),
+        "expected_source_file": case.get("source_file", ""),
         "expected_points": expected_points,
         "status": status,
         "completed": completed,
@@ -205,6 +342,7 @@ def run_case(api_url: str, agent_id: str, session_prefix: str, max_step: int, ti
         "answer": answer,
         "error": error,
         "retrievals": retrievals,
+        "coverage": coverage,
         "raw_events": events,
     }
 
@@ -251,6 +389,22 @@ def _retrieval_summary_cells(retrievals: list[dict[str, Any]]) -> tuple[str, str
         score_cell = f"{_fmt_score(min_score)} .. {_fmt_score(max_score)}"
     empty_cell = "—" if empty is None else str(empty).lower()
     return retrieved_cell, score_cell, empty_cell
+
+
+def _coverage_summary_cell(result: dict[str, Any]) -> str:
+    coverage = result.get("coverage") or {}
+    if not coverage:
+        return "—"
+    total = coverage.get("expected_points_total") or 0
+    points_cell = "manual"
+    if result.get("score_mode") != "manual" and total:
+        points_cell = f"{coverage.get('expected_points_in_final_context', 0)}/{total}"
+    return (
+        f"{coverage.get('coverage_layer', '—')}; "
+        f"file final={str(coverage.get('source_file_in_final_context')).lower()}; "
+        f"section final={str(coverage.get('section_in_final_context')).lower()}; "
+        f"points final={points_cell}"
+    )
 
 
 def _metadata_value(metadata: dict[str, Any], key: str) -> Any:
@@ -376,8 +530,8 @@ def write_markdown(path: Path, results: list[dict[str, Any]], api_url: str, agen
     lines.append(">")
     lines.append("> Details 区的 `pre_rerank_documents` 展开 rerank 前候选池，`documents` 展开最终 top-K chunk attribution；document 行的 `score` 是当前阶段写回的候选分，可能来自 HYBRID RRF、query-variant fusion、per-variant rerank RRF 或 fusion-aware rerank；原始向量分与关键词分分别看 `vectorScore` / `keywordScore`，多 query 召回融合看 `queryFusionScore/queryFusionRank/queryVariantHitCount`；最终 rerank 写回分看 `rerankScore`，多路 rerank 融合分看 `rerankFusionScore/rerankVariantHitCount`，fusion-aware 弱加成看 `queryFusionBoostScore/fusionAwareScore`；rerank 服务状态看 `rerank_runtime` 的 model / endpoint / failure_reason；keyword 分支未参与时看 `keywordSkippedReason`。")
     lines.append("")
-    lines.append("| id | type | completed | duration_ms | should_answer | retrieved | score | empty | literal_hit | missed_points | answer_preview | manual_pass |")
-    lines.append("|---|---|---:|---:|---:|---:|---|---:|---:|---|---|---|")
+    lines.append("| id | type | completed | duration_ms | should_answer | retrieved | score | empty | literal_hit | source_coverage | missed_points | answer_preview | manual_pass |")
+    lines.append("|---|---|---:|---:|---:|---:|---|---:|---:|---|---|---|---|")
     for r in results:
         score_mode = r.get("score_mode") or "literal"
         if score_mode == "manual":
@@ -388,7 +542,7 @@ def write_markdown(path: Path, results: list[dict[str, Any]], api_url: str, agen
             missed_cell = md_escape(", ".join(r["missed_expected_points"]))
         retrieved_cell, score_cell, empty_cell = _retrieval_summary_cells(r.get("retrievals") or [])
         lines.append(
-            "| {id} | {case_type} | {completed} | {duration_ms} | {should_answer} | {retrieved} | {score} | {empty} | {literal} | {missed} | {preview} |  |".format(
+            "| {id} | {case_type} | {completed} | {duration_ms} | {should_answer} | {retrieved} | {score} | {empty} | {literal} | {coverage} | {missed} | {preview} |  |".format(
                 id=md_escape(r["id"]),
                 case_type=md_escape(r["case_type"]),
                 completed=str(r["completed"]).lower(),
@@ -398,6 +552,7 @@ def write_markdown(path: Path, results: list[dict[str, Any]], api_url: str, agen
                 score=score_cell,
                 empty=empty_cell,
                 literal=literal_cell,
+                coverage=md_escape(_coverage_summary_cell(r)),
                 missed=missed_cell,
                 preview=md_escape(answer_preview(r["answer"])),
             )
@@ -417,6 +572,36 @@ def write_markdown(path: Path, results: list[dict[str, Any]], api_url: str, agen
         lines.append(f"- score_mode: `{score_mode}`")
         if r["error"]:
             lines.append(f"- error: `{r['error']}`")
+        coverage = r.get("coverage") or {}
+        if coverage:
+            pre_points_cell = "manual"
+            final_points_cell = "manual"
+            if r.get("score_mode") != "manual":
+                pre_points_cell = f"{coverage.get('expected_points_in_pre_rerank')}/{coverage.get('expected_points_total')}"
+                final_points_cell = f"{coverage.get('expected_points_in_final_context')}/{coverage.get('expected_points_total')}"
+            lines.append(
+                "- source_coverage: layer `{layer}` / source_file `{source_file}` / section `{section}`".format(
+                    layer=coverage.get("coverage_layer"),
+                    source_file=coverage.get("expected_source_file") or "—",
+                    section=coverage.get("expected_source_section") or "—",
+                )
+            )
+            lines.append(
+                "  - pre_rerank: docs `{docs}` / source_file `{source_file}` / section `{section}` / expected_points_exact `{points}`".format(
+                    docs=coverage.get("pre_rerank_document_count"),
+                    source_file=str(coverage.get("source_file_in_pre_rerank")).lower(),
+                    section=str(coverage.get("section_in_pre_rerank")).lower(),
+                    points=pre_points_cell,
+                )
+            )
+            lines.append(
+                "  - final_context: docs `{docs}` / source_file `{source_file}` / section `{section}` / expected_points_exact `{points}`".format(
+                    docs=coverage.get("final_document_count"),
+                    source_file=str(coverage.get("source_file_in_final_context")).lower(),
+                    section=str(coverage.get("section_in_final_context")).lower(),
+                    points=final_points_cell,
+                )
+            )
         lines.append("- expected_points:")
         for point in r["expected_points"]:
             if score_mode == "manual":

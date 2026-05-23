@@ -275,7 +275,14 @@ docs/dev-ops/rag-eval/
     - 主要结论 2：Context Salience 有非 Grafana 的正向证据。`L5 current best` 相比 `A4 no salience`，`EXT-ARTEMIS-02` 从 retry 后 `2/3` 提升到 `3/3`，`EXT-RFC9110-03` 从 `0/3` 提升到 `2/3`；这说明 salience 不只是 RAG-10 量身定做，但收益仍受 literal 判分与生成措辞影响。
     - 主要结论 3：BGE rerank 在该 8-case 窄集没有体现稳定净收益。`A1 current no rerank` 与 `L5 current best` 表现接近，且早期 `L2/L3/L4` 对 `EXT-ARTEMIS-02` 反而从 `3/3` 降为 `2/3`。这不是 BGE 失败，而是说明 rerank 需要按“候选覆盖 / final context / generation”分层看，不能假设 rerank 一定提升答案。
     - 判分边界：`EXT-ARTEMIS-01` 多组答案语义正确（中文日期与持续时间），但 literal 仍为 `0/3`，属于字面匹配低估；后续外部集需要补 source coverage / semantic manual scoring，否则容易把答案格式差异误判为检索失败。
-    - 决策：暂不直接上更复杂的 evidence-type coverage。下一步应先把外部样本评测口径和报告聚合做稳，再决定是否做更通用的 context salience / final context coverage 机制。
+  - 决策：暂不直接上更复杂的 evidence-type coverage。下一步应先把外部样本评测口径和报告聚合做稳，再决定是否做更通用的 context salience / final context coverage 机制。
+- **D27 Step 7.1 外部评测归因增强（2026-05-23）**：
+  - 目标：先增强报告归因，不改 Java RAG 主链路。原因是外部样本已经证明，继续看 `literal_hit` 会把“答案格式差异 / 生成遗漏 / 证据未进上下文”混成一类失败。
+  - 实现范围：`rag_eval_runner.py` 基于 case 的 `source_file`、`expected_source_section`、`expected_points`，以及 retrieval metadata 的 `pre_rerank_documents` / `documents` 计算 `source_coverage`。
+  - 观测字段：summary 新增 `source_coverage`；Details 新增 `source_coverage`、`pre_rerank`、`final_context` 三行，展示 source file 是否进入候选池 / final context、section 是否命中、literal expected points 是否在上下文中。
+  - 归因标签：当前最小标签包括 `section_in_final_context`、`section_lost_before_final`、`source_file_in_final_context`、`source_file_lost_before_final`、`source_file_not_in_candidates`、`no_retrieval_metadata`、`answer_generation_or_literal_mismatch`。
+  - 边界：manual case 的 expected points 多是中文语义判分口径，不做 exact coverage 结论；报告显示为 `manual`。literal case 如果 expected points 已在 final context 但 answer literal 没命中，则归为 `answer_generation_or_literal_mismatch`，避免误调 retrieval/rerank。
+  - 验证：`python3 -m py_compile docs/dev-ops/rag-eval/rag_eval_runner.py docs/dev-ops/rag-eval/viewer/build_dataset.py` 通过；synthetic report smoke 能输出 `source_coverage` 与 `expected_points_exact`，并正确标记 `answer_generation_or_literal_mismatch`。
 
 ### 2.2 关键认知（必读，否则会重复踩坑）
 
