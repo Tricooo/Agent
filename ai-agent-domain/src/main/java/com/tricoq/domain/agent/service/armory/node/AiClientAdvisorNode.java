@@ -102,9 +102,11 @@ public class AiClientAdvisorNode extends AbstractArmorySupport {
             }
             rewriteContextBuilder.extraClientId(queryRewriterClientId);
             rewriteContextBuilder.queryRewriteDomainHints(ragAnswer.getQueryRewriteDomainHints());
-            QueryRewriteProfileContext profileContext = queryRewriteProfileContext(ragAnswer);
-            rewriteContextBuilder.knowledgeBaseProfileHints(profileContext.profileHints());
-            rewriteContextBuilder.profileVersion(profileContext.profileVersion());
+            if (ragAnswer.isQueryRewriteProfileEnabled()) {
+                QueryRewriteProfileContext profileContext = queryRewriteProfileContext(ragAnswer);
+                rewriteContextBuilder.knowledgeBaseProfileHints(profileContext.profileHints());
+                rewriteContextBuilder.profileVersion(profileContext.profileVersion());
+            }
             rewriteContextBuilder.profileHintTopN(ragAnswer.getQueryRewriteProfileHintTopN());
         }
 

@@ -1,7 +1,7 @@
 # RAG Eval 自动化 — 计划与状态
 
 > 这份文档是 RAG 评测链路工作的 single source of truth。任何接手会话先读这里。
-> 最后更新：2026-05-22（D25：KnowledgeBaseProfile 后续计划）
+> 最后更新：2026-05-23（D26：外部样本消融验证计划）
 
 ## 目录组织
 
@@ -41,7 +41,11 @@ docs/dev-ops/rag-eval/
     ├── step6.4-query-aware-rerank/ ← all-hit 观测 + ORIGINAL_PLUS_VARIANT smoke（May 19）
     ├── step6.5-per-variant-rerank-rrf/ ← PER_VARIANT_RERANK_RRF 全量验证（May 19）
     ├── step6.6-fusion-aware-rerank-rrf/ ← FUSION_AWARE_RERANK_RRF 实验收口（May 19）
-    └── step6.7-llm-query-rewrite/  ← LLM_MULTI_QUERY / domain hints 实验（May 21）
+    ├── step6.7-llm-query-rewrite/  ← LLM_MULTI_QUERY / domain hints 实验（May 21）
+    ├── step6.8-knowledge-base-profile/ ← 自动 KnowledgeBaseProfile + query-time selection（May 23）
+    ├── step6.9-llm-profile/        ← LLM profile hybrid-v2 验证（May 23）
+    ├── step7-answer-context-salience/ ← Answer Generation / Context Salience 首轮验证（May 23）
+    └── external-ablation/          ← 外部样本消融验证，计划中
 ```
 
 > 归档原则：按"评测口径是否一致"分。F-fix 是 schema 硬边界——之前的产物没有 `retrieved/score/empty` 三列，永久不可与之后互比 score。
@@ -253,6 +257,25 @@ docs/dev-ops/rag-eval/
   - 关键修正：selector 不能把 profile 原始分当相关性；必须先有 query overlap / alias overlap / 有效 CJK phrase overlap，再用 profile score 排序。英文 stopword（如 `to` / `the`）和中文低信号单字（如 `的`）会导致无关技术 token 误入 prompt，已过滤。若 profile 已加载但 query 无匹配，则返回 `NO_PROFILE_MATCH`，不再回退手工 `queryRewriteDomainHints`。
   - 验证产物：`results/step6.8-knowledge-base-profile/rag-eval-result-step6.8-auto-profile-narrow.md` 与 `rag-eval-result-step6.8-auto-profile-full.md`。最终 full 14/14 completed；RAG-04 `3/3`；RAG-07/RAG-08/RAG-14 拒答保持；RAG-10 report 展示 `AUTO_PROFILE` 和内存指标 hints，但最终 full 仍为 `2/5`，缺三档范围，归因转向 Answer Generation / Context Salience。
   - 当前结论：Step 6.8 证明了“手工 hints -> 自动 profile + query-time selection + report 可观测”的工程闭环；不要再继续通过扩大 rewrite prompt 或手工 hints 追 RAG-10 答案完整性。
+- **D26 外部样本消融验证计划（2026-05-23）**：
+  - 触发原因：现有 Grafana/RAG-10 样本过窄，容易把单 case 失败误判为通用问题。新增 `external-samples/` 后，下一步先做消融验证，而不是继续直接实现 evidence-type coverage。
+  - 测试边界：先不改正式 `cases.json`，使用 runner 的 `--cases` 指向临时窄集文件；不上传 `.DS_Store` / `README.md` / cases JSON；正式上传外部 corpus、改 DB agent/advisor 配置、跑 eval 前单独确认目标 knowledge tag。
+  - 首轮窄集：`docs/dev-ops/rag-eval/external-samples/cases/external-sample-narrow-8.json`，包含 `EXT-ARTEMIS-01`、`EXT-ARTEMIS-02`、`EXT-RFC9110-03`、`EXT-K8S-PV-03`、`EXT-OWASP-03`、`EXT-PG-04`、`EXT-RFC9110-04`、`EXT-K8S-PV-04`。
+  - 首轮 corpus：`artemis-i-mission-timeline.md`、`rfc-9110-http-semantics.md`、`kubernetes-persistent-volumes.md`、`owasp-top10-a01-a03-a05.md`、`postgresql-generated-columns-version-contrast.md`。
+  - 消融矩阵优先级：先跑 `L0 baseline`（VECTOR / no rerank / no rewrite / no profile / no salience）、`L2 hybrid+bge`、`L4 +LLM rewrite+auto profile`、`L5 current best`、`A1 current best without rerank`、`A4 current best without salience`。若差异不清，再补 `L1 hybrid only`、`L3 rewrite without profile`、`A2 no rewrite/profile`、`A3 no profile`。
+  - 观察指标：不只看 final score，还要看 candidate coverage、rerank 是否丢关键 chunk、final context coverage、rewrite variants、selectedProfileHints、context salience cues/expansions、拒答正确性，并把失败归到 ingestion / retrieval / rerank / final context / generation / literal mismatch / refusal violation。
+  - 当前代码支持度：`retrievalMode`、`rerankPolicy`、`rewritePolicy`、`rerankQueryPolicy`、`queryRewriteProfileEnabled`、`queryRewriteProfileHintTopN`、`contextSalienceEnabled` 均来自 RAG advisor `ext_param`，可通过测试 agent/advisor 配置切换；`queryRewriteProfileEnabled=false` 会保留 LLM rewrite 但不加载自动 profile hints，`contextSalienceEnabled=false` 会关闭 salience 生成提示、cue 渲染和相邻证据片段扩展，二者默认 `true` 保持现有行为。
+  - 决策门：若外部样本中 `L5` 只改善 Grafana/RAG-10 而不能改善流程、规范、概念区分、版本冲突类 case，则判定当前优化存在样本局限；只有当 candidate 有证据但 final context 丢证据时，才进入 evidence-type coverage 设计。
+  - **首轮实测结果（2026-05-23）**：
+    - 上传策略：按文章一 tag 上传 5 份首轮 corpus，tag 为 `ext-artemis-i-20260523`、`ext-rfc9110-20260523`、`ext-k8s-pv-20260523`、`ext-owasp-top10-20260523`、`ext-postgresql-generated-columns-version-contrast.md` 对应的 `ext-postgresql-generated-columns-20260523`。未改正式 `cases.json`。
+    - Profile 状态：Artemis / RFC9110 / OWASP / PostgreSQL 生成 `hybrid-v2`；K8S PV 因离线 LLM structured output 解析失败回退 `rule-v1`，这是 hybrid profile 的真实降级样本，不重传覆盖。
+    - 运行矩阵：`results/external-ablation/` 下生成 L0 VECTOR only、L1 Hybrid only、L2 Hybrid+BGE、L3 Rewrite no profile、L4 Rewrite+profile no salience、L5 current best、A1 no rerank、A4 no salience 共 8 个主报告；另有 2 个 retry 报告用于补齐外部 embedding API transient timeout。
+    - 工程状态：BGE `loaded=true`；所有 rerank 报告 `rerank_runtime.failure_reason` 为空；矩阵结束后 `rag_advisor_grafana_llm_v2` 已从备份恢复到 Grafana profile v2 配置。
+    - 主要结论 1：外部窄集下 baseline 已能回答大部分 manual case，Hybrid / Rewrite / Profile 没有显示稳定碾压式增益。`L3 rewrite no profile` 与 `L4 rewrite+profile` 的差异很小，说明在短小、单主题、query 与原文术语接近的文档上，Profile 的可见收益有限。
+    - 主要结论 2：Context Salience 有非 Grafana 的正向证据。`L5 current best` 相比 `A4 no salience`，`EXT-ARTEMIS-02` 从 retry 后 `2/3` 提升到 `3/3`，`EXT-RFC9110-03` 从 `0/3` 提升到 `2/3`；这说明 salience 不只是 RAG-10 量身定做，但收益仍受 literal 判分与生成措辞影响。
+    - 主要结论 3：BGE rerank 在该 8-case 窄集没有体现稳定净收益。`A1 current no rerank` 与 `L5 current best` 表现接近，且早期 `L2/L3/L4` 对 `EXT-ARTEMIS-02` 反而从 `3/3` 降为 `2/3`。这不是 BGE 失败，而是说明 rerank 需要按“候选覆盖 / final context / generation”分层看，不能假设 rerank 一定提升答案。
+    - 判分边界：`EXT-ARTEMIS-01` 多组答案语义正确（中文日期与持续时间），但 literal 仍为 `0/3`，属于字面匹配低估；后续外部集需要补 source coverage / semantic manual scoring，否则容易把答案格式差异误判为检索失败。
+    - 决策：暂不直接上更复杂的 evidence-type coverage。下一步应先把外部样本评测口径和报告聚合做稳，再决定是否做更通用的 context salience / final context coverage 机制。
 
 ### 2.2 关键认知（必读，否则会重复踩坑）
 
@@ -914,6 +937,42 @@ fresh 验证结论：
 - RAG-10 选中 `node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes / memory_available / memory_usage / 内存使用率查询` 等 hints，说明 LLM profile 已进入 query-time selection。
 - RAG-14 显示 `source NO_PROFILE_MATCH / selected —`，拒答边界未被 profile 强行拉偏。
 - RAG-10 最终仍为 `2/5`，漏 `正常范围 / 警告范围 / 危险范围`；由于 profile / rewrite / rerank 已有证据，下一步归因转向 Answer Generation / Context Salience。
+
+### Step 7 Answer Generation / Context Salience（验证中）
+
+2026-05-23 在 Step 6.9 fresh BGE 基础上进入 Step 7。只读诊断先确认：
+
+- 原文 `docs/dev-ops/rag-file/grafana-mcp-tools-guide.md:160-164` 包含完整“内存数据解释”：`正常范围 0-80% / 警告范围 80-95% / 危险范围 95-100%`。
+- pgvector 真实 chunk 中，完整内存范围在 `chunkIndex=5`；Step 6.9 full 报告最终 documents 命中的是 `chunkIndex=6`，该 chunk 只从 `危险范围: 95-100%` 这一截开始。
+- 因此断点不是 profile 或 rerank 未生效，而是 final context 组装和 answer generation 合同没有把跨 chunk 的关键标准稳定呈现给模型。
+
+本轮实现边界：
+
+- 不修改 rewrite/profile/rerank/embedding/eval 口径。
+- `RagAnswerAdvisor` 的 answer prompt 增加通用回答合同：如果上下文含公式、阈值、范围、判断标准、状态等级、参数、示例或排查步骤，相关时必须显式展开；上下文没有的范围不能编造。
+- 新增 `ContextSalienceSupport`：在 final context 渲染时识别 `formula / range / judgement / procedure / parameter / example` 证据提示。
+- 对疑似被 chunk 边界切开的结构化证据块，渲染层按同一 `knowledge + sourcePath + previous chunkIndex` 读取相邻前一 chunk，作为 `[相邻证据片段]` 放进当前引用块下；触发条件不再依赖 RAG-10 的 `正常/警告/危险` 词表，而是看当前 chunk 是否从列表项、表格行或代码块中间开始，并且包含范围/阈值/参数/代码等结构化证据。这不改变检索命中和 rerank 排序，只增强最终上下文显著性。
+- 观测字段新增 `qa_context_salience_cues` / `qa_context_salience_expansion_count`，runner 报告展示 `context_salience`。
+
+验证产物：
+
+- 窄集：`results/step7-answer-context-salience/rag-eval-result-step7-salience-narrow.md`
+  - RAG-04 `3/3`，RAG-07/RAG-14 拒答保持。
+  - RAG-10 `5/5`；`context_salience expansions=1`；`profile_hints version hybrid-v2`；`rerank_runtime model bge-reranker-v2-m3`。
+- Full：`results/step7-answer-context-salience/rag-eval-result-step7-salience-full.md`
+  - 14/14 completed。
+  - literal cases 全命中：RAG-02 `4/4`、RAG-03 `3/3`、RAG-04 `3/3`、RAG-05 `5/5`、RAG-10 `5/5`、RAG-11 `2/2`、RAG-13 `2/2`。
+  - 14 条均显示 `rerank_runtime: model bge-reranker-v2-m3`，`PASSTHROUGH=0`，非空 `failure_reason=0`。
+  - `context_salience expansions=1` 仅出现在 RAG-05 和 RAG-10；RAG-10 从 Step 6.9 full 的 `2/5` 回到 `5/5`。
+- 泛化复盘：`results/step7-answer-context-salience/rag-eval-result-step7-boundary-verbatim-full.md`
+  - 14/14 completed，BGE rerank 正常，拒答 case 未被 profile/salience 明显拉偏。
+  - RAG-04 在 full 中 `3/3`；窄集曾出现 `7*24*3600` 被模型格式化为 `7 * 24 * 3600`，属于 literal smoke 的格式保真风险，不改 eval 口径。
+  - RAG-10 full 又回到 `2/5`，但这次断点不同：候选池有 `chunkIndex=5/6`，final topK 没有保住阈值标准 chunk，`context_salience expansions=0`。这说明“相邻 chunk 补全”只能解决已进入 final context 的 chunk 边界切断，不能解决关键证据未进入 final topK。
+  - 曾尝试让 coverage guard 使用 all-hit `bestQueryVariantRank/queryVariantIndexes`，窄集验证未解决 RAG-10，且可能扩大无关 case 的 guard 行为，已撤回。下一步若继续 Step 7，应做更明确的 evidence-type coverage：当 query/rewrite/profile 表达了 `threshold / judgement / range / parameter / procedure` 意图时，从候选池中保护少量同类证据 chunk，而不是扩大普通 variant coverage。
+
+面试口径：
+
+> 前面的 Query Rewrite / Profile / Hybrid / BGE rerank 解决的是 find evidence；Step 7 解决 use evidence。第一版 salience 证明了：当关键证据已经进入 final context 但被 chunk 边界切断时，可以通过 answer contract + 相邻证据补全提高生成稳定性。泛化复盘进一步暴露第二类问题：关键证据在候选池里但没进入 final topK 时，单纯的相邻补全无效，后续要做 evidence-type coverage，而不是继续硬调 rewrite prompt 或把 profile 当答案事实。
 
 ## 5. 关键约束 / 隐藏陷阱
 

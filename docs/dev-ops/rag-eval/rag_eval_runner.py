@@ -34,6 +34,8 @@ QA_CONTEXT_ACTUAL_CHARS = "qa_context_actual_chars"
 QA_CONTEXT_SELECTED_COUNT = "qa_context_selected_count"
 QA_CONTEXT_DROPPED_COUNT = "qa_context_dropped_count"
 QA_CONTEXT_TRUNCATED = "qa_context_truncated"
+QA_CONTEXT_SALIENCE_CUES = "qa_context_salience_cues"
+QA_CONTEXT_SALIENCE_EXPANSION_COUNT = "qa_context_salience_expansion_count"
 QA_RERANK_APPLIED = "qa_rerank_applied"
 QA_RERANK_MODE = "qa_rerank_mode"
 QA_RERANK_CANDIDATE_COUNT = "qa_rerank_candidate_count"
@@ -455,6 +457,15 @@ def write_markdown(path: Path, results: list[dict[str, Any]], api_url: str, agen
                     "  - context_chars: actual `{act}` / max `{mx}`".format(
                         act=data.get(QA_CONTEXT_ACTUAL_CHARS),
                         mx=data.get(QA_CONTEXT_MAX_CHARS),
+                    )
+                )
+                salience_cues = data.get(QA_CONTEXT_SALIENCE_CUES) or []
+                if not isinstance(salience_cues, list):
+                    salience_cues = [salience_cues]
+                lines.append(
+                    "  - context_salience: cues `{cues}` / expansions `{expansions}`".format(
+                        cues=md_escape(" | ".join(str(item) for item in salience_cues) or "—"),
+                        expansions=data.get(QA_CONTEXT_SALIENCE_EXPANSION_COUNT) or 0,
                     )
                 )
                 lines.append(

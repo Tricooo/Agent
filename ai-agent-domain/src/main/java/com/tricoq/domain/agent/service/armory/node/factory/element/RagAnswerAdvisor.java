@@ -77,6 +77,7 @@ public class RagAnswerAdvisor implements BaseAdvisor {
 
     private static final int DEFAULT_MAX_CONTEXT_CHARS = 6000;
     private static final int DEFAULT_MAX_RERANK_QUERY_CHARS = 1000;
+    private static final int SALIENCE_ADJACENT_MAX_CHARS = 1400;
     private static final double DEFAULT_QUERY_FUSION_RERANK_WEIGHT = 0.3D;
     private static final String CHUNK_TRUNCATED_NOTICE = "\n...[chunk truncated]...\n";
     private static final int MIN_CHUNK_HEAD_CHARS = 1000;
@@ -129,12 +130,30 @@ public class RagAnswerAdvisor implements BaseAdvisor {
         this.documentReranker = documentReranker == null ? new PassthroughDocumentReranker() : documentReranker;
         this.queryRewriter = queryRewriter == null ? passthroughQueryRewriter() : queryRewriter;
         this.retrievalTopKPlan = buildTopKPlan(searchRequest.getTopK());
-        this.userTextAdvisor = """
+        this.userTextAdvisor = buildUserTextAdvisor(this.retrievalOptions.isContextSalienceEnabled());
+
+    }
+
+    private static QueryRewriter passthroughQueryRewriter() {
+        return new RewritePipeline(RewritePolicy.PASSTHROUGH, List.of(new PassthroughQueryRewriter()));
+    }
+
+    private static String buildUserTextAdvisor(boolean contextSalienceEnabled) {
+        String salienceInstruction = contextSalienceEnabled ? """
+                If the context contains formulas, thresholds, ranges, judgement standards,
+                status levels, parameters, examples, or troubleshooting steps, include those
+                evidence items explicitly when they are relevant to the user question.
+                Preserve code, PromQL, formulas, configuration keys, identifiers, and
+                threshold literals exactly as they appear in the context when quoting them.
+                Do not invent missing ranges or standards; if a requested item is absent from
+                the context, say that the context does not provide it.
+                """ : "";
+        return """
                 
                 Context information is below, surrounded by ---------------------
                 Each context chunk is prefixed with a citation number like [1], [2].
                 When using context information, prefer mentioning the citation number.
-                
+                %s
                 ---------------------
                 {%s}
                 ---------------------
@@ -142,12 +161,7 @@ public class RagAnswerAdvisor implements BaseAdvisor {
                 Given the context and provided history information and not prior knowledge,
                 reply to the user comment. If the answer is not in the context, inform
                 the user that you can't answer the question.
-                """.formatted(AdvisorContext.QUESTION_ANSWER_CONTEXT);
-
-    }
-
-    private static QueryRewriter passthroughQueryRewriter() {
-        return new RewritePipeline(RewritePolicy.PASSTHROUGH, List.of(new PassthroughQueryRewriter()));
+                """.formatted(salienceInstruction, AdvisorContext.QUESTION_ANSWER_CONTEXT);
     }
 
     private RetrievalTopKPlan buildTopKPlan(int topK) {
@@ -201,6 +215,8 @@ public class RagAnswerAdvisor implements BaseAdvisor {
             emptyRetrievalContext.put(Qa.CONTEXT_SELECTED_COUNT, 0);
             emptyRetrievalContext.put(Qa.CONTEXT_DROPPED_COUNT, 0);
             emptyRetrievalContext.put(Qa.CONTEXT_TRUNCATED, false);
+            emptyRetrievalContext.put(Qa.CONTEXT_SALIENCE_CUES, List.of());
+            emptyRetrievalContext.put(Qa.CONTEXT_SALIENCE_EXPANSION_COUNT, 0);
             emptyRetrievalContext.put(Qa.SIMILARITY_THRESHOLD, request.getSimilarityThreshold());
             emptyRetrievalContext.put(Qa.CANDIDATE_SIMILARITY_THRESHOLD, candidateSimilarityThreshold);
             emptyRetrievalContext.put(Qa.RERANK_APPLIED, false);
@@ -254,6 +270,8 @@ public class RagAnswerAdvisor implements BaseAdvisor {
         advisedUserParams.put(Qa.CONTEXT_SELECTED_COUNT, renderedContext.selectedCount());
         advisedUserParams.put(Qa.CONTEXT_DROPPED_COUNT, renderedContext.droppedCount());
         advisedUserParams.put(Qa.CONTEXT_TRUNCATED, renderedContext.truncated());
+        advisedUserParams.put(Qa.CONTEXT_SALIENCE_CUES, renderedContext.salienceCues());
+        advisedUserParams.put(Qa.CONTEXT_SALIENCE_EXPANSION_COUNT, renderedContext.salienceExpansionCount());
         advisedUserParams.put(Qa.SIMILARITY_THRESHOLD, request.getSimilarityThreshold());
         advisedUserParams.put(Qa.CANDIDATE_SIMILARITY_THRESHOLD, candidateSimilarityThreshold);
         advisedUserParams.put(Qa.MIN_RETRIEVED_SCORE, minScore);
@@ -1335,8 +1353,11 @@ public class RagAnswerAdvisor implements BaseAdvisor {
     // V1 先使用字符预算，后续可替换为 token 预算或语义边界裁剪
     private RenderedDocumentContext renderDocumentContext(List<Document> documents, int maxContextChars) {
         StringBuilder builder = new StringBuilder();
+        LinkedHashSet<String> salienceCues = new LinkedHashSet<>();
+        Set<String> renderedSourceChunkKeys = sourceChunkKeys(documents);
         boolean truncated = false;
         int selectedCount = 0;
+        int salienceExpansionCount = 0;
         for (int i = 0; i < documents.size(); i++) {
             Document document = documents.get(i);
             //score ≈ 1 - distance 用于判断召回结果是否足够可信 distance位于metadata中
@@ -1347,11 +1368,24 @@ public class RagAnswerAdvisor implements BaseAdvisor {
                     StringUtils.abbreviate(document.getText(), 200));
             // Step 3.3 渲染端追加 chunk 来源行（PLAN.md §9.1 落点 C），让 LLM 引用 "[i+1]" 时能看到溯源
             String sourceLine = buildSourceLine(document.getMetadata());
+            String salienceLine = "";
+            String adjacentContext = "";
+            if (retrievalOptions.isContextSalienceEnabled()) {
+                ContextSalienceSupport.Analysis salienceAnalysis = ContextSalienceSupport.analyze(document.getText());
+                salienceCues.addAll(salienceAnalysis.cues());
+                salienceLine = ContextSalienceSupport.renderCueLine(salienceAnalysis);
+                adjacentContext = buildAdjacentSalienceContext(document, salienceAnalysis, renderedSourceChunkKeys);
+                if (StringUtils.isNotBlank(adjacentContext)) {
+                    salienceExpansionCount++;
+                }
+            }
             String renderedDocument = "["
                     + (i + 1)
                     + "]"
                     + (sourceLine.isEmpty() ? "" : " " + sourceLine)
+                    + (salienceLine.isEmpty() ? "" : " " + salienceLine)
                     + System.lineSeparator()
+                    + adjacentContext
                     + document.getText()
                     + System.lineSeparator()
                     + System.lineSeparator();
@@ -1373,10 +1407,77 @@ public class RagAnswerAdvisor implements BaseAdvisor {
                 builder.toString(),
                 selectedCount,
                 documents.size() - selectedCount,
-                truncated
+                truncated,
+                List.copyOf(salienceCues),
+                salienceExpansionCount
         );
 
 
+    }
+
+    private String buildAdjacentSalienceContext(Document document,
+                                                ContextSalienceSupport.Analysis salienceAnalysis,
+                                                Set<String> renderedSourceChunkKeys) {
+        if (salienceAnalysis == null || !salienceAnalysis.needsPreviousChunkContext()) {
+            return "";
+        }
+        Optional<Document> previousChunk = findPreviousSourceChunk(document);
+        if (previousChunk.isEmpty()) {
+            return "";
+        }
+        Document adjacentDocument = previousChunk.get();
+        String adjacentKey = sourceChunkKey(adjacentDocument.getMetadata());
+        if (StringUtils.isNotBlank(adjacentKey) && renderedSourceChunkKeys.contains(adjacentKey)) {
+            return "";
+        }
+        String sourceLine = buildSourceLine(adjacentDocument.getMetadata());
+        return "[相邻证据片段] "
+                + (sourceLine.isEmpty() ? "" : sourceLine + " ")
+                + "用于还原被 chunk 边界切开的范围/阈值标准："
+                + System.lineSeparator()
+                + StringUtils.abbreviate(adjacentDocument.getText(), SALIENCE_ADJACENT_MAX_CHARS)
+                + System.lineSeparator()
+                + "[当前召回片段]"
+                + System.lineSeparator();
+    }
+
+    private Optional<Document> findPreviousSourceChunk(Document document) {
+        if (document == null || MapUtils.isEmpty(document.getMetadata())) {
+            return Optional.empty();
+        }
+        if (vectorStore == null) {
+            return Optional.empty();
+        }
+        Map<String, Object> metadata = document.getMetadata();
+        String knowledge = metadataText(metadata, DocumentMetadata.KNOWLEDGE);
+        String sourcePath = metadataText(metadata, DocumentMetadata.SOURCE_PATH);
+        Integer chunkIndex = metadataInteger(metadata, DocumentMetadata.CHUNK_INDEX);
+        if (StringUtils.isAnyBlank(knowledge, sourcePath) || chunkIndex == null || chunkIndex <= 0) {
+            return Optional.empty();
+        }
+
+        JdbcTemplate template = vectorStore.getNativeClient().filter(JdbcTemplate.class::isInstance)
+                .map(JdbcTemplate.class::cast)
+                .orElse(null);
+        if (template == null) {
+            return Optional.empty();
+        }
+
+        String sql = """
+                SELECT id::text AS id, content, metadata::text AS metadata
+                FROM vector_store_openai
+                WHERE metadata->>'knowledge' = ?
+                  AND metadata->>'sourcePath' = ?
+                  AND (metadata->>'chunkIndex')::int = ?
+                LIMIT 1
+                """;
+        RowMapper<Document> rowMapper = (rs, rowNum) -> Document.builder()
+                .id(rs.getString("id"))
+                .text(rs.getString("content"))
+                .metadata(parseMetadata(rs.getString("metadata")))
+                .build();
+        List<Document> results = template.query(sql, rowMapper, knowledge, sourcePath, chunkIndex - 1);
+        return results.stream().findFirst();
     }
 
     private String truncateChunkIfNeeded(String renderedDocument, int remainingChars) {
@@ -1427,6 +1528,32 @@ public class RagAnswerAdvisor implements BaseAdvisor {
         return sb.toString();
     }
 
+    private Set<String> sourceChunkKeys(List<Document> documents) {
+        if (CollectionUtils.isEmpty(documents)) {
+            return Set.of();
+        }
+        LinkedHashSet<String> keys = new LinkedHashSet<>();
+        for (Document document : documents) {
+            if (document == null) {
+                continue;
+            }
+            String key = sourceChunkKey(document.getMetadata());
+            if (StringUtils.isNotBlank(key)) {
+                keys.add(key);
+            }
+        }
+        return keys;
+    }
+
+    private String sourceChunkKey(Map<String, Object> metadata) {
+        String sourcePath = metadataText(metadata, DocumentMetadata.SOURCE_PATH);
+        Integer chunkIndex = metadataInteger(metadata, DocumentMetadata.CHUNK_INDEX);
+        if (StringUtils.isBlank(sourcePath) || chunkIndex == null) {
+            return "";
+        }
+        return sourcePath + "#" + chunkIndex;
+    }
+
     private Double minScore(List<Document> documents) {
         Double minScore = null;
         for (Document document : documents) {
@@ -1455,7 +1582,9 @@ public class RagAnswerAdvisor implements BaseAdvisor {
             String context,
             int selectedCount,
             int droppedCount,
-            boolean truncated
+            boolean truncated,
+            List<String> salienceCues,
+            int salienceExpansionCount
     ) {
     }
 

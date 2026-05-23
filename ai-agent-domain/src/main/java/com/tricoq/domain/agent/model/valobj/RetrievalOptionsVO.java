@@ -47,6 +47,11 @@ public class RetrievalOptionsVO {
      */
     private RerankQueryPolicy rerankQueryPolicy = RerankQueryPolicy.ORIGINAL;
 
+    /**
+     * 查询阶段是否渲染 context salience 提示与相邻证据片段。默认开启，保持现有行为。
+     */
+    private boolean contextSalienceEnabled = true;
+
     public static RetrievalOptionsVO from(AiClientAdvisorDTO.RagAnswer ragAnswer, int topK) {
         return from(ragAnswer, topK, null);
     }
@@ -64,6 +69,7 @@ public class RetrievalOptionsVO {
         options.setRrfK(positiveOrDefault(ragAnswer.getRrfK(), DEFAULT_RRF_K));
         options.setCandidateSimilarityThreshold(ragAnswer.getCandidateSimilarityThreshold());
         options.setRerankQueryPolicy(RerankQueryPolicy.getByPolicyOrDefault(ragAnswer.getRerankQueryPolicy()));
+        options.setContextSalienceEnabled(ragAnswer.isContextSalienceEnabled());
         if (null != keyWordPolicy) {
             options.setKeyWordPolicy(keyWordPolicy);
         }

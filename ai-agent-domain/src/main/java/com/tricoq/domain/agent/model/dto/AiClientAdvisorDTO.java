@@ -129,6 +129,16 @@ public class AiClientAdvisorDTO {
          * 自动 KnowledgeBaseProfile 在 query-time selection 阶段最多选择的 hint 数量。
          */
         private int queryRewriteProfileHintTopN = 8;
+
+        /**
+         * 是否启用自动 KnowledgeBaseProfile hints；默认开启，便于消融实验单独关闭 profile。
+         */
+        private boolean queryRewriteProfileEnabled = true;
+
+        /**
+         * 是否启用 Context Salience 渲染增强；默认开启，便于消融实验按 advisor 配置关闭。
+         */
+        private boolean contextSalienceEnabled = true;
     }
 
 }

@@ -167,6 +167,7 @@ GROUP_META: dict[str, dict[str, str]] = {
     "step6.6-fusion-aware-rerank-rrf": {"label": "Step 6.6 fusion-aware rerank RRF", "phase": "Step 6 Query Rewrite", "color": "#7cb342", "note": "rerank RRF 弱融合 queryFusionRank"},
     "step6.7-llm-query-rewrite": {"label": "Step 6.7 LLM query rewrite", "phase": "Step 6 Query Rewrite", "color": "#c0ca33", "note": "LLM rewrite + domain hints 实验"},
     "step6.8-knowledge-base-profile": {"label": "Step 6.8 KnowledgeBaseProfile", "phase": "Step 6 Query Rewrite", "color": "#afb42b", "note": "auto profile + query-time selected hints"},
+    "external-ablation": {"label": "External ablation", "phase": "External generalization", "color": "#546e7a", "note": "外部 8-case 窄集消融"},
     "phase-a5-control": {"label": "Phase A.5 control (empty)", "phase": "Step 3 A.5", "color": "#bdbdbd", "note": "空目录"},
 }
 
@@ -270,6 +271,23 @@ def display_label_from_file(group: str, filename: str) -> str:
         if "llm-list-narrow" in stem:
             return "6.7 LLM List DTO · narrow"
         return "6.7 LLM List DTO · RAG-10"
+    if group == "external-ablation":
+        if "l0-vector-only" in stem:
+            return "EXT L0 · VECTOR only"
+        if "l1-hybrid-only" in stem:
+            return "EXT L1 · Hybrid only"
+        if "l2-hybrid-bge" in stem:
+            return "EXT L2 · Hybrid + BGE"
+        if "l3-rewrite-no-profile" in stem:
+            return "EXT L3 · Rewrite no profile"
+        if "l4-rewrite-profile-no-salience" in stem:
+            return "EXT L4 · Rewrite + profile"
+        if "l5-current-best" in stem:
+            return "EXT L5 · current best"
+        if "a1-current-no-rerank" in stem:
+            return "EXT A1 · no rerank"
+        if "a4-current-no-salience" in stem:
+            return "EXT A4 · no salience"
 
     return run_label_from_file(group, filename)
 

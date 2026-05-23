@@ -100,6 +100,16 @@ public final class RagObservationKeys {
         public static final String CONTEXT_TRUNCATED = "qa_context_truncated";
 
         /**
+         * 最终上下文渲染时识别出的证据提示类型，例如 formula / range / judgement。
+         */
+        public static final String CONTEXT_SALIENCE_CUES = "qa_context_salience_cues";
+
+        /**
+         * 上下文渲染为修复 chunk 边界切分而补充的同源相邻证据片段数量。
+         */
+        public static final String CONTEXT_SALIENCE_EXPANSION_COUNT = "qa_context_salience_expansion_count";
+
+        /**
          * 本次是否执行真实 rerank；false 表示只做 passthrough 占位排序。
          */
         public static final String RERANK_APPLIED = "qa_rerank_applied";
