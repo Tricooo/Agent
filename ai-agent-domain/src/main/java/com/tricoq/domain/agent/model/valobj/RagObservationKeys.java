@@ -196,6 +196,11 @@ public final class RagObservationKeys {
         public static final String QUERY_REWRITE_PROFILE_SOURCE = "qa_query_rewrite_profile_source";
 
         /**
+         * query rewrite 使用的 profile 版本，例如 rule-v1 / hybrid-v2。
+         */
+        public static final String QUERY_REWRITE_PROFILE_VERSION = "qa_query_rewrite_profile_version";
+
+        /**
          * 本次 query-time selection 选择出的 profile hints。
          */
         public static final String QUERY_REWRITE_SELECTED_PROFILE_HINTS = "qa_query_rewrite_selected_profile_hints";

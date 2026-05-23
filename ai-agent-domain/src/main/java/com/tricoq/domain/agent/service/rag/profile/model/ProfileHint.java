@@ -20,6 +20,12 @@ public class ProfileHint {
 
     private String source;
 
+    private String sourcePath;
+
+    private Integer chunkIndex;
+
+    private String evidenceText;
+
     private Integer frequency;
 
     private Integer score;

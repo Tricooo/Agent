@@ -23,7 +23,21 @@ public class KnowledgeBaseProfile {
 
     private String profileVersion;
 
+    private String profileSource;
+
     private LocalDateTime generatedAt;
+
+    private String summary;
+
+    private List<GroundedProfileItem> concepts;
+
+    private List<ProfileAlias> aliases;
+
+    private List<GroundedProfileItem> questionsAnswered;
+
+    private List<GroundedProfileItem> negativeScopes;
+
+    private List<GroundedProfileItem> evidenceTypes;
 
     private List<ProfileHint> hints;
 }

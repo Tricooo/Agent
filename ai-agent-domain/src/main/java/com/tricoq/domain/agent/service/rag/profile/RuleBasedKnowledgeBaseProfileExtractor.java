@@ -1,5 +1,6 @@
 package com.tricoq.domain.agent.service.rag.profile;
 
+import com.tricoq.domain.agent.model.valobj.RagObservationKeys.DocumentMetadata;
 import com.tricoq.domain.agent.service.rag.profile.model.KnowledgeBaseProfile;
 import com.tricoq.domain.agent.service.rag.profile.model.ProfileHint;
 import com.tricoq.domain.agent.service.rag.profile.model.ProfileHintType;
@@ -22,6 +23,7 @@ import java.util.regex.Pattern;
 public class RuleBasedKnowledgeBaseProfileExtractor implements KnowledgeBaseProfileExtractor {
 
     public static final String PROFILE_VERSION = "rule-v1";
+    public static final String PROFILE_SOURCE = "RULE";
 
     private static final int MAX_HINTS = 80;
     private static final int MAX_HINT_CHARS = 80;
@@ -48,7 +50,7 @@ public class RuleBasedKnowledgeBaseProfileExtractor implements KnowledgeBaseProf
         Map<String, HintAccumulator> hints = new LinkedHashMap<>();
         if (!CollectionUtils.isEmpty(documents)) {
             for (Document document : documents) {
-                collectFromText(StringUtils.defaultString(document.getText()), hints);
+                collectFromDocument(document, hints);
             }
         }
 
@@ -63,57 +65,65 @@ public class RuleBasedKnowledgeBaseProfileExtractor implements KnowledgeBaseProf
                 .ragId(ragId)
                 .knowledgeTag(knowledgeTag)
                 .profileVersion(PROFILE_VERSION)
+                .profileSource(PROFILE_SOURCE)
                 .generatedAt(LocalDateTime.now())
                 .hints(profileHints)
                 .build();
     }
 
-    private void collectFromText(String text, Map<String, HintAccumulator> hints) {
+    private void collectFromDocument(Document document, Map<String, HintAccumulator> hints) {
+        String text = StringUtils.defaultString(document.getText());
         if (StringUtils.isBlank(text)) {
             return;
         }
-        collectPattern(text, HEADING_PATTERN, ProfileHintType.HEADING, "heading", hints);
-        collectPattern(text, INLINE_CODE_PATTERN, ProfileHintType.INLINE_CODE, "inline_code", hints);
-        collectCodeBlockTokens(text, hints);
-        collectTechnicalTokens(text, hints);
-        collectEvidencePhrases(text, hints);
+        String sourcePath = metadataText(document, DocumentMetadata.SOURCE_PATH);
+        Integer chunkIndex = metadataInteger(document, DocumentMetadata.CHUNK_INDEX);
+        collectPattern(text, HEADING_PATTERN, ProfileHintType.HEADING, "heading", sourcePath, chunkIndex, hints);
+        collectPattern(text, INLINE_CODE_PATTERN, ProfileHintType.INLINE_CODE, "inline_code", sourcePath, chunkIndex, hints);
+        collectCodeBlockTokens(text, sourcePath, chunkIndex, hints);
+        collectTechnicalTokens(text, sourcePath, chunkIndex, hints);
+        collectEvidencePhrases(text, sourcePath, chunkIndex, hints);
     }
 
     private void collectPattern(String text, Pattern pattern, ProfileHintType type,
-                                String source, Map<String, HintAccumulator> hints) {
+                                String source, String sourcePath, Integer chunkIndex,
+                                Map<String, HintAccumulator> hints) {
         Matcher matcher = pattern.matcher(text);
         while (matcher.find()) {
-            addHint(matcher.group(1), type, source, hints);
+            addHint(matcher.group(1), type, source, sourcePath, chunkIndex, matcher.group(1), hints);
         }
     }
 
-    private void collectCodeBlockTokens(String text, Map<String, HintAccumulator> hints) {
+    private void collectCodeBlockTokens(String text, String sourcePath, Integer chunkIndex,
+                                        Map<String, HintAccumulator> hints) {
         Matcher blockMatcher = CODE_BLOCK_PATTERN.matcher(text);
         while (blockMatcher.find()) {
             Matcher tokenMatcher = TECHNICAL_TOKEN_PATTERN.matcher(blockMatcher.group(1));
             while (tokenMatcher.find()) {
                 String token = tokenMatcher.group(1);
                 if (isStrongTechnicalToken(token)) {
-                    addHint(token, ProfileHintType.CODE_TOKEN, "code_block", hints);
+                    addHint(token, ProfileHintType.CODE_TOKEN, "code_block", sourcePath, chunkIndex, token, hints);
                 }
             }
         }
     }
 
-    private void collectTechnicalTokens(String text, Map<String, HintAccumulator> hints) {
+    private void collectTechnicalTokens(String text, String sourcePath, Integer chunkIndex,
+                                        Map<String, HintAccumulator> hints) {
         Matcher matcher = TECHNICAL_TOKEN_PATTERN.matcher(text);
         while (matcher.find()) {
             String token = matcher.group(1);
             if (isStrongTechnicalToken(token)) {
-                addHint(token, ProfileHintType.TECHNICAL_TOKEN, "technical_token", hints);
+                addHint(token, ProfileHintType.TECHNICAL_TOKEN, "technical_token", sourcePath, chunkIndex, token, hints);
             }
         }
     }
 
-    private void collectEvidencePhrases(String text, Map<String, HintAccumulator> hints) {
+    private void collectEvidencePhrases(String text, String sourcePath, Integer chunkIndex,
+                                        Map<String, HintAccumulator> hints) {
         for (String phrase : EVIDENCE_PHRASES) {
             if (StringUtils.containsIgnoreCase(text, phrase)) {
-                addHint(phrase, ProfileHintType.EVIDENCE_TYPE, "evidence_type", hints);
+                addHint(phrase, ProfileHintType.EVIDENCE_TYPE, "evidence_type", sourcePath, chunkIndex, phrase, hints);
             }
         }
     }
@@ -152,6 +162,7 @@ public class RuleBasedKnowledgeBaseProfileExtractor implements KnowledgeBaseProf
     }
 
     private void addHint(String rawValue, ProfileHintType type, String source,
+                         String sourcePath, Integer chunkIndex, String evidenceText,
                          Map<String, HintAccumulator> hints) {
         String value = normalizeHint(rawValue);
         if (StringUtils.isBlank(value)) {
@@ -159,7 +170,7 @@ public class RuleBasedKnowledgeBaseProfileExtractor implements KnowledgeBaseProf
         }
         String key = value.toLowerCase(Locale.ROOT);
         HintAccumulator accumulator = hints.computeIfAbsent(key, ignored -> new HintAccumulator(value, type, source));
-        accumulator.add(type, source);
+        accumulator.add(type, source, sourcePath, chunkIndex, evidenceText);
     }
 
     private String normalizeHint(String value) {
@@ -176,8 +187,33 @@ public class RuleBasedKnowledgeBaseProfileExtractor implements KnowledgeBaseProf
             case CODE_TOKEN -> 40;
             case TECHNICAL_TOKEN -> 35;
             case EVIDENCE_TYPE -> 30;
+            case CONCEPT -> 28;
+            case ALIAS -> 26;
+            case QUESTION_ANSWERED -> 24;
+            case NEGATIVE_SCOPE -> 22;
+            case LLM_EVIDENCE_TYPE -> 20;
             case HEADING -> 20;
         };
+    }
+
+    private String metadataText(Document document, String key) {
+        Object value = document.getMetadata().get(key);
+        return value == null ? "" : String.valueOf(value);
+    }
+
+    private Integer metadataInteger(Document document, String key) {
+        Object value = document.getMetadata().get(key);
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        if (value == null) {
+            return null;
+        }
+        try {
+            return Integer.parseInt(String.valueOf(value));
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
     }
 
     private final class HintAccumulator {
@@ -185,6 +221,9 @@ public class RuleBasedKnowledgeBaseProfileExtractor implements KnowledgeBaseProf
         private final String value;
         private ProfileHintType type;
         private String source;
+        private String sourcePath;
+        private Integer chunkIndex;
+        private String evidenceText;
         private int frequency;
         private int score;
 
@@ -194,12 +233,22 @@ public class RuleBasedKnowledgeBaseProfileExtractor implements KnowledgeBaseProf
             this.source = source;
         }
 
-        private void add(ProfileHintType nextType, String nextSource) {
+        private void add(ProfileHintType nextType, String nextSource,
+                         String nextSourcePath, Integer nextChunkIndex, String nextEvidenceText) {
             frequency++;
             int nextWeight = typeWeight(nextType);
             if (nextWeight > typeWeight(type)) {
                 type = nextType;
                 source = nextSource;
+            }
+            if (StringUtils.isBlank(sourcePath) && StringUtils.isNotBlank(nextSourcePath)) {
+                sourcePath = nextSourcePath;
+            }
+            if (chunkIndex == null && nextChunkIndex != null) {
+                chunkIndex = nextChunkIndex;
+            }
+            if (StringUtils.isBlank(evidenceText) && StringUtils.isNotBlank(nextEvidenceText)) {
+                evidenceText = StringUtils.abbreviate(StringUtils.trimToEmpty(nextEvidenceText), MAX_HINT_CHARS);
             }
             score += nextWeight;
         }
@@ -217,6 +266,9 @@ public class RuleBasedKnowledgeBaseProfileExtractor implements KnowledgeBaseProf
                     .value(value)
                     .type(type)
                     .source(source)
+                    .sourcePath(sourcePath)
+                    .chunkIndex(chunkIndex)
+                    .evidenceText(evidenceText)
                     .frequency(frequency)
                     .score(score)
                     .build();

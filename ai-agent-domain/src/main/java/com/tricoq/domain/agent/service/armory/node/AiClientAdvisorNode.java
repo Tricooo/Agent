@@ -102,7 +102,9 @@ public class AiClientAdvisorNode extends AbstractArmorySupport {
             }
             rewriteContextBuilder.extraClientId(queryRewriterClientId);
             rewriteContextBuilder.queryRewriteDomainHints(ragAnswer.getQueryRewriteDomainHints());
-            rewriteContextBuilder.knowledgeBaseProfileHints(queryRewriteProfileHints(ragAnswer));
+            QueryRewriteProfileContext profileContext = queryRewriteProfileContext(ragAnswer);
+            rewriteContextBuilder.knowledgeBaseProfileHints(profileContext.profileHints());
+            rewriteContextBuilder.profileVersion(profileContext.profileVersion());
             rewriteContextBuilder.profileHintTopN(ragAnswer.getQueryRewriteProfileHintTopN());
         }
 
@@ -112,15 +114,15 @@ public class AiClientAdvisorNode extends AbstractArmorySupport {
         return vo.createAdvisor(advisorVO, vectorStore, reranker, queryRewriter);
     }
 
-    private List<ProfileHint> queryRewriteProfileHints(AiClientAdvisorDTO.RagAnswer ragAnswer) {
+    private QueryRewriteProfileContext queryRewriteProfileContext(AiClientAdvisorDTO.RagAnswer ragAnswer) {
         List<String> knowledgeTags = knowledgeTags(ragAnswer.getFilterExpression());
         if (CollectionUtils.isEmpty(knowledgeTags)) {
-            return List.of();
+            return QueryRewriteProfileContext.empty();
         }
         List<KnowledgeBaseProfile> profiles = knowledgeBaseProfileRepository.queryByKnowledgeTags(knowledgeTags);
         if (CollectionUtils.isEmpty(profiles)) {
             log.info("RAG知识库画像未命中: knowledgeTags={}", knowledgeTags);
-            return List.of();
+            return QueryRewriteProfileContext.empty();
         }
         List<ProfileHint> profileHints = profiles.stream()
                 .filter(Objects::nonNull)
@@ -128,9 +130,23 @@ public class AiClientAdvisorNode extends AbstractArmorySupport {
                 .flatMap(profile -> profile.getHints().stream())
                 .filter(Objects::nonNull)
                 .toList();
+        String profileVersion = profiles.stream()
+                .filter(Objects::nonNull)
+                .map(KnowledgeBaseProfile::getProfileVersion)
+                .filter(StringUtils::isNotBlank)
+                .distinct()
+                .reduce((left, right) -> left + "," + right)
+                .orElse("");
         log.info("RAG知识库画像加载完成: knowledgeTags={}, profiles={}, hints={}",
                 knowledgeTags, profiles.size(), profileHints.size());
-        return profileHints;
+        return new QueryRewriteProfileContext(profileHints, profileVersion);
+    }
+
+    private record QueryRewriteProfileContext(List<ProfileHint> profileHints, String profileVersion) {
+
+        private static QueryRewriteProfileContext empty() {
+            return new QueryRewriteProfileContext(List.of(), "");
+        }
     }
 
     private List<String> knowledgeTags(String filterExpression) {

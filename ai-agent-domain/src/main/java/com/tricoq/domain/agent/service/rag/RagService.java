@@ -94,8 +94,9 @@ public class RagService implements IRagService {
 
         KnowledgeBaseProfile profile = knowledgeBaseProfileExtractor.extract(ragId, tag, allDocuments);
         boolean profileSaved = knowledgeBaseProfileRepository.saveOrUpdate(profile);
-        log.info("RAG知识库画像生成完成: ragId={}, tag={}, chunks={}, hints={}, saved={}",
-                ragId, tag, allDocuments.size(), profile.getHints() == null ? 0 : profile.getHints().size(), profileSaved);
+        log.info("RAG知识库画像生成完成: ragId={}, tag={}, version={}, source={}, chunks={}, hints={}, saved={}",
+                ragId, tag, profile.getProfileVersion(), profile.getProfileSource(),
+                allDocuments.size(), profile.getHints() == null ? 0 : profile.getHints().size(), profileSaved);
 
     }
 

@@ -25,6 +25,8 @@ public class RewriteContext {
 
     private String profileSource;
 
+    private String profileVersion;
+
     private Integer profileHintTopN;
 
 }

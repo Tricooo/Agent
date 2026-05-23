@@ -94,6 +94,15 @@ spring:
           connect-timeout: ${RAG_RERANK_LOCAL_BGE_CONNECT_TIMEOUT:10s}
           read-timeout: ${RAG_RERANK_LOCAL_BGE_READ_TIMEOUT:10s}
           model-name: ${RAG_RERANK_LOCAL_BGE_MODEL_NAME:bge-reranker-v2-m3}
+      profile:
+        llm:
+          # v2 离线画像默认关闭；开启后只在入库阶段调用 LLM，失败会回退 rule-v1。
+          enabled: ${RAG_PROFILE_LLM_ENABLED:false}
+          client-id: ${RAG_PROFILE_LLM_CLIENT_ID:}
+          max-snippets: ${RAG_PROFILE_LLM_MAX_SNIPPETS:12}
+          max-snippet-chars: ${RAG_PROFILE_LLM_MAX_SNIPPET_CHARS:900}
+          max-items-per-type: ${RAG_PROFILE_LLM_MAX_ITEMS_PER_TYPE:12}
+          timeout-millis: ${RAG_PROFILE_LLM_TIMEOUT_MILLIS:45000}
 
 mybatis-plus:
   configuration:

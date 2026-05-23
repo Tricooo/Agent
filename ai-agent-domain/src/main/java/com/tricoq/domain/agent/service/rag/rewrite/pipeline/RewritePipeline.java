@@ -97,6 +97,7 @@ public class RewritePipeline implements QueryRewriter {
                 .attemptTrace(attemptTrace)
                 .selectedProfileHints(requestContext == null ? List.of() : requestContext.getSelectedProfileHints())
                 .profileSource(requestContext == null ? ProfileHintSelector.SOURCE_NONE : requestContext.getProfileSource())
+                .profileVersion(requestContext == null ? "" : requestContext.getProfileVersion())
                 .build();
     }
 
@@ -134,6 +135,7 @@ public class RewritePipeline implements QueryRewriter {
                 .knowledgeBaseProfileHints(rewriteContext.getKnowledgeBaseProfileHints())
                 .selectedProfileHints(selectedHints)
                 .profileSource(profileSource)
+                .profileVersion(rewriteContext.getProfileVersion())
                 .profileHintTopN(rewriteContext.getProfileHintTopN())
                 .build();
     }

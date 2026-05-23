@@ -886,10 +886,34 @@ fc49eb4 docs: RAG eval 接力计划 + 历史评测产物归档
    - 查询阶段：`AiClientAdvisorNode -> RewriteContext -> RewritePipeline` 加载 profile hints，并按 user query 选择 topN `selectedProfileHints`；如果 profile 已加载但没有匹配，source 为 `NO_PROFILE_MATCH`，不回退手工 hints。
    - 观测阶段：报告新增 `profile_hints: source ... / selected ...`，viewer 新增 Step 6.8 group metadata。
    - 验证阶段：窄回归与 full 14 均已跑通；最终 full 14/14 completed，RAG-04 `3/3`、RAG-07/RAG-08/RAG-14 拒答保持，RAG-10 自动选中内存指标 hints 但答案仍可能漏三档范围。
-3. Step 7 Answer Generation / Context Salience：仅当 Step 6.8 证明关键证据已经进入 final documents 但最终答案仍漏点时启动。它解决“找到了会不会用”，不要和 profile 自动化混成一个实验。
-4. 延期话题：RAG-09 / RAG-10 paraphrase regression、RAGAS 集成、embedding 模型迁移、profile 管理端、profile 版本管理、多知识库 profile merge、离线 LLM 生成 summary/questionsAnswered。
+3. Step 6.9 v2 离线 LLM KnowledgeBaseProfile 已完成 fresh BGE 验证：`hybrid-v2` profile 能进入 query-time selection，BGE rerank 真实生效，RAG-14 拒答边界不破；RAG-10 仍漏三档范围，归因不继续放在 profile / rewrite。
+4. Step 7 Answer Generation / Context Salience：仅当 Step 6.8/6.9 证明关键证据已经进入 final documents 但最终答案仍漏点时启动。它解决“找到了会不会用”，不要和 profile 自动化混成一个实验。
+5. 延期话题：RAG-09 / RAG-10 paraphrase regression、RAGAS 集成、embedding 模型迁移、profile 管理端、profile 版本管理、多知识库 profile merge。
 
 **执行原则**：Step 6.8 只证明一件事：`queryRewriteDomainHints` 能从手工配置升级为自动 profile + query-time selection。不要同时改 rerank policy、answer prompt、embedding 或评测口径。
+
+### Step 6.9 v2 离线 LLM KnowledgeBaseProfile（已验证）
+
+2026-05-23 已完成 v2 profile 小闭环与 fresh BGE 验证。早期 Step 6.9 报告中有 BGE 未启动和 stale fat jar 两类无效样本，已从结果目录中删除；保留的有效报告只包含真实 `rerank applied=true` 的 fresh 结果：
+
+- `results/step6.9-llm-profile/rag-eval-result-step6.9-hybrid-v2-dedicated-local-bge-narrow-fresh.md`
+- `results/step6.9-llm-profile/rag-eval-result-step6.9-hybrid-v2-dedicated-local-bge-full-fresh.md`
+
+工程落点：
+
+- `HybridKnowledgeBaseProfileExtractor` 成为主入口：先跑 `RuleBasedKnowledgeBaseProfileExtractor`，再可选合并 `LlmKnowledgeBaseProfileExtractor` 输出；LLM 关闭或失败时保留 `rule-v1` 结果。
+- `LlmKnowledgeBaseProfileExtractor` 只在入库阶段执行，配置项为 `spring.ai.rag.profile.llm.*`；输出 fields 包括 `summary / concepts / aliases / questionsAnswered / negativeScopes / evidenceTypes`。
+- v2 防幻觉边界：LLM 输出的结构化项必须带 `sourcePath / chunkIndex / evidenceText`，本地校验 evidenceText 能在对应 chunk 中找到，否则丢弃，不进入 `selectedProfileHints`。
+- 存储仍复用 `ai_client_rag_profile.profile_json`；`KnowledgeBaseProfile` 扩展 JSON 字段，但 query-time 第一版仍向下兼容 `ProfileHint`。
+- report 观测补充 `profileVersion`，继续展示 `profileSource / selectedProfileHints`，用于区分 `rule-v1` 与 `hybrid-v2`。
+
+fresh 验证结论：
+
+- Full eval 14/14 completed；14 条均显示 `profile_hints: version hybrid-v2`。
+- 14 条均显示 `rerank_runtime: model bge-reranker-v2-m3`，非空 `failure_reason=0`，`PASSTHROUGH=0`。
+- RAG-10 选中 `node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes / memory_available / memory_usage / 内存使用率查询` 等 hints，说明 LLM profile 已进入 query-time selection。
+- RAG-14 显示 `source NO_PROFILE_MATCH / selected —`，拒答边界未被 profile 强行拉偏。
+- RAG-10 最终仍为 `2/5`，漏 `正常范围 / 警告范围 / 危险范围`；由于 profile / rewrite / rerank 已有证据，下一步归因转向 Answer Generation / Context Salience。
 
 ## 5. 关键约束 / 隐藏陷阱
 

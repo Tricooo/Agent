@@ -32,4 +32,6 @@ public class RewriteResult {
 
     private String profileSource;
 
+    private String profileVersion;
+
 }
