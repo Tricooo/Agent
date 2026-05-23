@@ -7,6 +7,7 @@ import com.tricoq.domain.agent.service.rag.rewrite.model.LlmRewriteResponse;
 import com.tricoq.domain.agent.service.rag.rewrite.strategy.AbstractQueryRewriter;
 import com.tricoq.domain.agent.spi.LlmInvocationFacade;
 import lombok.RequiredArgsConstructor;
+import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Component;
 
@@ -93,10 +94,16 @@ public class LlmQueryRewriter extends AbstractQueryRewriter {
     }
 
     private String formatDomainHints(RewriteContext context) {
-        if (context == null || context.getQueryRewriteDomainHints() == null) {
+        if (context == null) {
             return "- 暂无额外领域提示，只基于原问题做通用检索规划。";
         }
-        List<String> domainHints = context.getQueryRewriteDomainHints().stream()
+        List<String> sourceHints = CollectionUtils.isNotEmpty(context.getSelectedProfileHints())
+                ? context.getSelectedProfileHints()
+                : context.getQueryRewriteDomainHints();
+        if (sourceHints == null) {
+            return "- 暂无额外领域提示，只基于原问题做通用检索规划。";
+        }
+        List<String> domainHints = sourceHints.stream()
                 .filter(StringUtils::isNotBlank)
                 .map(String::trim)
                 .distinct()

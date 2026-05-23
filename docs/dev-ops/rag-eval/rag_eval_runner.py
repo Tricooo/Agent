@@ -50,6 +50,8 @@ QA_QUERY_REWRITE_REQUESTED_POLICY = "qa_query_rewrite_requested_policy"
 QA_QUERY_REWRITE_FAILURE_REASON = "qa_query_rewrite_failure_reason"
 QA_QUERY_REWRITE_ELAPSED_MS = "qa_query_rewrite_elapsed_ms"
 QA_QUERY_REWRITE_ATTEMPT_TRACE = "qa_query_rewrite_attempt_trace"
+QA_QUERY_REWRITE_PROFILE_SOURCE = "qa_query_rewrite_profile_source"
+QA_QUERY_REWRITE_SELECTED_PROFILE_HINTS = "qa_query_rewrite_selected_profile_hints"
 QA_QUERY_VARIANT_COUNT = "qa_query_variant_count"
 QA_QUERY_VARIANT_TEXTS = "qa_query_variant_texts"
 
@@ -493,6 +495,15 @@ def write_markdown(path: Path, results: list[dict[str, Any]], api_url: str, agen
                         failure=md_escape(data.get(QA_QUERY_REWRITE_FAILURE_REASON) or "—"),
                         attempts=md_escape(data.get(QA_QUERY_REWRITE_ATTEMPT_TRACE) or "—"),
                         texts=md_escape(" | ".join(str(item) for item in query_variants)),
+                    )
+                )
+                selected_profile_hints = data.get(QA_QUERY_REWRITE_SELECTED_PROFILE_HINTS) or []
+                if not isinstance(selected_profile_hints, list):
+                    selected_profile_hints = [selected_profile_hints]
+                lines.append(
+                    "  - profile_hints: source `{source}` / selected `{selected}`".format(
+                        source=data.get(QA_QUERY_REWRITE_PROFILE_SOURCE) or "—",
+                        selected=md_escape(" | ".join(str(item) for item in selected_profile_hints) or "—"),
                     )
                 )
                 _append_pre_rerank_documents(lines, data)

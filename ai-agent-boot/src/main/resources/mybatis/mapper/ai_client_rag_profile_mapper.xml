@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tricoq.infrastructure.dao.IAiClientRagProfileDao">
+
+    <resultMap id="AiClientRagProfileMap" type="com.tricoq.infrastructure.dao.po.AiClientRagProfile">
+        <id column="id" property="id"/>
+        <result column="rag_id" property="ragId"/>
+        <result column="knowledge_tag" property="knowledgeTag"/>
+        <result column="profile_version" property="profileVersion"/>
+        <result column="profile_json" property="profileJson"/>
+        <result column="status" property="status"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+    <update id="updateByKnowledgeTag" parameterType="com.tricoq.infrastructure.dao.po.AiClientRagProfile">
+        UPDATE ai_client_rag_profile SET
+            rag_id = #{ragId},
+            profile_version = #{profileVersion},
+            profile_json = #{profileJson},
+            status = #{status},
+            update_time = #{updateTime}
+        WHERE knowledge_tag = #{knowledgeTag}
+    </update>
+
+    <select id="queryByKnowledgeTag" parameterType="java.lang.String" resultMap="AiClientRagProfileMap">
+        SELECT id, rag_id, knowledge_tag, profile_version, profile_json, status, create_time, update_time
+        FROM ai_client_rag_profile
+        WHERE knowledge_tag = #{knowledgeTag}
+          AND status = 1
+    </select>
+
+    <select id="queryByKnowledgeTags" resultMap="AiClientRagProfileMap">
+        SELECT id, rag_id, knowledge_tag, profile_version, profile_json, status, create_time, update_time
+        FROM ai_client_rag_profile
+        WHERE status = 1
+        <if test="knowledgeTags != null and knowledgeTags.size() > 0">
+            AND knowledge_tag IN
+            <foreach collection="knowledgeTags" item="knowledgeTag" open="(" separator="," close=")">
+                #{knowledgeTag}
+            </foreach>
+        </if>
+    </select>
+</mapper>

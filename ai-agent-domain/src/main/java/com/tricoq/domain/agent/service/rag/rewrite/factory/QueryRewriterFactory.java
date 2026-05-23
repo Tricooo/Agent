@@ -1,12 +1,12 @@
 package com.tricoq.domain.agent.service.rag.rewrite.factory;
 
+import com.tricoq.domain.agent.service.rag.profile.ProfileHintSelector;
 import com.tricoq.domain.agent.service.rag.rewrite.QueryRewriter;
 import com.tricoq.domain.agent.service.rag.rewrite.enums.RewritePolicy;
 import com.tricoq.domain.agent.service.rag.rewrite.model.RewriteContext;
 import com.tricoq.domain.agent.service.rag.rewrite.pipeline.RewritePipeline;
 import com.tricoq.domain.agent.service.rag.rewrite.strategy.QueryRewriteStrategy;
 import lombok.RequiredArgsConstructor;
-import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -23,6 +23,7 @@ import java.util.Objects;
 public class QueryRewriterFactory {
 
     private final Map<String, QueryRewriteStrategy> queryRewriteStrategies;
+    private final ProfileHintSelector profileHintSelector;
 
     public QueryRewriter getQueryRewriter(String policy) {
         return getQueryRewriter(policy, null);
@@ -35,7 +36,7 @@ public class QueryRewriterFactory {
                 .filter(Objects::nonNull)
                 .toList();
         if (!strategies.isEmpty()) {
-            return new RewritePipeline(rewritePolicy, strategies, context);
+            return new RewritePipeline(rewritePolicy, strategies, context, profileHintSelector);
         }
 
         QueryRewriteStrategy passthrough = queryRewriteStrategies.get(
@@ -44,6 +45,6 @@ public class QueryRewriterFactory {
         if (passthrough == null) {
             throw new IllegalStateException("PassthroughQueryRewriter strategy not found");
         }
-        return new RewritePipeline(RewritePolicy.PASSTHROUGH, List.of(passthrough));
+        return new RewritePipeline(RewritePolicy.PASSTHROUGH, List.of(passthrough), null, profileHintSelector);
     }
 }

@@ -166,6 +166,7 @@ GROUP_META: dict[str, dict[str, str]] = {
     "step6.5-per-variant-rerank-rrf": {"label": "Step 6.5 per-variant rerank RRF", "phase": "Step 6 Query Rewrite", "color": "#43a047", "note": "每路 query 独立 rerank 后 RRF"},
     "step6.6-fusion-aware-rerank-rrf": {"label": "Step 6.6 fusion-aware rerank RRF", "phase": "Step 6 Query Rewrite", "color": "#7cb342", "note": "rerank RRF 弱融合 queryFusionRank"},
     "step6.7-llm-query-rewrite": {"label": "Step 6.7 LLM query rewrite", "phase": "Step 6 Query Rewrite", "color": "#c0ca33", "note": "LLM rewrite + domain hints 实验"},
+    "step6.8-knowledge-base-profile": {"label": "Step 6.8 KnowledgeBaseProfile", "phase": "Step 6 Query Rewrite", "color": "#afb42b", "note": "auto profile + query-time selected hints"},
     "phase-a5-control": {"label": "Phase A.5 control (empty)", "phase": "Step 3 A.5", "color": "#bdbdbd", "note": "空目录"},
 }
 
@@ -706,6 +707,14 @@ def derive_config_hint(group: str, run_id: str, parsed: dict | None = None) -> s
         if "llm-list" in r:
             return "rewrite=LLM_MULTI_QUERY; structured List<String> output"
         return "rewrite=LLM_MULTI_QUERY"
+    if g == "step6.8-knowledge-base-profile":
+        if "auto-profile" in r:
+            return "rewrite=LLM_MULTI_QUERY; auto profile selected hints"
+        if "no-hints" in r:
+            return "rewrite=LLM_MULTI_QUERY; no hints baseline"
+        if "manual-hints" in r:
+            return "rewrite=LLM_MULTI_QUERY; manual hints baseline"
+        return "rewrite=LLM_MULTI_QUERY; KnowledgeBaseProfile"
 
     # Content-derived rerank signal (preferred over naming when present)
     if parsed:

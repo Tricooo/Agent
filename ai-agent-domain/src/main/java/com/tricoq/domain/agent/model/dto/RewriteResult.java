@@ -28,4 +28,8 @@ public class RewriteResult {
 
     private String attemptTrace;
 
+    private List<String> selectedProfileHints;
+
+    private String profileSource;
+
 }

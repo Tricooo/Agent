@@ -1,5 +1,6 @@
 package com.tricoq.domain.agent.service.rag.rewrite.model;
 
+import com.tricoq.domain.agent.service.rag.profile.model.ProfileHint;
 import lombok.Builder;
 import lombok.Data;
 
@@ -17,5 +18,13 @@ public class RewriteContext {
     private String extraClientId;
 
     private List<String> queryRewriteDomainHints;
+
+    private List<ProfileHint> knowledgeBaseProfileHints;
+
+    private List<String> selectedProfileHints;
+
+    private String profileSource;
+
+    private Integer profileHintTopN;
 
 }

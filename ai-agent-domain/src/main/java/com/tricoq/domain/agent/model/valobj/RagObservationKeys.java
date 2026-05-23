@@ -190,6 +190,16 @@ public final class RagObservationKeys {
          */
         public static final String QUERY_REWRITE_ATTEMPT_TRACE = "qa_query_rewrite_attempt_trace";
 
+        /**
+         * query rewrite 使用的 profile hint 来源，例如 AUTO_PROFILE / MANUAL_CONFIG。
+         */
+        public static final String QUERY_REWRITE_PROFILE_SOURCE = "qa_query_rewrite_profile_source";
+
+        /**
+         * 本次 query-time selection 选择出的 profile hints。
+         */
+        public static final String QUERY_REWRITE_SELECTED_PROFILE_HINTS = "qa_query_rewrite_selected_profile_hints";
+
         private Qa() {
         }
     }

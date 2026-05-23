@@ -248,6 +248,11 @@ docs/dev-ops/rag-eval/
   - 范围：做面试版闭环，不做完整产品化 profile 平台；预计 1.5-2 天。
   - 验收：清空手工 hints 后，auto profile 仍能让 RAG-10 的 rewrite query 带出关键领域词；RAG-04 不退，RAG-07/RAG-14 不误答；报告展示 selectedProfileHints。
   - 边界：如果关键证据已进入 final documents 但答案仍漏点，归因到 Answer Generation / Context Salience，不继续硬调 rewrite prompt。
+- **Step 6.8 KnowledgeBaseProfile 面试版实测（2026-05-23）**：
+  - 实现结果：新增轻量 `ai_client_rag_profile` 表，`RagService.storeRagFile()` 在 Tika + `TokenTextSplitter` 后抽取 profile；`AiClientAdvisorNode` 按 `filterExpression` 加载 profile hints；`RewritePipeline` 在 query-time 选择 `selectedProfileHints` 后接入现有 `LLM_MULTI_QUERY`。
+  - 关键修正：selector 不能把 profile 原始分当相关性；必须先有 query overlap / alias overlap / 有效 CJK phrase overlap，再用 profile score 排序。英文 stopword（如 `to` / `the`）和中文低信号单字（如 `的`）会导致无关技术 token 误入 prompt，已过滤。若 profile 已加载但 query 无匹配，则返回 `NO_PROFILE_MATCH`，不再回退手工 `queryRewriteDomainHints`。
+  - 验证产物：`results/step6.8-knowledge-base-profile/rag-eval-result-step6.8-auto-profile-narrow.md` 与 `rag-eval-result-step6.8-auto-profile-full.md`。最终 full 14/14 completed；RAG-04 `3/3`；RAG-07/RAG-08/RAG-14 拒答保持；RAG-10 report 展示 `AUTO_PROFILE` 和内存指标 hints，但最终 full 仍为 `2/5`，缺三档范围，归因转向 Answer Generation / Context Salience。
+  - 当前结论：Step 6.8 证明了“手工 hints -> 自动 profile + query-time selection + report 可观测”的工程闭环；不要再继续通过扩大 rewrite prompt 或手工 hints 追 RAG-10 答案完整性。
 
 ### 2.2 关键认知（必读，否则会重复踩坑）
 
@@ -875,12 +880,12 @@ fc49eb4 docs: RAG eval 接力计划 + 历史评测产物归档
 按下一步时机排序：
 
 1. Step 6.3-6.7 已阶段性收口：RAG-fusion、per-variant rerank RRF、fusion-aware rerank、LLM rewrite 工程骨架和 Step 6.7 eval 产物均已落地。当前不继续硬调 `LlmQueryRewriter` prompt。
-2. Step 6.8 KnowledgeBaseProfile 面试版（预计 1.5-2 天）：
-   - 入库阶段：在 `RagService.storeRagFile()` 的 Tika 解析 / TokenTextSplitter 切分之后，自动抽取 profile hints。第一版优先规则抽取，不接离线 LLM：heading、反引号词、代码块 token、带 `_` / `-` / `.` / `/` 的技术标识符、英文数字混合词、参数/示例/判断标准/阈值/范围/排查步骤等证据类型词。
-   - 存储阶段：保存知识库级 profile JSON。实现时再根据现有表结构决定是轻量新表，还是挂到现有知识库记录的扩展字段；不要把 profile 塞进回答 prompt 当事实依据。
-   - 查询阶段：根据 user query 从 profile 中选择 topN 相关 hints，替代手工 `queryRewriteDomainHints`，再进入现有 `LLM_MULTI_QUERY` rewrite pipeline。
-   - 观测阶段：报告新增 `selectedProfileHints` / profile source，使 eval 能解释本次 rewrite 用了哪些自动 hints。
-   - 验证阶段：先跑 RAG-04 / RAG-07 / RAG-10 / RAG-14 窄回归，再跑 14 条全量；对比 no hints / manual hints / auto profile hints。
+2. Step 6.8 KnowledgeBaseProfile 面试版已完成（2026-05-23）：
+   - 入库阶段：`RagService.storeRagFile()` 在 Tika 解析 / TokenTextSplitter 切分之后，使用规则抽取 profile hints；第一版不接离线 LLM。
+   - 存储阶段：新增轻量 `ai_client_rag_profile` 表保存知识库级 profile JSON；profile 不进入 answer prompt，也不作为事实依据。
+   - 查询阶段：`AiClientAdvisorNode -> RewriteContext -> RewritePipeline` 加载 profile hints，并按 user query 选择 topN `selectedProfileHints`；如果 profile 已加载但没有匹配，source 为 `NO_PROFILE_MATCH`，不回退手工 hints。
+   - 观测阶段：报告新增 `profile_hints: source ... / selected ...`，viewer 新增 Step 6.8 group metadata。
+   - 验证阶段：窄回归与 full 14 均已跑通；最终 full 14/14 completed，RAG-04 `3/3`、RAG-07/RAG-08/RAG-14 拒答保持，RAG-10 自动选中内存指标 hints 但答案仍可能漏三档范围。
 3. Step 7 Answer Generation / Context Salience：仅当 Step 6.8 证明关键证据已经进入 final documents 但最终答案仍漏点时启动。它解决“找到了会不会用”，不要和 profile 自动化混成一个实验。
 4. 延期话题：RAG-09 / RAG-10 paraphrase regression、RAGAS 集成、embedding 模型迁移、profile 管理端、profile 版本管理、多知识库 profile merge、离线 LLM 生成 summary/questionsAnswered。
 
@@ -913,7 +918,7 @@ fc49eb4 docs: RAG eval 接力计划 + 历史评测产物归档
 
 1. Read 这份 `PLAN.md` 全文（特别是 §3 D10-D16：Hybrid、Rerank、A/B 归因与 Step 5.4 工程化收口）
 2. 确认 §3 commit 范围是否已落地（`git log --oneline -10` 看 `cc20ba4`、`176abc5`、`c95aabd`、`631ffd2` 等 Step 5 提交）
-3. 当前游标：**Step 6.7 LLM Query Rewrite 工程骨架已收口**。如果继续补 rewrite 能力闭环，下一步是 Step 6.8 KnowledgeBaseProfile 面试版：入库自动抽取 profile hints、查询时动态选择 hints、接入现有 `LLM_MULTI_QUERY`，并在 report 中展示 selectedProfileHints。不要继续把 Grafana/PromQL 词硬写进 prompt，也不要把 profile 当作回答事实依据。
+3. 当前游标：**Step 6.8 KnowledgeBaseProfile 面试版已完成实现与验证**。LLM Query Rewrite 主线已经从手工 `queryRewriteDomainHints` 升级为自动 profile + query-time selection + report 可观测；后续若继续追 RAG-10 漏范围，应切到 Answer Generation / Context Salience，不要继续把 Grafana/PromQL 词硬写进 prompt，也不要把 profile 当作回答事实依据。
 4. 如果改 yml / 重启 backend / 重灌向量库后再跑 eval：必须先预热 `POST http://localhost:8099/api/v1/agent/armory_agent` body `{"agentId":"rag_demo"}`（未预热直接打 auto_agent 会 HTTP 500，duration ~5ms，看似 endpoint 死了）
 5. **不要**自行重跑 v1/v2/v3 中任何一轮——Phase A 已锁定参数 250/109，重跑只会消耗 LLM 配额且 score 必然飘动（embedding 不变 score 应稳定，LLM 输出会因 sampling 飘）
 

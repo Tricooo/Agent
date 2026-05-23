@@ -377,6 +377,13 @@ public class RagAnswerAdvisor implements BaseAdvisor {
         params.put(Qa.QUERY_REWRITE_ATTEMPT_TRACE, rewriteResult == null
                 ? ""
                 : StringUtils.defaultString(rewriteResult.getAttemptTrace()));
+        params.put(Qa.QUERY_REWRITE_PROFILE_SOURCE, rewriteResult == null
+                ? ""
+                : StringUtils.defaultString(rewriteResult.getProfileSource()));
+        params.put(Qa.QUERY_REWRITE_SELECTED_PROFILE_HINTS, rewriteResult == null
+                || CollectionUtils.isEmpty(rewriteResult.getSelectedProfileHints())
+                ? List.of()
+                : rewriteResult.getSelectedProfileHints());
     }
 
     private RerankQueryPlan buildRerankQueryPlan(String userText, List<String> queryVariants) {

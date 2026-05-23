@@ -124,6 +124,11 @@ public class AiClientAdvisorDTO {
          * LLM query rewrite 的知识库领域提示词；例如指标名、术语、函数名、证据类型。
          */
         private List<String> queryRewriteDomainHints;
+
+        /**
+         * 自动 KnowledgeBaseProfile 在 query-time selection 阶段最多选择的 hint 数量。
+         */
+        private int queryRewriteProfileHintTopN = 8;
     }
 
 }

@@ -1,9 +1,12 @@
 package com.tricoq.domain.agent.service.rag;
 
 import com.tricoq.domain.agent.adapter.repository.IAiClientRagOrderRepository;
+import com.tricoq.domain.agent.adapter.repository.IKnowledgeBaseProfileRepository;
 import com.tricoq.domain.agent.model.dto.AiRagOrderDTO;
 import com.tricoq.domain.agent.model.valobj.RagObservationKeys.DocumentMetadata;
 import com.tricoq.domain.agent.service.IRagService;
+import com.tricoq.domain.agent.service.rag.profile.KnowledgeBaseProfileExtractor;
+import com.tricoq.domain.agent.service.rag.profile.model.KnowledgeBaseProfile;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
@@ -34,6 +37,12 @@ public class RagService implements IRagService {
 
     @Resource
     private IAiClientRagOrderRepository ragRepository;
+
+    @Resource
+    private KnowledgeBaseProfileExtractor knowledgeBaseProfileExtractor;
+
+    @Resource
+    private IKnowledgeBaseProfileRepository knowledgeBaseProfileRepository;
 
     /**
      * 上传的文件会先做文档解析，再按 token 切分成适合检索的小片段，并给每个片段打上知识标签，后续检索时可以按标签召回对应知识
@@ -82,6 +91,11 @@ public class RagService implements IRagService {
         aiRagOrderVO.setKnowledgeTag(tag);
         aiRagOrderVO.setStatus(1);
         ragRepository.insert(aiRagOrderVO);
+
+        KnowledgeBaseProfile profile = knowledgeBaseProfileExtractor.extract(ragId, tag, allDocuments);
+        boolean profileSaved = knowledgeBaseProfileRepository.saveOrUpdate(profile);
+        log.info("RAG知识库画像生成完成: ragId={}, tag={}, chunks={}, hints={}, saved={}",
+                ragId, tag, allDocuments.size(), profile.getHints() == null ? 0 : profile.getHints().size(), profileSaved);
 
     }
 

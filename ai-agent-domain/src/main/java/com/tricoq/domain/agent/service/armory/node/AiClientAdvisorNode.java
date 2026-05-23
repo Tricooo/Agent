@@ -1,12 +1,15 @@
 package com.tricoq.domain.agent.service.armory.node;
 
 import com.alibaba.fastjson.JSON;
+import com.tricoq.domain.agent.adapter.repository.IKnowledgeBaseProfileRepository;
 import com.tricoq.domain.agent.model.dto.AiClientAdvisorDTO;
 import com.tricoq.domain.agent.model.dto.AiClientDTO;
 import com.tricoq.domain.agent.model.entity.ArmoryCommandEntity;
 import com.tricoq.domain.agent.model.enums.AiAgentEnumVO;
 import com.tricoq.domain.agent.model.enums.AiClientAdvisorTypeEnumVO;
 import com.tricoq.domain.agent.service.armory.node.factory.DefaultArmoryStrategyFactory;
+import com.tricoq.domain.agent.service.rag.profile.model.KnowledgeBaseProfile;
+import com.tricoq.domain.agent.service.rag.profile.model.ProfileHint;
 import com.tricoq.domain.agent.service.rag.rerank.DocumentReranker;
 import com.tricoq.domain.agent.service.rag.rerank.factory.DocumentRerankerFactory;
 import com.tricoq.domain.agent.service.rag.rewrite.QueryRewriter;
@@ -22,7 +25,12 @@ import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * @author trico qiang
@@ -33,6 +41,8 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AiClientAdvisorNode extends AbstractArmorySupport {
 
+    private static final Pattern KNOWLEDGE_FILTER_VALUE_PATTERN = Pattern.compile("'([^']+)'");
+
     private final AiClientNode clientNode;
 
     private final VectorStore vectorStore;
@@ -40,6 +50,8 @@ public class AiClientAdvisorNode extends AbstractArmorySupport {
     protected final DocumentRerankerFactory documentRerankerFactory;
 
     protected final QueryRewriterFactory queryRewriterFactory;
+
+    protected final IKnowledgeBaseProfileRepository knowledgeBaseProfileRepository;
 
     /**
      * 节点自身处理逻辑
@@ -90,12 +102,50 @@ public class AiClientAdvisorNode extends AbstractArmorySupport {
             }
             rewriteContextBuilder.extraClientId(queryRewriterClientId);
             rewriteContextBuilder.queryRewriteDomainHints(ragAnswer.getQueryRewriteDomainHints());
+            rewriteContextBuilder.knowledgeBaseProfileHints(queryRewriteProfileHints(ragAnswer));
+            rewriteContextBuilder.profileHintTopN(ragAnswer.getQueryRewriteProfileHintTopN());
         }
 
         QueryRewriter queryRewriter = queryRewriterFactory.getQueryRewriter(
                 ragAnswer.getRewritePolicy(), rewriteContextBuilder.build()
         );
         return vo.createAdvisor(advisorVO, vectorStore, reranker, queryRewriter);
+    }
+
+    private List<ProfileHint> queryRewriteProfileHints(AiClientAdvisorDTO.RagAnswer ragAnswer) {
+        List<String> knowledgeTags = knowledgeTags(ragAnswer.getFilterExpression());
+        if (CollectionUtils.isEmpty(knowledgeTags)) {
+            return List.of();
+        }
+        List<KnowledgeBaseProfile> profiles = knowledgeBaseProfileRepository.queryByKnowledgeTags(knowledgeTags);
+        if (CollectionUtils.isEmpty(profiles)) {
+            log.info("RAG知识库画像未命中: knowledgeTags={}", knowledgeTags);
+            return List.of();
+        }
+        List<ProfileHint> profileHints = profiles.stream()
+                .filter(Objects::nonNull)
+                .filter(profile -> !CollectionUtils.isEmpty(profile.getHints()))
+                .flatMap(profile -> profile.getHints().stream())
+                .filter(Objects::nonNull)
+                .toList();
+        log.info("RAG知识库画像加载完成: knowledgeTags={}, profiles={}, hints={}",
+                knowledgeTags, profiles.size(), profileHints.size());
+        return profileHints;
+    }
+
+    private List<String> knowledgeTags(String filterExpression) {
+        if (StringUtils.isBlank(filterExpression) || !StringUtils.containsIgnoreCase(filterExpression, "knowledge")) {
+            return List.of();
+        }
+        Set<String> knowledgeTags = new LinkedHashSet<>();
+        Matcher matcher = KNOWLEDGE_FILTER_VALUE_PATTERN.matcher(filterExpression);
+        while (matcher.find()) {
+            String knowledgeTag = StringUtils.trimToEmpty(matcher.group(1));
+            if (StringUtils.isNotBlank(knowledgeTag)) {
+                knowledgeTags.add(knowledgeTag);
+            }
+        }
+        return List.copyOf(knowledgeTags);
     }
 
 
