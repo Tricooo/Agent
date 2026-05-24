@@ -10,63 +10,93 @@
 <body>
   <header class="topbar">
     <div class="brand">
-      <div class="brand-mark">R</div>
-      <div>
+      <div class="brand-mark" aria-hidden="true">R</div>
+      <div class="brand-text">
         <div class="brand-title">RAG Eval Experiment Workbench</div>
-        <div class="brand-meta" id="health-line">loading</div>
+        <div class="brand-meta" id="health-line">loading index</div>
       </div>
     </div>
     <nav class="tabs" aria-label="Workbench views">
-      <button class="tab active" data-view="dashboard">Dashboard</button>
-      <button class="tab" data-view="runs">Runs</button>
-      <button class="tab" data-view="cases">Cases</button>
-      <button class="tab" data-view="matrix">Matrix</button>
-      <button class="tab" data-view="compare">Compare</button>
-      <button class="tab" data-view="insights">Insights</button>
+      <button class="tab active" data-view="dashboard" type="button">Dashboard</button>
+      <button class="tab" data-view="runs" type="button">Runs</button>
+      <button class="tab" data-view="cases" type="button">Cases</button>
+      <button class="tab" data-view="matrix" type="button">Matrix</button>
+      <button class="tab" data-view="compare" type="button">Compare</button>
+      <button class="tab" data-view="insights" type="button">Insights</button>
     </nav>
+    <div class="top-actions">
+      <button class="primary" id="reindex-btn" type="button">Reindex</button>
+    </div>
   </header>
 
   <main class="page">
-    <section class="view active" id="view-dashboard">
+
+    <!-- ================= Dashboard ================= -->
+    <section class="view active" id="view-dashboard" aria-labelledby="dash-h1">
       <div class="section-head">
-        <h1>实验索引总览</h1>
-        <button class="primary" id="reindex-btn">Reindex</button>
+        <div>
+          <h1 id="dash-h1">Workbench</h1>
+          <p class="lede">本地索引状态、最近 run、解析告警与常用对照入口。</p>
+        </div>
       </div>
       <div class="metrics" id="dashboard-metrics"></div>
-      <div class="split">
-        <section>
-          <h2>Recent Runs</h2>
-          <div id="recent-runs" class="list"></div>
-        </section>
-        <section>
-          <h2>Parse Warnings</h2>
-          <div id="warning-list" class="list"></div>
-        </section>
+
+      <div class="panel" style="margin-bottom:20px">
+        <div class="panel-head">
+          <h2>Quick Compare</h2>
+          <span class="panel-meta" id="quick-compare-meta">presets</span>
+        </div>
+        <div class="quick-compare" id="quick-compare"></div>
+      </div>
+
+      <div class="dash-bottom">
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Recent runs</h2>
+            <span class="panel-meta" id="recent-runs-meta"></span>
+          </div>
+          <div class="panel-body" id="recent-runs"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Parse warnings</h2>
+            <span class="panel-meta" id="warning-list-meta"></span>
+          </div>
+          <div class="panel-body" id="warning-list"></div>
+        </div>
       </div>
     </section>
 
-    <section class="view" id="view-runs">
+    <!-- ================= Runs ================= -->
+    <section class="view" id="view-runs" aria-labelledby="runs-h1">
       <div class="section-head">
-        <h1>Report Index</h1>
+        <div>
+          <h1 id="runs-h1">Runs</h1>
+          <p class="lede">每个 run 是一份 markdown 实验报告,显示 group / agent / 解析告警。</p>
+        </div>
         <div class="filters">
-          <select id="run-group-filter"></select>
-          <select id="run-agent-filter"></select>
+          <select id="run-group-filter" aria-label="filter by group"></select>
+          <select id="run-agent-filter" aria-label="filter by agent"></select>
         </div>
       </div>
       <div class="table-wrap"><table id="runs-table"></table></div>
     </section>
 
-    <section class="view" id="view-cases">
+    <!-- ================= Cases ================= -->
+    <section class="view" id="view-cases" aria-labelledby="cases-h1">
       <div class="section-head">
-        <h1>Case Registry</h1>
+        <div>
+          <h1 id="cases-h1">Cases</h1>
+          <p class="lede">问题清单:internal 来自 cases.json,external 来自外部样本登记。</p>
+        </div>
         <div class="filters">
-          <select id="case-origin-filter">
+          <select id="case-origin-filter" aria-label="filter by origin">
             <option value="">all origins</option>
             <option value="internal">internal</option>
             <option value="external">external</option>
           </select>
-          <select id="case-family-filter"></select>
-          <select id="case-score-filter">
+          <select id="case-family-filter" aria-label="filter by family"></select>
+          <select id="case-score-filter" aria-label="filter by score mode">
             <option value="">all score modes</option>
             <option value="literal">literal</option>
             <option value="manual">manual</option>
@@ -76,67 +106,110 @@
       <div class="table-wrap"><table id="cases-table"></table></div>
     </section>
 
-    <section class="view" id="view-matrix">
+    <!-- ================= Matrix ================= -->
+    <section class="view" id="view-matrix" aria-labelledby="matrix-h1">
       <div class="section-head">
-        <h1>Experiment Matrix</h1>
+        <div>
+          <h1 id="matrix-h1">Experiment matrix</h1>
+          <p class="lede">行是 case,列是 run。点击任意 cell 查看完整诊断。</p>
+        </div>
         <div class="filters">
-          <select id="matrix-origin-filter">
-            <option value="">all cases</option>
+          <select id="matrix-origin-filter" aria-label="filter by origin">
+            <option value="">all origins</option>
             <option value="internal">internal</option>
             <option value="external">external</option>
           </select>
-          <select id="matrix-family-filter"></select>
-          <select id="matrix-group-filter"></select>
-          <select id="matrix-agent-filter"></select>
+          <select id="matrix-family-filter" aria-label="filter by family"></select>
+          <select id="matrix-score-filter" aria-label="filter by score mode">
+            <option value="">all score modes</option>
+            <option value="literal">literal</option>
+            <option value="manual">manual</option>
+          </select>
+          <select id="matrix-case-type-filter" aria-label="filter by case type"></select>
+          <select id="matrix-group-filter" aria-label="filter by group"></select>
+          <select id="matrix-agent-filter" aria-label="filter by agent"></select>
+          <label class="filter-toggle" title="drop rows/columns that have no recorded results">
+            <input type="checkbox" id="matrix-hide-empty"> hide empty
+          </label>
         </div>
       </div>
-      <div class="legend">
-        <span><i class="sw ok"></i>pass</span>
-        <span><i class="sw warn"></i>partial</span>
-        <span><i class="sw bad"></i>fail</span>
-        <span><i class="sw manual"></i>manual/coverage</span>
+      <div class="legend" aria-hidden="true">
+        <span><i class="sw pass"></i>pass</span>
+        <span><i class="sw partial"></i>partial</span>
+        <span><i class="sw fail"></i>fail</span>
+        <span><i class="sw manual"></i>manual / coverage</span>
+        <span><i class="sw empty"></i>not run</span>
       </div>
       <div class="matrix-wrap"><table id="matrix-table"></table></div>
     </section>
 
-    <section class="view" id="view-compare">
+    <!-- ================= Compare ================= -->
+    <section class="view" id="view-compare" aria-labelledby="compare-h1">
       <div class="section-head">
-        <h1>Ablation Compare</h1>
-        <div class="filters compare-controls">
-          <select id="compare-a"></select>
-          <select id="compare-b"></select>
+        <div>
+          <h1 id="compare-h1">Ablation compare</h1>
+          <p class="lede">选两条 run 看 case-level 差异、coverage 漂移、duration 变化。</p>
         </div>
       </div>
+
+      <div class="compare-picker">
+        <div class="run-card">
+          <div class="rc-label">Run A</div>
+          <select id="compare-a" aria-label="select run A"></select>
+          <div class="rc-meta" id="compare-a-meta"></div>
+        </div>
+        <div class="run-card">
+          <div class="rc-label">Run B</div>
+          <select id="compare-b" aria-label="select run B"></select>
+          <div class="rc-meta" id="compare-b-meta"></div>
+        </div>
+      </div>
+
       <div class="preset-row" id="preset-row"></div>
-      <div id="compare-summary" class="metrics"></div>
-      <div class="table-wrap"><table id="compare-table"></table></div>
+      <div id="compare-summary"></div>
+      <div class="compare-toolbar" id="compare-toolbar" hidden>
+        <label><input type="checkbox" id="cmp-diff-only"> only show diff metrics</label>
+        <label><input type="checkbox" id="cmp-lcs-diff" checked> highlight answer line diffs</label>
+        <span class="ct-hint">click case to expand / collapse</span>
+      </div>
+      <div class="cmp-list" id="compare-list"></div>
     </section>
 
-    <section class="view" id="view-insights">
+    <!-- ================= Insights ================= -->
+    <section class="view" id="view-insights" aria-labelledby="insights-h1">
       <div class="section-head">
-        <h1>Insight Summary</h1>
+        <div>
+          <h1 id="insights-h1">Insights</h1>
+          <p class="lede">Run 级别均值与 case 级别失败/不稳定排行。</p>
+        </div>
       </div>
-      <div class="split">
-        <section>
-          <h2>Run Summary</h2>
-          <div class="table-wrap"><table id="insight-runs-table"></table></div>
-        </section>
-        <section>
-          <h2>Case Summary</h2>
-          <div class="table-wrap"><table id="insight-cases-table"></table></div>
-        </section>
+      <div class="dash-grid">
+        <div class="panel">
+          <div class="panel-head"><h2>Run summary</h2><span class="panel-meta">avg duration · rerank · profile</span></div>
+          <div class="panel-body"><div class="table-wrap" style="border:0;box-shadow:none;border-radius:0"><table id="insight-runs-table"></table></div></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h2>Case summary</h2><span class="panel-meta">sorted by literal failures</span></div>
+          <div class="panel-body"><div class="table-wrap" style="border:0;box-shadow:none;border-radius:0"><table id="insight-cases-table"></table></div></div>
+        </div>
       </div>
     </section>
+
   </main>
 
+  <!-- ================= Drilldown modal ================= -->
   <div class="modal-backdrop" id="modal-backdrop" hidden>
     <section class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
       <header class="modal-head">
-        <div>
+        <div class="mh-text">
+          <div class="mh-eyebrow" id="modal-eyebrow"></div>
           <h2 id="modal-title">Drilldown</h2>
-          <p id="modal-subtitle"></p>
+          <p class="mh-sub" id="modal-subtitle"></p>
         </div>
-        <button id="modal-close" class="icon-button" aria-label="Close">×</button>
+        <div class="modal-nav" id="modal-nav" aria-label="case navigation"></div>
+        <button id="modal-close" class="close-btn" type="button" aria-label="Close drilldown">
+          <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 3l8 8M11 3l-8 8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </button>
       </header>
       <div class="modal-body" id="modal-body"></div>
     </section>
