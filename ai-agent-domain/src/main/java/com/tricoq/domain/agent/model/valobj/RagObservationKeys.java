@@ -377,6 +377,16 @@ public final class RagObservationKeys {
         public static final String COVERAGE_GUARD_ADDED = "coverageGuardAdded";
 
         /**
+         * 当前文档由 coverage guard 补回的原因，例如 query_variant / evidence_type。
+         */
+        public static final String COVERAGE_GUARD_REASON = "coverageGuardReason";
+
+        /**
+         * evidence-type coverage guard 命中的证据类型提示，例如 range / judgement。
+         */
+        public static final String COVERAGE_GUARD_CUES = "coverageGuardCues";
+
+        /**
          * 当前 chunk 最先由第几个 query variant 召回，1 表示原始 query。
          */
         public static final String QUERY_VARIANT_INDEX = "queryVariantIndex";

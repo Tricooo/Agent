@@ -1,0 +1,147 @@
+[
+  {
+    "id": "EXT-PG-04",
+    "case_type": "answerable_version_conflict",
+    "score_mode": "manual",
+    "source_file": "corpus/database/postgresql-generated-columns-version-contrast.md",
+    "question": "如果知识库同时有 PostgreSQL 16 和 18 文档，关于 generated column 的 virtual/stored 差异应该如何回答？",
+    "should_answer": true,
+    "expected_source_section": "Version Conflict Handling",
+    "expected_points": [
+      "区分版本",
+      "PostgreSQL 18 has stored and virtual",
+      "PostgreSQL 18 defaults to virtual",
+      "PostgreSQL 16",
+      "STORED"
+    ],
+    "expected_points_v2": [
+      {
+        "id": "distinguish_versions",
+        "type": "alias",
+        "weight": 1,
+        "required": true,
+        "aliases": [
+          "区分版本",
+          "分别说明",
+          "version qualification",
+          "different PostgreSQL versions"
+        ],
+        "evidence": [
+          {
+            "source_file": "corpus/database/postgresql-generated-columns-version-contrast.md",
+            "anchor_text": "Do not mix these rules without naming the version."
+          }
+        ]
+      },
+      {
+        "id": "pg18_stored_and_virtual",
+        "type": "alias",
+        "weight": 1,
+        "required": true,
+        "aliases": [
+          "PostgreSQL 18 has stored and virtual",
+          "stored and virtual generated columns",
+          "PostgreSQL 18 支持两种生成列",
+          "PostgreSQL 18 支持 `STORED` 与 `VIRTUAL`",
+          "PostgreSQL 18 既有 STORED 也有 VIRTUAL",
+          "既有 STORED 也有 VIRTUAL",
+          "既有 `STORED` 也有 `VIRTUAL`",
+          "STORED 也有 VIRTUAL",
+          "支持 STORED 与 VIRTUAL",
+          "stored 和 virtual",
+          "stored and virtual"
+        ],
+        "evidence": [
+          {
+            "source_file": "corpus/database/postgresql-generated-columns-version-contrast.md",
+            "anchor_text": "PostgreSQL 18 describes two kinds of generated columns"
+          },
+          {
+            "source_file": "corpus/database/postgresql-generated-columns-version-contrast.md",
+            "anchor_text": "PostgreSQL 18 has stored and virtual generated columns."
+          },
+          {
+            "source_file": "corpus/database/postgresql-generated-columns-version-contrast.md",
+            "anchor_text": "https://www.postgresql.org/docs/18/ddl-generated-columns.html"
+          }
+        ]
+      },
+      {
+        "id": "pg18_default_virtual",
+        "type": "alias",
+        "weight": 1,
+        "required": true,
+        "aliases": [
+          "defaults to virtual",
+          "default virtual",
+          "默认 virtual",
+          "默认是 virtual"
+        ],
+        "evidence": [
+          {
+            "source_file": "corpus/database/postgresql-generated-columns-version-contrast.md",
+            "anchor_text": "PostgreSQL 18 defaults to virtual when the kind is not specified."
+          }
+        ]
+      },
+      {
+        "id": "pg16_stored",
+        "type": "regex",
+        "weight": 1,
+        "required": true,
+        "regex": [
+          "PostgreSQL\\s+16.*STORED",
+          "PostgreSQL\\s+16.*stored",
+          "16.*STORED"
+        ],
+        "evidence": [
+          {
+            "source_file": "corpus/database/postgresql-generated-columns-version-contrast.md",
+            "anchor_text": "PostgreSQL 16 `CREATE TABLE` documentation shows generated columns as `STORED`."
+          },
+          {
+            "source_file": "corpus/database/postgresql-generated-columns-version-contrast.md",
+            "anchor_text": "https://www.postgresql.org/docs/16/sql-createtable.html"
+          }
+        ]
+      },
+      {
+        "id": "do_not_apply_pg18_to_pg16",
+        "type": "alias",
+        "weight": 1,
+        "required": true,
+        "aliases": [
+          "Do not apply",
+          "不能混用",
+          "不得混淆",
+          "不要在没有版本限定的情况下",
+          "直接套用到 PostgreSQL 16",
+          "避免将 18 的默认行为套用到 16 上",
+          "避免把新版本的默认行为套用到旧版本上",
+          "不要把 PostgreSQL 18",
+          "不能将 PG18",
+          "不能将 PostgreSQL 18",
+          "不要将 PG18",
+          "不应把 18 的默认 virtual",
+          "不应把 18 的默认 virtual 结论应用到 16 上",
+          "不应把 PostgreSQL 18",
+          "不能直接套用 PostgreSQL 18",
+          "不能直接套用 PostgreSQL 18 的默认虚拟结论",
+          "不能将其中一个版本的默认行为错误地应用到另一个版本",
+          "切勿直接给出一个普适性",
+          "without version qualification"
+        ],
+        "evidence": [
+          {
+            "source_file": "corpus/database/postgresql-generated-columns-version-contrast.md",
+            "anchor_text": "Version Conflict Handling"
+          },
+          {
+            "source_file": "corpus/database/postgresql-generated-columns-version-contrast.md",
+            "anchor_text": "External RAG Sample: PostgreSQL Generated Columns Version Contrast"
+          }
+        ]
+      }
+    ]
+  }
+]

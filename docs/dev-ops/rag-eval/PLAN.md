@@ -1,7 +1,7 @@
 # RAG Eval 自动化 — 计划与状态
 
 > 这份文档是 RAG 评测链路工作的 single source of truth。任何接手会话先读这里。
-> 最后更新：2026-05-24（D28：RAG Eval Experiment Workbench MVP）
+> 最后更新：2026-05-25（D33：Step 8.4 v2 rubric live calibration）
 
 ## 目录组织
 
@@ -289,6 +289,42 @@ docs/dev-ops/rag-eval/
   - 实现：FastAPI + SQLite + 原生 JS/CSS；支持 Report Index、Case Registry、Experiment Matrix、Ablation Compare、Attribution Drilldown、Insight Summary。
   - 关键修正：旧 viewer 的 `build_dataset.py` 只接受 `RAG-*` summary/detail，因此 `external-ablation` runs 在旧 dataset 中 `case_count=0`；新 workbench parser 接受 `RAG-*` 与 `EXT-*`，并保留 parse warnings。
   - 验证：`experiment-workbench` reindex 当前得到 69 runs / 14 internal cases / 31 external cases / 391 case_results / 1923 document_hits；`external-ablation-06-l5-current-best` 已能显示 8 个 external case；浏览器点击 Dashboard/Runs/Cases/Matrix/Drilldown/Compare/Insights 通过。
+- **D29 Step 7.2 Experiment Workbench 多维对照归因（2026-05-24）**：
+  - 目标：用 `experiment-workbench` 对已有 internal / external 报告做 preset 对照，不再凭单个报告或单个 case 判断 Hybrid、BGE rerank、LLM rewrite、Profile、Context Salience 是否“有用”。
+  - `L0 vector only` vs `L5 current best`：external-narrow，literal `33.3% -> 55.6%`。组合链路有效；典型提升是 `EXT-RFC9110-03` 从 `0/3` 到 `2/3`。
+  - `no rerank` vs `BGE`：external-narrow，literal `55.6% -> 55.6%`。当前窄集未证明 BGE 单独抬分；它的价值更多是 runtime 可观测、排序稳定性和避免一个 incomplete/error，而不是保证每个小样本涨分。
+  - `no profile` vs `profile`：external-narrow，literal `22.2% -> 22.2%`。Profile 已进入 query-time selection，但当前外部窄集未证明最终 literal 提升。
+  - `rule profile` vs `LLM profile`：internal-full，literal `91.4% -> 91.4%`。LLM profile 增强画像与语义导航，但它不是答案事实层，内部 14 条未体现最终 literal 提升。
+  - `no salience` vs `salience`：external-narrow，literal `0% -> 55.6%`，是本轮收益最明显的一组；但 `EXT-ARTEMIS-02` 的 A 侧是 incomplete，因此不能把全部收益归因成纯 salience 算法收益。
+  - `Step 6.8` vs `Step 6.9`：internal-full，literal `91.4% -> 91.4%`，支持“profile v2 是检索导航增强，不是 answer generation 银弹”的口径。
+  - 关键 case 归因：`EXT-RFC9110-03` 中 L0 已召回正确 chunk，L5 让答案更贴近 expected points，说明部分收益发生在答案表达 / 证据使用层，不是纯召回从无到有；`RAG-10` 中 Step 6.8/6.9 都选中内存指标 hints、都走 BGE，pre-rerank 中出现过相关 chunk，但 final context 没稳定保留阈值/范围 chunk，剩余问题属于 candidate-to-final context preservation / answer generation context salience。
+  - 结论口径：不要说“之前功能没用”。更准确的说法是：组合链路有效；单层能力在当前样本上的增益边界更清楚了。Profile 是 retrieval navigation layer，不是 answer fact layer；rerank 是 ordering / risk-control layer，不保证每个小样本涨分；source coverage / failure mode 是定位断点的诊断层。
+  - TODO：`experiment-workbench` 的 run-level feature flag 聚合仍有小瑕疵，L0 run-level 有时显示 `profile:auto`，但 case drilldown 显示 `profile_source=NONE`；进入 Step 7.3 前需要校准聚合口径，避免展示层误导归因。
+- **D31 Step 8.1 Eval v2 Metric Reframe 初版（2026-05-24）**：
+  - 触发原因：Step 7.3 rerun2 已证明 RAG-10 `pre_rerank expected_points_exact=5/5`、`final_context expected_points_exact=5/5`，但旧 summary 仍显示 `literal_hit=2/5`。旧顶层分数把“证据是否找到 / final context 是否保住 / 答案是否语义使用 / 字面是否一致”压成一个数，已不适合继续指导优化。
+  - 实现范围：只改 `docs/dev-ops/rag-eval/rag_eval_runner.py` 的评测报告口径，不改 Java RAG 主链路、不改 answer prompt、不改 rerank/profile/rewrite 策略、不改正式 `cases.json`。
+  - 新增报告字段：顶部写入 `eval_schema_version=v2`、`case_schema_version=v1-compatible`、`rubric_coverage=0/N`；summary 使用 `literal_smoke` 替代 `literal_hit`，新增 `candidate_recall`、`final_context_recall`、`candidate_to_final_delta`、`final_to_answer_delta`、`failure_layer`、`health`、`answerability`。
+  - 新增归因：`build_eval_v2()` 基于 runtime、answerability、旧 `source_coverage` 与 `expected_points` 子串口径推导单值 `failure_layer`。Step 8.1 没有 v2 rubric，因此 `semantic_score=n/a`；未补 rubric 的 literal case 不自动判 `answer_semantic_miss`。
+  - 聚合视图：报告新增 `Eval v2 By Case Type` 与 `Answerability Matrix`，让后续 workbench 可以按 case_type、拒答四象限和 failure layer 做横向分析。
+  - 验证：`python3 -m py_compile docs/dev-ops/rag-eval/rag_eval_runner.py` 通过；`git diff --check -- docs/dev-ops/rag-eval/rag_eval_runner.py` 通过；离线构造 RAG-10 同形样例（candidate=5/5、final=5/5、answer literal=2/5）输出 `failure_layer=literal_only_mismatch`、`verdict=pass`、`semantic_score=n/a`。
+  - 面试口径：这一步不是“调模型涨分”，而是修评测尺子。RAG 优化到多模块阶段后，必须先把 runtime validity、candidate recall、final context recall、answerability、literal smoke 分开，否则会把 profile/rerank/salience 的真实边界误判成“功能没用”或“继续调 prompt”。
+- **D32 Step 8.2/8.3 Eval v2 semantic rubric + Workbench 接入（2026-05-25）**：
+  - Step 8.2：`rag_eval_runner.py` 支持 `expected_points_v2`，第一版 deterministic matcher 包括 `exact / alias / regex / numeric_alias / ordered_steps / refusal`；`semantic_score` 与 `answer_completeness` 改为加权得分，旧 `literal_hit` 保留为 `literal_smoke`。
+  - 已补 v2 rubric：internal `RAG-10`、`RAG-14`；external `EXT-ARTEMIS-01`、`EXT-RFC9110-03`、`EXT-K8S-PV-03`、`EXT-PG-04`。未补 rubric 的 case 继续显示 `semantic_score=n/a`，不伪造语义分。
+  - Step 8.3：`experiment-workbench` 的 parser/db/indexer/API/前端接入 v2 字段：run/case/result 表新增 semantic、answer completeness、failure layer、candidate/final recall、semantic hits/misses；矩阵和 drilldown 优先展示 `semantic_score` 与 `failure_layer`。
+  - 展示层补齐：Dashboard 新增 `Eval v2 Rubric Cases` 面板和 v2 rubric 覆盖指标；Cases / Matrix 新增 `v2 rubric only` 过滤；Cases 表展示 `v2 · N pts`、rubric 类型；Runs / Insights 展示 schema、rubric coverage、semantic、answer completeness。
+  - 关键修正：external case registry 中 `external-sample-cases.json` 与 `external-sample-narrow-8.json` 有重复 case id；workbench 现在合并重复 case 时保留更丰富的 `expected_points_v2`，避免窄集清单覆盖完整 rubric。
+  - 验证：JSON 校验通过；`python3 -m py_compile docs/dev-ops/rag-eval/rag_eval_runner.py docs/dev-ops/rag-eval/experiment-workbench/app.py docs/dev-ops/rag-eval/experiment-workbench/workbench/*.py` 通过；`node --check docs/dev-ops/rag-eval/experiment-workbench/static/app.js` 通过；workbench reindex 当前 71 runs / 45 cases / 397 case_results / 1985 document_hits / 0 parse warnings；registry 中 v2 case 为 6 条；浏览器验证 Dashboard / Cases / Matrix 的 v2 rubric 入口可见且过滤正确。
+  - 离线 smoke：RAG-10 同形样例输出 `candidate_recall=5/5`、`final_context_recall=5/5`、`semantic_score=5/5`、`answer_completeness=5/5`、`literal_smoke=2/5`、`failure_layer=literal_only_mismatch`、`verdict=pass`；RAG-14 refusal 与 EXT-K8S-PV-03 ordered steps 均可匹配 100%。
+  - 面试口径：Step 8.2/8.3 不证明 RAG 主链路变强，而是让“模型答对但字面不一致”和“证据断在 retrieval/rerank/final context/answer 哪一层”能被报告和 workbench 稳定区分。后续再评估 rewrite/rerank/profile/salience 时，优先看 `semantic_score + failure_layer + candidate/final recall`，不再只看 literal。
+- **D33 Step 8.4 v2 rubric live calibration（2026-05-25）**：
+  - 目标：用真实后端、真实 BGE reranker、真实 profile selection 跑 6 条 v2 rubric smoke，不调 Java RAG 主链路，只校准评测尺子和运行配置边界。
+  - 配置边界：`rag_profile_v2_demo` 默认 advisor filter 仍是 `knowledge == 'rag-profile-llm-v2-dedicated-20260523'`，只适合 internal Grafana profile v2；混合 internal/external case 必须临时切 all-tags filter，跑完恢复并重新 armory。默认 filter 已在每轮后恢复。
+  - 关键结果：默认 Grafana-only filter 下，external cases 会召回 internal/control 文档，不能评价 RAG 能力；all-tags 后，RAG-10 / RAG-14 / EXT-ARTEMIS-01 / EXT-RFC9110-03 / EXT-K8S-PV-03 均能用 v2 指标给出更清楚归因。`EXT-RFC9110-03` 是典型收益：`semantic_score=3/3` 但旧 literal 只有 `1/3`，证明 `literal_smoke` 不能作为主指标。
+  - Rubric 校准：`EXT-K8S-PV-03` 首跑 `ordered_steps=0/5`，但答案实际包含 Retain -> 删除 PVC -> 重建较小 PVC -> 恢复 reclaim policy；补充中文别名后 rerun 变为 `semantic_score=5/5`。这说明 v2 rubric 也要 review，不是天然真相。
+  - PG 稳定性发现：`EXT-PG-04` 多轮 PG-only rerun 在同一配置下出现 `semantic_score=3/5 -> 5/5` 摆动；主要来自生成措辞与要点展开不稳定，而不是 rerank/Profile 未生效。已补充 alias、PG16/PG18 URL evidence anchor，并让 evidence matcher 同时检查 document metadata 的 `headingPath/parentSection/section/sourcePath/source/ragName`，但该 case 仍应作为 stability / repeated-run 触发器，不宜用单次结果做模块胜负判断。
+  - 验证与索引：JSON 校验、`python3 -m py_compile docs/dev-ops/rag-eval/rag_eval_runner.py docs/dev-ops/rag-eval/experiment-workbench/app.py docs/dev-ops/rag-eval/experiment-workbench/workbench/*.py`、`node --check docs/dev-ops/rag-eval/experiment-workbench/static/app.js`、`git diff --check` 均通过；清理中间 rerun 后，workbench reindex 为 76 runs / 45 cases / 409 case_results / 2097 document_hits / parse_warning_count=0。
+  - 决策：下一步不直接扩大 prompt 或硬调 PG rubric；先把 ablation 矩阵建立在 v2 rubric + failure_layer + stability 视角上。至少对 PG 这类 version-conflict case 做 N=3 或 majority 标注，再评价 rewrite/rerank/profile/salience 的边际收益。
 
 ### 2.2 关键认知（必读，否则会重复踩坑）
 
@@ -987,6 +1023,169 @@ fresh 验证结论：
 
 > 前面的 Query Rewrite / Profile / Hybrid / BGE rerank 解决的是 find evidence；Step 7 解决 use evidence。第一版 salience 证明了：当关键证据已经进入 final context 但被 chunk 边界切断时，可以通过 answer contract + 相邻证据补全提高生成稳定性。泛化复盘进一步暴露第二类问题：关键证据在候选池里但没进入 final topK 时，单纯的相邻补全无效，后续要做 evidence-type coverage，而不是继续硬调 rewrite prompt 或把 profile 当答案事实。
 
+### Step 7.2 Experiment Workbench 多维对照归因（已完成首轮）
+
+2026-05-24 使用 `experiment-workbench` 对 internal / external 报告做 preset 对照，目标是把“功能是否有效”从单报告印象改成可复核的 A/B 归因。这个步骤不改 Java 主链路、不跑新 eval，只读取现有报告索引和 case drilldown。
+
+首轮对照结论：
+
+- `L0 vector only` vs `L5 current best`：external-narrow，literal `33.3% -> 55.6%`，说明组合链路有效；典型提升 `EXT-RFC9110-03` 从 `0/3` 到 `2/3`。
+- `no rerank` vs `BGE`：external-narrow，literal `55.6% -> 55.6%`，当前窄集未证明 BGE 单独抬分；rerank 的价值更偏排序可观测、风险控制和避免 incomplete/error。
+- `no profile` vs `profile`：external-narrow，literal `22.2% -> 22.2%`，profile 已进入 query-time selection，但当前外部窄集未证明最终 literal 提升。
+- `rule profile` vs `LLM profile`：internal-full，literal `91.4% -> 91.4%`，LLM profile 增强画像与语义导航，但不直接承诺 answer generation 提分。
+- `no salience` vs `salience`：external-narrow，literal `0% -> 55.6%`，收益最明显；但 `EXT-ARTEMIS-02` 的 A 侧是 incomplete，不能把全部收益归因成纯 salience 算法收益。
+- `Step 6.8` vs `Step 6.9`：internal-full，literal `91.4% -> 91.4%`，进一步支持 profile v2 是导航增强，不是最终答案银弹。
+
+典型 case 归因：
+
+- `EXT-RFC9110-03`：L0 已召回正确 chunk；L5 通过 rewrite/profile/salience 让答案更贴近 expected points，说明收益更多发生在答案表达 / 证据使用层，不是纯召回从无到有。
+- `RAG-10`：Step 6.8/6.9 都选中内存指标 hints、都走 BGE，pre-rerank 中出现过相关 chunk，但 final context 没稳定保留阈值 / 范围 chunk。剩余问题应归到 candidate-to-final context preservation / answer generation context salience，而不是继续怪 profile 或硬调 rewrite prompt。
+
+面试口径：
+
+> 我们不是把每个模块都包装成单独涨分按钮，而是把 RAG 拆成 query understanding、candidate recall、rerank ordering、profile navigation、final context salience、answer generation 六个断点。实验显示组合链路优于 L0 baseline；但单层能力在小样本上的收益边界不同。Profile 是检索导航层，rerank 是排序与风险控制层，source coverage / failure mode 是诊断层。只有先判断证据断在哪一层，才能决定下一步动哪个旋钮。
+
+下一步：进入 Step 7.3 前先校准 `experiment-workbench` 的 run-level feature flag 聚合口径；随后如果继续做 evidence-type coverage，应只解决“pre-rerank 有关键证据但 final topK 没保住”的断点，避免把 profile、rerank、answer prompt 和 eval 口径再次混在一起。
+
+### Step 7.3 Final Context Evidence Preservation（窄集验证通过）
+
+2026-05-24 已实现第一版 evidence-type coverage guard。目标只覆盖 Step 7.1 暴露的第二类断点：关键证据已经进入 pre-rerank 候选池，但 rerank 后 final topK 没有保住。它不改 rewrite/profile/rerank/eval 口径，也不扩大 finalTopK。
+
+实现边界：
+
+- `ContextSalienceSupport` 新增 query/profile intent 与 candidate evidence 的 cue 匹配：`formula / range / judgement / procedure / parameter / example`。
+- `RagAnswerAdvisor` 在既有 query-variant coverage guard 后追加 evidence-type guard：query/rewrite/profile 表达证据意图，candidate chunk 含同类证据，candidate 来源已出现在 final context，且位于 pre-rerank 前 8 名时，最多补回 1 个同源证据 chunk。
+- 关键修正：evidence-type guard 只补“尚未进入 final context”的 candidate。首次重跑时 RAG-10 完整完成但 `coverage_guard=false`，原因是一个已在 final context 的证据 chunk 消耗了 `maxAdded=1` 名额；修复后先用单测复现，再让 selector 跳过 final document keys。
+- document metadata 新增 `coverageGuardReason` / `coverageGuardCues`，runner 报告展示这两个字段，用于区分旧的 `query_variant` guard 和新的 `evidence_type` guard。
+- `experiment-workbench` 顺手修正 run-level feature flag 聚合：`NONE / NO_PROFILE_MATCH` 不再让 L0 误显示 `profile:auto`。
+
+验证状态：
+
+- 单测：`mvn -pl ai-agent-domain test -Dtest=ContextSalienceSupportTest,RagAnswerAdvisorCoverageGuardTest -DskipTests=false` 通过，7 tests / 0 failures。
+- Python 编译：`python3 -m py_compile docs/dev-ops/rag-eval/rag_eval_runner.py docs/dev-ops/rag-eval/experiment-workbench/app.py docs/dev-ops/rag-eval/experiment-workbench/workbench/*.py` 通过。
+- 构建：`mvn -pl ai-agent-boot -am install -Dmaven.test.skip=true` 通过。
+- live smoke：BGE `/health` 为 `loaded=true`，新 jar 重启后 `rag_profile_v2_demo` armory 成功。
+- 有效窄集报告：`results/step7-answer-context-salience/rag-eval-result-step7.3-evidence-preservation-narrow-rerun2.md`。
+- 窄集结果：RAG-04 completed=true、`3/3`、BGE 正常；RAG-10 completed=true，`pre_rerank expected_points_exact=5/5`，`final_context expected_points_exact=5/5`，chunk 5 以 `coverageGuardReason=evidence_type` / `coverageGuardCues=['formula','range','judgement','procedure']` 进入 final documents；RAG-14 completed=true，`profile_hints source=NO_PROFILE_MATCH`，`coverage_guard applied=false`，拒答边界未破坏。
+- 口径纠偏：RAG-10 表格 `literal_hit` 仍显示 `2/5`，因为 expected points 是 `正常范围/警告范围/危险范围` 的字面子串，而答案写成了 `正常/警告/危险 + 百分比区间`。报告已将 source coverage 归为 `answer_generation_or_literal_mismatch`，不能再误判为 retrieval/rerank/profile 失败。
+
+下一步：
+
+- 跑 internal full，观察 evidence-type guard 的触发面是否过宽，以及 RAG-07/RAG-08/RAG-12/RAG-14 拒答边界是否稳定。
+- 再把 external sample smoke 纳入 workbench 对照：只有当 `pre_rerank 有证据但 final context 丢证据` 的 case 被改善，才扩大 Step 7.3；如果只是 literal mismatch，不继续加规则。
+
+### Step 8.1 Eval v2 Metric Reframe（初版已落地）
+
+2026-05-24 进入 Step 8。触发点不是 RAG 主链路又发现新 bug，而是 Step 7.3 暴露出评测尺子已经跟不上系统复杂度：RAG-10 的 candidate 与 final context 都已经覆盖 5/5 expected points，但旧 `literal_hit` 仍然是 2/5，容易误导后续继续调 retrieval / rerank / profile / prompt。
+
+实现边界：
+
+- 只改 `docs/dev-ops/rag-eval/rag_eval_runner.py` 的 report layer。
+- 不改 Java RAG 链路、不改 rerank policy、不改 rewrite/profile、不改 answer prompt、不改正式 `cases.json`。
+- Step 8.1 仍复用旧 `expected_points` 子串口径计算 `candidate_recall` / `final_context_recall`；真正的 v2 semantic rubric 放到 Step 8.2。
+
+已落地能力：
+
+- 顶部 metadata：`eval_schema_version=v2`、`case_schema_version=v1-compatible`、`rubric_coverage=0/N`。
+- Summary：`literal_hit` 改名为 `literal_smoke`，新增 `candidate_recall`、`final_context_recall`、`candidate_to_final_delta`、`final_to_answer_delta`、`failure_layer`、`health`、`answerability`。
+- Details：新增 `eval_v2` 区块，展示 `verdict / failure_layer / health / valid_for_scoring` 和 candidate -> final -> answer 漏斗。
+- 聚合：新增 `Eval v2 By Case Type` 与 `Answerability Matrix`。
+- 归因：`runtime_failure / false_answer / false_refusal / retrieval_miss / rerank_or_context_loss / literal_only_mismatch / manual_review_needed / none` 作为第一版 `failure_layer`。
+
+验证：
+
+- `python3 -m py_compile docs/dev-ops/rag-eval/rag_eval_runner.py`
+- `git diff --check -- docs/dev-ops/rag-eval/rag_eval_runner.py`
+- 离线构造 RAG-10 同形样例，确认输出：
+  - `candidate_recall=5/5`
+  - `final_context_recall=5/5`
+  - `literal_smoke=2/5`
+  - `failure_layer=literal_only_mismatch`
+  - `verdict=pass`
+  - `semantic_score=n/a`
+
+### Step 8.2/8.3 Eval v2 Semantic Rubric + Workbench 接入（已落地）
+
+2026-05-25 已把 Step 8.1 的 v2 视图从“旧 expected_points 的分层展示”推进到第一版可评分 rubric。目标不是让评测变成另一个不透明 LLM judge，而是先用 deterministic matcher 解决最明显的 literal false negative：模型语义答对，但没有逐字复述 expected point。
+
+实现边界：
+
+- 不改 Java RAG 主链路、不改 rerank policy、不改 rewrite/profile、不改 answer prompt。
+- 不重写历史报告；旧报告继续按 v1-compatible 解析，未补 `expected_points_v2` 的 case 显示 `semantic_score=n/a`。
+- v2 rubric 第一版只覆盖可解释、可 review 的 matcher：`exact / alias / regex / numeric_alias / ordered_steps / refusal`。
+- `semantic_score = Σ matched weight / Σ total weight`；`answer_completeness = Σ matched required weight / Σ required weight`。旧 `literal_hit` 只作为 `literal_smoke` 保留，不再作为唯一成果依据。
+
+已补 rubric：
+
+- Internal：`RAG-10`、`RAG-14`。
+- External：`EXT-ARTEMIS-01`、`EXT-RFC9110-03`、`EXT-K8S-PV-03`、`EXT-PG-04`。
+
+Workbench 接入：
+
+- DB schema 增加 `expected_points_v2_json`、`eval_schema_version`、`case_schema_version`、`rubric_coverage`、`semantic_score`、`answer_completeness`、`failure_layer`、`candidate_recall`、`final_context_recall`、`semantic_hits_json`、`semantic_misses_json` 等列。
+- Parser 支持 Eval v2 summary/details，并能兼容历史 v1/new schema 报告。
+- Matrix cell 优先显示 `semantic_score`，drilldown 展示 Eval v2 rubric / failure layer / semantic hits/misses。
+- Dashboard 直接列出 6 条 v2 rubric case；Cases / Matrix 增加 `v2 rubric only` 过滤；Runs / Insights 展示 schema、rubric coverage、semantic、answer completeness。
+- 重复 external case id 合并时保留更丰富的 `expected_points_v2`，避免 `external-sample-narrow-8.json` 覆盖 `external-sample-cases.json` 中的完整 rubric。
+
+验证：
+
+- `python3 -m json.tool docs/dev-ops/rag-eval/cases.json >/tmp/cases.json.check`
+- `python3 -m json.tool docs/dev-ops/rag-eval/external-samples/cases/external-sample-cases.json >/tmp/external-cases.json.check`
+- `python3 -m py_compile docs/dev-ops/rag-eval/rag_eval_runner.py docs/dev-ops/rag-eval/experiment-workbench/app.py docs/dev-ops/rag-eval/experiment-workbench/workbench/*.py`
+- `node --check docs/dev-ops/rag-eval/experiment-workbench/static/app.js`
+- workbench reindex：71 runs / 45 cases / 397 case_results / 1985 document_hits / parse_warning_count=0；v2 rubric case=6。
+- Browser smoke：Dashboard 能看到 `Eval v2 Rubric Cases` 和 6 条 v2 case；Cases 的 `v2 rubric only` 只显示 `RAG-10 / RAG-14 / EXT-ARTEMIS-01 / EXT-RFC9110-03 / EXT-K8S-PV-03 / EXT-PG-04`；Matrix 的 rubric 过滤也只显示这 6 条，并在 cell/header 中展示 semantic 指标。
+- 离线 smoke：RAG-10 同形样例 `semantic_score=5/5`、`literal_smoke=2/5`、`failure_layer=literal_only_mismatch`、`verdict=pass`；RAG-14 refusal 与 EXT-K8S-PV-03 ordered steps 均可 100% 匹配。
+
+下一步：
+
+- 明早先用现有 internal / external 报告在 workbench 看 `semantic_score` / `failure_layer`，确认新指标展示是否符合预期。
+- 然后再决定是否跑新的 backend eval。跑之前先重启使用新 runner 的服务/脚本，并只选 6 条有 v2 rubric 的 smoke case，避免把未补 rubric 的 case 当作 semantic 回归依据。
+
+### Step 8.4 Eval v2 Rubric Live Calibration（已完成首轮）
+
+2026-05-25 对 6 条 v2 rubric case 做了真实后端校准。重点不是追求一次 run 全绿，而是确认新指标能区分三类问题：运行配置问题、rubric 假阴性、以及生成稳定性问题。
+
+运行配置发现：
+
+- `rag_profile_v2_demo` 当前默认 filter 是 `knowledge == 'rag-profile-llm-v2-dedicated-20260523'`，只覆盖 Grafana/internal profile v2。
+- 如果直接用它跑 external cases，会召回 internal/control 文档，结论只能说明“评测配置错了”，不能说明 RAG 模块失败。
+- 混合 6-case smoke 需要临时 all-tags filter：
+  - `rag-profile-llm-v2-dedicated-20260523`
+  - `ext-artemis-i-20260523`
+  - `ext-rfc9110-20260523`
+  - `ext-k8s-pv-20260523`
+  - `ext-postgresql-generated-columns-20260523`
+- 每轮临时 filter 跑完都已通过 admin API 恢复原 Grafana-only filter，并重新 armory `rag_profile_v2_demo`。
+
+指标校准结果：
+
+- `RAG-10`：all-tags 6-case 报告中 `candidate=5/5`、`final=5/5`、`semantic=5/5`，BGE `PER_VARIANT_RERANK_RRF` 正常参与，`failure_reason` 为空。
+- `RAG-14`：`true_refusal`，拒答边界保持。
+- `EXT-ARTEMIS-01`：日期/时长语义点可通过 v2 rubric 判定，不再依赖英文 literal。
+- `EXT-RFC9110-03`：`semantic_score=3/3` 但旧 literal 只有 `1/3`，这是 v2 指标最清楚的价值证明。
+- `EXT-K8S-PV-03`：首轮 rubric alias 过窄，误判为 `semantic=0/5`；补中文步骤别名后 rerun 为 `semantic=5/5`。
+- `EXT-PG-04`：多轮 rerun 显示同配置下答案要点展开不稳定，`semantic_score` 可在 `3/5 -> 5/5` 之间摆动；这类 version-conflict case 后续应进入 stability / repeated-run 评估，而不是用单次报告判断模块胜负。
+
+代码/数据校准：
+
+- `rag_eval_runner.py` 的 v2 evidence matcher 从只查 `text/content/preview` 扩展为同时查 document metadata：`headingPath`、`parentSection`、`section`、`sourcePath`、`source`、`ragName`。原因是 retrieval SSE 的 document text 往往只是 preview，section/heading 证据不能只靠 preview 子串判断。
+- `external-sample-cases.json` 对 `EXT-K8S-PV-03`、`EXT-PG-04` 补充了更稳定的 alias/evidence anchor。这个动作是校准评测 rubric，不改变 RAG 主链路。
+
+验证：
+
+- JSON 校验：`cases.json`、`external-sample-cases.json`、Step 8.4 临时 PG/6-case 文件均通过。
+- `python3 -m py_compile docs/dev-ops/rag-eval/rag_eval_runner.py docs/dev-ops/rag-eval/experiment-workbench/app.py docs/dev-ops/rag-eval/experiment-workbench/workbench/*.py`
+- `node --check docs/dev-ops/rag-eval/experiment-workbench/static/app.js`
+- `git diff --check`
+- workbench reindex：清理中间 rerun 后为 76 runs / 45 cases / 409 case_results / 2097 document_hits / parse_warning_count=0。
+
+下一步：
+
+- 进入 v2 指标下的消融矩阵前，先把 `EXT-PG-04` 这类高波动 case 标为 stability-sensitive；至少 N=3 或 majority 后再看模块 lift。
+- 对常规 ablation，优先比较 `semantic_score`、`answer_completeness`、`failure_layer`、`candidate_recall`、`final_context_recall`、`runtime_validity`，literal 只保留 smoke。
+
 ## 5. 关键约束 / 隐藏陷阱
 
 - 业务代码 / 对外文档不使用 emoji（CLI 提示文案例外）
@@ -1014,7 +1213,7 @@ fresh 验证结论：
 
 1. Read 这份 `PLAN.md` 全文（特别是 §3 D10-D16：Hybrid、Rerank、A/B 归因与 Step 5.4 工程化收口）
 2. 确认 §3 commit 范围是否已落地（`git log --oneline -10` 看 `cc20ba4`、`176abc5`、`c95aabd`、`631ffd2` 等 Step 5 提交）
-3. 当前游标：**Step 6.8 KnowledgeBaseProfile 面试版已完成实现与验证**。LLM Query Rewrite 主线已经从手工 `queryRewriteDomainHints` 升级为自动 profile + query-time selection + report 可观测；后续若继续追 RAG-10 漏范围，应切到 Answer Generation / Context Salience，不要继续把 Grafana/PromQL 词硬写进 prompt，也不要把 profile 当作回答事实依据。
+3. 当前游标：**Step 8.2/8.3 Eval v2 semantic rubric + workbench 接入已完成离线验证**。后续评估 rewrite/rerank/profile/salience 时，先看 `semantic_score`、`answer_completeness`、`failure_layer`、`candidate_recall`、`final_context_recall`，不要再只用 `literal_hit/literal_smoke` 判断功能是否有效。
 4. 如果改 yml / 重启 backend / 重灌向量库后再跑 eval：必须先预热 `POST http://localhost:8099/api/v1/agent/armory_agent` body `{"agentId":"rag_demo"}`（未预热直接打 auto_agent 会 HTTP 500，duration ~5ms，看似 endpoint 死了）
 5. **不要**自行重跑 v1/v2/v3 中任何一轮——Phase A 已锁定参数 250/109，重跑只会消耗 LLM 配额且 score 必然飘动（embedding 不变 score 应稳定，LLM 输出会因 sampling 飘）
 

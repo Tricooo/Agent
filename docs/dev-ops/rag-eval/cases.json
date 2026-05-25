@@ -129,6 +129,76 @@
       "正常范围",
       "警告范围",
       "危险范围"
+    ],
+    "expected_points_v2": [
+      {
+        "id": "memory_formula_available",
+        "type": "exact",
+        "weight": 1,
+        "required": true,
+        "answer_match": ["node_memory_MemAvailable_bytes"],
+        "evidence": [
+          {
+            "source_file": "grafana-mcp-tools-guide.md",
+            "anchor_text": "node_memory_MemAvailable_bytes"
+          }
+        ]
+      },
+      {
+        "id": "memory_formula_total",
+        "type": "exact",
+        "weight": 1,
+        "required": true,
+        "answer_match": ["node_memory_MemTotal_bytes"],
+        "evidence": [
+          {
+            "source_file": "grafana-mcp-tools-guide.md",
+            "anchor_text": "node_memory_MemTotal_bytes"
+          }
+        ]
+      },
+      {
+        "id": "normal_range",
+        "type": "numeric_alias",
+        "weight": 1,
+        "required": true,
+        "aliases": ["正常范围", "正常", "normal"],
+        "values": ["0-80%"],
+        "evidence": [
+          {
+            "source_file": "grafana-mcp-tools-guide.md",
+            "anchor_text": "正常范围: 0-80%"
+          }
+        ]
+      },
+      {
+        "id": "warning_range",
+        "type": "numeric_alias",
+        "weight": 1,
+        "required": true,
+        "aliases": ["警告范围", "警告", "warning"],
+        "values": ["80-95%"],
+        "evidence": [
+          {
+            "source_file": "grafana-mcp-tools-guide.md",
+            "anchor_text": "警告范围: 80-95%"
+          }
+        ]
+      },
+      {
+        "id": "danger_range",
+        "type": "numeric_alias",
+        "weight": 1,
+        "required": true,
+        "aliases": ["危险范围", "危险", "danger"],
+        "values": ["95-100%"],
+        "evidence": [
+          {
+            "source_file": "grafana-mcp-tools-guide.md",
+            "anchor_text": "危险范围: 95-100%"
+          }
+        ]
+      }
     ]
   },
   {
@@ -177,6 +247,31 @@
     "expected_points": [
       "does not specify which cloud provider",
       "cannot be answered from this document"
+    ],
+    "expected_points_v2": [
+      {
+        "id": "cloud_provider_refusal",
+        "type": "refusal",
+        "weight": 1,
+        "required": true,
+        "answer_match": [
+          "does not specify which cloud provider",
+          "does not identify a cloud provider",
+          "cannot be answered from this document",
+          "not specified"
+        ],
+        "unsupported_specific_answers": ["AWS", "Azure", "GCP", "Google Cloud", "Amazon", "阿里云", "腾讯云"],
+        "evidence": [
+          {
+            "source_file": "control-en-long-paragraph.txt",
+            "anchor_text": "does not specify which cloud provider hosts the fallback queue"
+          },
+          {
+            "source_file": "control-en-long-paragraph.txt",
+            "anchor_text": "cannot be answered from this document"
+          }
+        ]
+      }
     ]
   }
 ]

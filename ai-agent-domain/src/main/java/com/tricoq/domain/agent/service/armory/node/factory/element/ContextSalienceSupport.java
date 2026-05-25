@@ -3,6 +3,7 @@ package com.tricoq.domain.agent.service.armory.node.factory.element;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 
+import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -28,6 +29,9 @@ final class ContextSalienceSupport {
     private static final Pattern CODE_CONTINUATION_PATTERN = Pattern.compile(
             "(?i)^\\s*(?:[A-Za-z0-9_./:-]+\\s*[:=]|[({\\[]|\\w+\\([^)]*)"
     );
+    private static final Set<String> EVIDENCE_COVERAGE_CUES = Set.of(
+            "formula", "range", "judgement", "procedure", "parameter", "example"
+    );
 
     private ContextSalienceSupport() {
     }
@@ -44,6 +48,50 @@ final class ContextSalienceSupport {
         return new Analysis(List.copyOf(cues), needsPreviousChunkForBoundary(safeText, cues));
     }
 
+    static Analysis analyzeIntent(String userText, Collection<String> queryVariants, Collection<String> profileHints) {
+        StringBuilder builder = new StringBuilder();
+        appendIntentText(builder, userText);
+        if (!CollectionUtils.isEmpty(queryVariants)) {
+            for (String queryVariant : queryVariants) {
+                appendIntentText(builder, queryVariant);
+            }
+        }
+        if (!CollectionUtils.isEmpty(profileHints)) {
+            for (String profileHint : profileHints) {
+                appendIntentText(builder, profileHint);
+            }
+        }
+        return analyze(builder.toString());
+    }
+
+    static List<String> coverageCues(Analysis analysis) {
+        if (analysis == null || CollectionUtils.isEmpty(analysis.cues())) {
+            return List.of();
+        }
+        LinkedHashSet<String> cues = new LinkedHashSet<>();
+        for (String cue : analysis.cues()) {
+            if (EVIDENCE_COVERAGE_CUES.contains(cue)) {
+                cues.add(cue);
+            }
+        }
+        return List.copyOf(cues);
+    }
+
+    static boolean matchesCoverageIntent(Analysis intentAnalysis, Analysis evidenceAnalysis) {
+        List<String> intentCues = coverageCues(intentAnalysis);
+        List<String> evidenceCues = coverageCues(evidenceAnalysis);
+        if (CollectionUtils.isEmpty(intentCues) || CollectionUtils.isEmpty(evidenceCues)) {
+            return false;
+        }
+        for (String intentCue : intentCues) {
+            if (evidenceCues.contains(intentCue)) {
+                return true;
+            }
+        }
+        return (intentCues.contains("judgement") && evidenceCues.contains("range"))
+                || (intentCues.contains("range") && evidenceCues.contains("judgement"));
+    }
+
     static String renderCueLine(Analysis analysis) {
         if (analysis == null || CollectionUtils.isEmpty(analysis.cues())) {
             return "";
@@ -55,6 +103,16 @@ final class ContextSalienceSupport {
         if (pattern.matcher(text).find()) {
             cues.add(cue);
         }
+    }
+
+    private static void appendIntentText(StringBuilder builder, String text) {
+        if (StringUtils.isBlank(text)) {
+            return;
+        }
+        if (!builder.isEmpty()) {
+            builder.append(System.lineSeparator());
+        }
+        builder.append(text);
     }
 
     private static boolean needsPreviousChunkForBoundary(String text, Set<String> cues) {

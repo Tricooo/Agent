@@ -97,6 +97,10 @@ public class RagAnswerAdvisor implements BaseAdvisor {
     private static final int MIN_STRONG_KEYWORD_LENGTH = 5;
     private static final int DEFAULT_CANDIDATE_TOP_K = 20;
     private static final int COVERAGE_GUARD_PROTECTED_VARIANT_RANK = 2;
+    private static final int EVIDENCE_COVERAGE_GUARD_MAX_CANDIDATE_RANK = 8;
+    private static final int EVIDENCE_COVERAGE_GUARD_MAX_ADDED = 1;
+    private static final String COVERAGE_GUARD_REASON_QUERY_VARIANT = "query_variant";
+    private static final String COVERAGE_GUARD_REASON_EVIDENCE_TYPE = "evidence_type";
     private static final FilterExpressionConverter PG_FILTER_EXPRESSION_CONVERTER = new PgVectorFilterExpressionConverter();
     private static final String RETRIEVAL_MODE_HYBRID = "HYBRID";
     private static final String RETRIEVAL_SOURCE_VECTOR = "VECTOR";
@@ -252,7 +256,7 @@ public class RagAnswerAdvisor implements BaseAdvisor {
         int finalTopK = retrievalTopKPlan.finalTopK();
         RerankResult rerankResult = rerankDocuments(rerankQueryPlan, documents, retrievalTopKPlan);
         CoverageGuardResult coverageGuardResult = applyRerankCoverageGuard(
-                rerankResult.getDocuments(), documents, rerankResult, finalTopK);
+                rerankResult.getDocuments(), documents, rerankResult, finalTopK, userText, queryVariants, rewriteResult);
         List<Document> rerankDocuments = coverageGuardResult.documents();
 
         //documentContext 很长时要做裁剪/摘要（Top-K、去重、截断），否则可能超长或稀释关键信息
@@ -798,7 +802,10 @@ public class RagAnswerAdvisor implements BaseAdvisor {
             List<Document> rerankDocuments,
             List<Document> candidates,
             RerankResult rerankResult,
-            int topK) {
+            int topK,
+            String userText,
+            List<String> queryVariants,
+            RewriteResult rewriteResult) {
         List<Document> finalDocuments = CollectionUtils.isEmpty(rerankDocuments) ? List.of() : rerankDocuments;
         if (rerankResult == null || !rerankResult.isApplied()
                 || CollectionUtils.isEmpty(finalDocuments)
@@ -807,7 +814,13 @@ public class RagAnswerAdvisor implements BaseAdvisor {
             return new CoverageGuardResult(finalDocuments, false, 0);
         }
 
-        Map<String, Document> protectedCandidates = coverageGuardProtectedCandidates(candidates);
+        List<String> profileHints = rewriteResult == null
+                ? List.of()
+                : rewriteResult.getSelectedProfileHints();
+        ContextSalienceSupport.Analysis evidenceIntent = ContextSalienceSupport.analyzeIntent(
+                userText, queryVariants, profileHints);
+        Map<String, CoverageGuardCandidate> protectedCandidates = coverageGuardProtectedCandidates(
+                candidates, finalDocuments, evidenceIntent);
         if (protectedCandidates.isEmpty()) {
             return new CoverageGuardResult(finalDocuments, false, 0);
         }
@@ -824,16 +837,18 @@ public class RagAnswerAdvisor implements BaseAdvisor {
 
         int addedCount = 0;
         String rerankMode = StringUtils.defaultIfBlank(rerankResult.getMode(), RERANK_MODE_PASSTHROUGH);
-        for (Map.Entry<String, Document> entry : protectedCandidates.entrySet()) {
+        for (Map.Entry<String, CoverageGuardCandidate> entry : protectedCandidates.entrySet()) {
             if (presentKeys.contains(entry.getKey())) {
                 continue;
             }
 
             int rank;
             Document guardedDocument;
+            CoverageGuardCandidate protectedCandidate = entry.getValue();
             if (guardedDocuments.size() < topK) {
                 rank = guardedDocuments.size() + 1;
-                guardedDocument = markCoverageGuardAdded(entry.getValue(), rank, rerankResult.isApplied(), rerankMode);
+                guardedDocument = markCoverageGuardAdded(protectedCandidate.document(), rank,
+                        rerankResult.isApplied(), rerankMode, protectedCandidate.reason(), protectedCandidate.cues());
                 guardedDocuments.add(guardedDocument);
             } else {
                 int replacementIndex = findCoverageGuardReplacementIndex(guardedDocuments, protectedKeys);
@@ -846,7 +861,8 @@ public class RagAnswerAdvisor implements BaseAdvisor {
                     presentKeys.remove(replacedKey);
                 }
                 rank = replacementIndex + 1;
-                guardedDocument = markCoverageGuardAdded(entry.getValue(), rank, rerankResult.isApplied(), rerankMode);
+                guardedDocument = markCoverageGuardAdded(protectedCandidate.document(), rank,
+                        rerankResult.isApplied(), rerankMode, protectedCandidate.reason(), protectedCandidate.cues());
                 guardedDocuments.set(replacementIndex, guardedDocument);
             }
 
@@ -860,12 +876,24 @@ public class RagAnswerAdvisor implements BaseAdvisor {
         return new CoverageGuardResult(guardedDocuments, true, addedCount);
     }
 
-    private Map<String, Document> coverageGuardProtectedCandidates(List<Document> candidates) {
-        Map<String, Document> protectedCandidates = new LinkedHashMap<>();
+    private Map<String, CoverageGuardCandidate> coverageGuardProtectedCandidates(
+            List<Document> candidates,
+            List<Document> finalDocuments,
+            ContextSalienceSupport.Analysis evidenceIntent) {
+        Map<String, CoverageGuardCandidate> protectedCandidates = new LinkedHashMap<>();
         if (CollectionUtils.isEmpty(candidates)) {
             return protectedCandidates;
         }
 
+        Set<String> finalDocumentKeys = coverageGuardDocumentKeys(finalDocuments);
+        addQueryVariantCoverageGuardCandidates(protectedCandidates, candidates);
+        addEvidenceCoverageGuardCandidates(protectedCandidates, candidates, finalDocuments, finalDocumentKeys, evidenceIntent);
+        return protectedCandidates;
+    }
+
+    private void addQueryVariantCoverageGuardCandidates(
+            Map<String, CoverageGuardCandidate> protectedCandidates,
+            List<Document> candidates) {
         for (Document candidate : candidates) {
             Integer queryVariantIndex = metadataInteger(candidate, DocumentMetadata.QUERY_VARIANT_INDEX);
             Integer queryVariantRank = metadataInteger(candidate, DocumentMetadata.QUERY_VARIANT_RANK);
@@ -878,10 +906,70 @@ public class RagAnswerAdvisor implements BaseAdvisor {
 
             String key = coverageGuardDocumentKey(candidate);
             if (StringUtils.isNotBlank(key)) {
-                protectedCandidates.putIfAbsent(key, candidate);
+                protectedCandidates.putIfAbsent(
+                        key,
+                        new CoverageGuardCandidate(candidate, COVERAGE_GUARD_REASON_QUERY_VARIANT, List.of())
+                );
             }
         }
-        return protectedCandidates;
+    }
+
+    private void addEvidenceCoverageGuardCandidates(
+            Map<String, CoverageGuardCandidate> protectedCandidates,
+            List<Document> candidates,
+            List<Document> finalDocuments,
+            Set<String> finalDocumentKeys,
+            ContextSalienceSupport.Analysis evidenceIntent) {
+        if (CollectionUtils.isEmpty(ContextSalienceSupport.coverageCues(evidenceIntent))) {
+            return;
+        }
+        Set<String> finalSourcePaths = sourcePaths(finalDocuments);
+        if (finalSourcePaths.isEmpty()) {
+            return;
+        }
+
+        int addedCount = 0;
+        for (int i = 0; i < candidates.size() && i < EVIDENCE_COVERAGE_GUARD_MAX_CANDIDATE_RANK; i++) {
+            Document candidate = candidates.get(i);
+            String key = coverageGuardDocumentKey(candidate);
+            if (StringUtils.isBlank(key) || protectedCandidates.containsKey(key)
+                    || finalDocumentKeys.contains(key)
+                    || !finalSourcePaths.contains(sourcePath(candidate))) {
+                continue;
+            }
+
+            ContextSalienceSupport.Analysis evidenceAnalysis = ContextSalienceSupport.analyze(candidate.getText());
+            if (!ContextSalienceSupport.matchesCoverageIntent(evidenceIntent, evidenceAnalysis)) {
+                continue;
+            }
+
+            protectedCandidates.put(
+                    key,
+                    new CoverageGuardCandidate(
+                            candidate,
+                            COVERAGE_GUARD_REASON_EVIDENCE_TYPE,
+                            ContextSalienceSupport.coverageCues(evidenceAnalysis)
+                    )
+            );
+            addedCount++;
+            if (addedCount >= EVIDENCE_COVERAGE_GUARD_MAX_ADDED) {
+                return;
+            }
+        }
+    }
+
+    private Set<String> coverageGuardDocumentKeys(List<Document> documents) {
+        if (CollectionUtils.isEmpty(documents)) {
+            return Set.of();
+        }
+        Set<String> keys = new HashSet<>();
+        for (Document document : documents) {
+            String key = coverageGuardDocumentKey(document);
+            if (StringUtils.isNotBlank(key)) {
+                keys.add(key);
+            }
+        }
+        return keys;
     }
 
     private int findCoverageGuardReplacementIndex(List<Document> documents, Set<String> protectedKeys) {
@@ -894,12 +982,42 @@ public class RagAnswerAdvisor implements BaseAdvisor {
         return -1;
     }
 
-    private Document markCoverageGuardAdded(Document document, int rerankRank, boolean rerankApplied, String rerankMode) {
+    private Set<String> sourcePaths(List<Document> documents) {
+        if (CollectionUtils.isEmpty(documents)) {
+            return Set.of();
+        }
+        Set<String> sourcePaths = new HashSet<>();
+        for (Document document : documents) {
+            String sourcePath = sourcePath(document);
+            if (StringUtils.isNotBlank(sourcePath)) {
+                sourcePaths.add(sourcePath);
+            }
+        }
+        return sourcePaths;
+    }
+
+    private String sourcePath(Document document) {
+        if (document == null || MapUtils.isEmpty(document.getMetadata())) {
+            return StringUtils.EMPTY;
+        }
+        return metadataText(document.getMetadata(), DocumentMetadata.SOURCE_PATH);
+    }
+
+    private Document markCoverageGuardAdded(Document document,
+                                            int rerankRank,
+                                            boolean rerankApplied,
+                                            String rerankMode,
+                                            String coverageGuardReason,
+                                            List<String> coverageGuardCues) {
         Map<String, Object> metadata = new HashMap<>(document.getMetadata());
         metadata.put(DocumentMetadata.RERANK_RANK, rerankRank);
         metadata.put(DocumentMetadata.RERANK_APPLIED, rerankApplied);
         metadata.put(DocumentMetadata.RERANK_MODE, StringUtils.defaultIfBlank(rerankMode, RERANK_MODE_PASSTHROUGH));
         metadata.put(DocumentMetadata.COVERAGE_GUARD_ADDED, true);
+        metadata.put(DocumentMetadata.COVERAGE_GUARD_REASON, StringUtils.defaultString(coverageGuardReason));
+        if (!CollectionUtils.isEmpty(coverageGuardCues)) {
+            metadata.put(DocumentMetadata.COVERAGE_GUARD_CUES, coverageGuardCues);
+        }
         return document.mutate()
                 .metadata(metadata)
                 .build();
@@ -1024,6 +1142,13 @@ public class RagAnswerAdvisor implements BaseAdvisor {
             List<Document> documents,
             boolean applied,
             int addedCount
+    ) {
+    }
+
+    private record CoverageGuardCandidate(
+            Document document,
+            String reason,
+            List<String> cues
     ) {
     }
 

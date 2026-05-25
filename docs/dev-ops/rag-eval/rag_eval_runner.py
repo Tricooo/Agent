@@ -10,8 +10,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 import time
+import unicodedata
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -77,6 +79,8 @@ DOC_FUSION_AWARE_WEIGHT = "fusionAwareWeight"
 DOC_RERANK_APPLIED = "rerankApplied"
 DOC_RERANK_MODE = "rerankMode"
 DOC_COVERAGE_GUARD_ADDED = "coverageGuardAdded"
+DOC_COVERAGE_GUARD_REASON = "coverageGuardReason"
+DOC_COVERAGE_GUARD_CUES = "coverageGuardCues"
 DOC_RERANK_VARIANT_HIT_COUNT = "rerankVariantHitCount"
 DOC_BEST_RERANK_VARIANT_RANK = "bestRerankVariantRank"
 DOC_RERANK_VARIANT_INDEXES = "rerankVariantIndexes"
@@ -91,9 +95,36 @@ DOC_BEST_QUERY_VARIANT_RANK = "bestQueryVariantRank"
 DOC_QUERY_VARIANT_INDEXES = "queryVariantIndexes"
 DOC_QUERY_VARIANT_HITS = "queryVariantHits"
 
+EVAL_SCHEMA_VERSION = "v2"
+CASE_SCHEMA_VERSION_V1_COMPATIBLE = "v1-compatible"
+CASE_SCHEMA_VERSION_V2_COMPATIBLE = "v2-compatible"
+
+REFUSAL_TEMPLATES = [
+    "无法基于",
+    "当前知识库没有",
+    "知识库未涉及",
+    "文档没有指定",
+    "不能从文档回答",
+    "cannot be answered",
+    "does not specify",
+    "does not identify",
+    "not provided in the document",
+]
+
 
 def normalize_text(value: Any) -> str:
     return " ".join(str(value or "").lower().split())
+
+
+def normalize_match_text(value: Any) -> str:
+    text = unicodedata.normalize("NFKC", str(value or "")).lower()
+    text = re.sub(r"[*_`]+", "", text)
+    text = text.replace("：", ":")
+    text = re.sub(r"[‐‑‒–—−]", "-", text)
+    text = text.replace("～", "~").replace("〜", "~")
+    text = re.sub(r"(\d+(?:\.\d+)?)\s*(?:-|~|到|至)\s*(\d+(?:\.\d+)?)\s*%", r"\1-\2%", text)
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
 
 
 def load_cases(path: Path) -> list[dict[str, Any]]:
@@ -173,6 +204,421 @@ def keyword_check(answer: str, expected_points: list[str]) -> tuple[int, list[st
     return len(expected_points) - len(missed), missed
 
 
+def _has_expected_points_v2(case: dict[str, Any]) -> bool:
+    points = case.get("expected_points_v2")
+    return isinstance(points, list) and bool(points)
+
+
+def _case_schema_version(case: dict[str, Any]) -> str:
+    return CASE_SCHEMA_VERSION_V2_COMPATIBLE if _has_expected_points_v2(case) else CASE_SCHEMA_VERSION_V1_COMPATIBLE
+
+
+def _matches_refusal_template(answer: str) -> bool:
+    normalized = normalize_text(answer)
+    return any(template in normalized for template in REFUSAL_TEMPLATES)
+
+
+def _did_answer(answer: str) -> bool:
+    normalized = normalize_text(answer)
+    return len(normalized) >= 8 and not _matches_refusal_template(answer)
+
+
+def _answerability_bucket(should_answer: Any, did_answer: bool) -> str:
+    if should_answer is None:
+        return "n/a"
+    if bool(should_answer) and did_answer:
+        return "true_answer"
+    if bool(should_answer) and not did_answer:
+        return "false_refusal"
+    if not bool(should_answer) and did_answer:
+        return "false_answer"
+    return "true_refusal"
+
+
+def _ratio_cell(matched: int, total: int, enabled: bool = True) -> str:
+    if not enabled or total <= 0:
+        return "n/a"
+    return f"{matched}/{total}"
+
+
+def _delta_cell(after: int, before: int, enabled: bool = True) -> str:
+    if not enabled:
+        return "n/a"
+    return f"{after - before:+d}"
+
+
+def _evidence_scored(score_mode: str, total: int) -> bool:
+    return score_mode != "manual" and total > 0
+
+
+def _point_id(point: dict[str, Any], index: int) -> str:
+    return str(point.get("id") or f"point_{index}")
+
+
+def _point_weight(point: dict[str, Any]) -> float:
+    value = point.get("weight", 1)
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 1.0
+
+
+def _is_required(point: dict[str, Any]) -> bool:
+    return bool(point.get("required", True))
+
+
+def _weighted_score_cell(matched: float, total: float) -> str:
+    if total <= 0:
+        return "n/a"
+    if matched.is_integer() and total.is_integer():
+        return f"{int(matched)}/{int(total)}"
+    return f"{matched:.2f}/{total:.2f}"
+
+
+def _weighted_ratio(matched: float, total: float) -> float | None:
+    if total <= 0:
+        return None
+    return matched / total
+
+
+def _match_any(text: str, tokens: list[Any]) -> bool:
+    normalized = normalize_match_text(text)
+    return any(normalize_match_text(token) and normalize_match_text(token) in normalized for token in tokens)
+
+
+def _regex_any(text: str, patterns: list[Any]) -> bool:
+    for pattern in patterns:
+        try:
+            if re.search(str(pattern), text, flags=re.IGNORECASE | re.MULTILINE):
+                return True
+        except re.error:
+            continue
+    return False
+
+
+def _value_alias_distance(alias_span: tuple[int, int], value_span: tuple[int, int]) -> int:
+    alias_start, alias_end = alias_span
+    value_start, value_end = value_span
+    if alias_start <= value_end and value_start <= alias_end:
+        return 0
+    if alias_end <= value_start:
+        return value_start - alias_end
+    return alias_start - value_end
+
+
+def _segments_for_numeric_alias(answer: str) -> list[str]:
+    normalized = normalize_match_text(answer)
+    list_items = [item.strip() for item in re.split(r"(?:^|\n)\s*(?:[-*]|\d+[.)、])\s+", normalized) if item.strip()]
+    if len(list_items) > 1:
+        return list_items
+    sentence_items = [item.strip() for item in re.split(r"[。；;\n]+", normalized) if item.strip()]
+    return sentence_items or [normalized]
+
+
+def _numeric_alias_match(answer: str, aliases: list[Any], values: list[Any]) -> bool:
+    normalized_aliases = [normalize_match_text(alias) for alias in aliases if normalize_match_text(alias)]
+    normalized_values = [normalize_match_text(value) for value in values if normalize_match_text(value)]
+    for segment in _segments_for_numeric_alias(answer):
+        for alias in normalized_aliases:
+            for alias_match in re.finditer(re.escape(alias), segment):
+                alias_span = alias_match.span()
+                for value in normalized_values:
+                    for value_match in re.finditer(re.escape(value), segment):
+                        if _value_alias_distance(alias_span, value_match.span()) <= 80:
+                            return True
+    return False
+
+
+def _ordered_steps_match(answer: str, steps: list[Any]) -> bool:
+    normalized_answer = normalize_match_text(answer)
+    positions: list[int] = []
+    for step in steps:
+        aliases: list[Any]
+        if isinstance(step, dict):
+            if step.get("required", True) is False:
+                continue
+            aliases = list(step.get("aliases") or step.get("answer_match") or step.get("values") or [])
+            if step.get("text"):
+                aliases.append(step.get("text"))
+        else:
+            aliases = [step]
+        step_positions = [
+            normalized_answer.find(normalize_match_text(alias))
+            for alias in aliases
+            if normalize_match_text(alias)
+        ]
+        step_positions = [pos for pos in step_positions if pos >= 0]
+        if not step_positions:
+            return False
+        positions.append(min(step_positions))
+    return all(left < right for left, right in zip(positions, positions[1:]))
+
+
+def _refusal_match(answer: str, point: dict[str, Any]) -> bool:
+    positive = point.get("answer_match") or point.get("aliases") or REFUSAL_TEMPLATES
+    if not (_matches_refusal_template(answer) or _match_any(answer, list(positive))):
+        return False
+    unsupported = point.get("unsupported_specific_answers") or []
+    return not _match_any(answer, list(unsupported))
+
+
+def _answer_point_matches(answer: str, point: dict[str, Any]) -> bool:
+    point_type = str(point.get("type") or "exact")
+    if point_type == "exact":
+        return _match_any(answer, list(point.get("answer_match") or point.get("values") or []))
+    if point_type == "alias":
+        return _match_any(answer, list(point.get("aliases") or point.get("answer_match") or []))
+    if point_type == "regex":
+        return _regex_any(answer, list(point.get("regex") or point.get("patterns") or []))
+    if point_type == "numeric_alias":
+        return _numeric_alias_match(answer, list(point.get("aliases") or []), list(point.get("values") or []))
+    if point_type == "ordered_steps":
+        return _ordered_steps_match(answer, list(point.get("steps") or []))
+    if point_type == "refusal":
+        return _refusal_match(answer, point)
+    return False
+
+
+def _document_matches_evidence(document: dict[str, Any], evidence: dict[str, Any]) -> bool:
+    anchor = str(evidence.get("anchor_text") or "")
+    if not anchor:
+        return False
+    source_file = str(evidence.get("source_file") or "")
+    if source_file and not _source_file_matches(document, source_file):
+        return False
+    return normalize_match_text(anchor) in normalize_match_text(_doc_search_text(document))
+
+
+def _point_evidence_hit(point: dict[str, Any], documents: list[dict[str, Any]]) -> bool:
+    evidence_items = point.get("evidence") or []
+    if not isinstance(evidence_items, list) or not evidence_items:
+        fallbacks = point.get("context_match") or point.get("answer_match") or point.get("aliases") or []
+        return any(_match_any(_doc_text(document), list(fallbacks)) for document in documents if isinstance(document, dict))
+    for evidence in evidence_items:
+        if not isinstance(evidence, dict):
+            continue
+        for document in documents:
+            if isinstance(document, dict) and _document_matches_evidence(document, evidence):
+                return True
+    return False
+
+
+def evaluate_expected_points_v2(case: dict[str, Any],
+                                answer: str,
+                                pre_documents: list[dict[str, Any]],
+                                final_documents: list[dict[str, Any]]) -> dict[str, Any]:
+    points = case.get("expected_points_v2")
+    if not isinstance(points, list) or not points:
+        return {
+            "enabled": False,
+            "candidate_matched_weight": 0.0,
+            "final_matched_weight": 0.0,
+            "answer_matched_weight": 0.0,
+            "answer_required_matched_weight": 0.0,
+            "total_weight": 0.0,
+            "required_weight": 0.0,
+            "semantic_hits": [],
+            "semantic_misses": [],
+            "evidence_source_unverified": False,
+        }
+
+    total_weight = 0.0
+    required_weight = 0.0
+    candidate_weight = 0.0
+    final_weight = 0.0
+    answer_weight = 0.0
+    required_answer_weight = 0.0
+    hits: list[str] = []
+    misses: list[str] = []
+    evidence_source_unverified = False
+
+    for index, raw_point in enumerate(points, start=1):
+        if not isinstance(raw_point, dict):
+            continue
+        point = raw_point
+        point_id = _point_id(point, index)
+        weight = _point_weight(point)
+        required = _is_required(point)
+        total_weight += weight
+        if required:
+            required_weight += weight
+        if any(not (item.get("source_file") if isinstance(item, dict) else None) for item in point.get("evidence") or []):
+            evidence_source_unverified = True
+        if _point_evidence_hit(point, pre_documents):
+            candidate_weight += weight
+        if _point_evidence_hit(point, final_documents):
+            final_weight += weight
+        if _answer_point_matches(answer, point):
+            answer_weight += weight
+            if required:
+                required_answer_weight += weight
+            hits.append(point_id)
+        else:
+            misses.append(point_id)
+
+    return {
+        "enabled": True,
+        "candidate_matched_weight": candidate_weight,
+        "final_matched_weight": final_weight,
+        "answer_matched_weight": answer_weight,
+        "answer_required_matched_weight": required_answer_weight,
+        "total_weight": total_weight,
+        "required_weight": required_weight,
+        "semantic_hits": hits,
+        "semantic_misses": misses,
+        "evidence_source_unverified": evidence_source_unverified,
+    }
+
+
+def _failure_layer(result_valid_for_scoring: bool,
+                   answerability: str,
+                   score_mode: str,
+                   coverage: dict[str, Any],
+                   answer_matched_count: int,
+                   semantic: dict[str, Any] | None = None) -> str:
+    if not result_valid_for_scoring:
+        return "runtime_failure"
+    if answerability == "false_answer":
+        return "false_answer"
+    if answerability == "false_refusal":
+        return "false_refusal"
+
+    coverage_layer = str(coverage.get("coverage_layer") or "")
+    if coverage_layer == "no_retrieval_metadata":
+        return "manual_review_needed"
+
+    if semantic and semantic.get("enabled"):
+        total = float(semantic.get("total_weight") or 0)
+        required_total = float(semantic.get("required_weight") or 0)
+        pre_count = float(semantic.get("candidate_matched_weight") or 0)
+        final_count = float(semantic.get("final_matched_weight") or 0)
+        answer_count = float(semantic.get("answer_matched_weight") or 0)
+        required_answer_count = float(semantic.get("answer_required_matched_weight") or 0)
+        if pre_count < total:
+            return "retrieval_miss"
+        if final_count < pre_count or final_count < total:
+            return "rerank_or_context_loss"
+        if required_answer_count < required_total:
+            return "answer_semantic_miss"
+        literal_total = int(coverage.get("expected_points_total") or 0)
+        if _evidence_scored(score_mode, literal_total) and answer_matched_count < literal_total:
+            return "literal_only_mismatch"
+        return "none"
+
+    total = int(coverage.get("expected_points_total") or 0)
+    pre_count = int(coverage.get("expected_points_in_pre_rerank") or 0)
+    final_count = int(coverage.get("expected_points_in_final_context") or 0)
+    evidence_scored = _evidence_scored(score_mode, total)
+
+    if not evidence_scored:
+        return "none" if answerability == "true_refusal" else "manual_review_needed"
+    if pre_count < total:
+        return "retrieval_miss"
+    if final_count < pre_count or final_count < total:
+        return "rerank_or_context_loss"
+    if coverage_layer == "answer_generation_or_literal_mismatch" or answer_matched_count < total:
+        return "literal_only_mismatch"
+    return "none"
+
+
+def _verdict_for_failure_layer(failure_layer: str) -> str:
+    if failure_layer == "runtime_failure":
+        return "run_fail"
+    if failure_layer in {"false_answer", "false_refusal"}:
+        return "refusal_fail"
+    if failure_layer in {"none", "literal_only_mismatch"}:
+        return "pass"
+    if failure_layer == "manual_review_needed":
+        return "manual_review_needed"
+    return "fail"
+
+
+def _health_for_failure_layer(failure_layer: str) -> str:
+    if failure_layer == "runtime_failure":
+        return "run_fail"
+    if failure_layer in {"false_answer", "false_refusal"}:
+        return "refusal_issue"
+    if failure_layer == "groundedness_risk":
+        return "ungrounded"
+    if failure_layer == "manual_review_needed":
+        return "review"
+    if failure_layer in {"none", "literal_only_mismatch"}:
+        return "ok"
+    return "fail"
+
+
+def build_eval_v2(case: dict[str, Any],
+                  completed: bool,
+                  error: str | None,
+                  answer: str,
+                  score_mode: str,
+                  answer_matched_count: int,
+                  coverage: dict[str, Any],
+                  semantic: dict[str, Any] | None = None) -> dict[str, Any]:
+    total = int(coverage.get("expected_points_total") or 0)
+    pre_count = int(coverage.get("expected_points_in_pre_rerank") or 0)
+    final_count = int(coverage.get("expected_points_in_final_context") or 0)
+    evidence_scored = _evidence_scored(score_mode, total)
+    semantic = semantic or {"enabled": False}
+    if semantic.get("enabled"):
+        semantic_total = float(semantic.get("total_weight") or 0)
+        semantic_required_total = float(semantic.get("required_weight") or 0)
+        semantic_candidate = float(semantic.get("candidate_matched_weight") or 0)
+        semantic_final = float(semantic.get("final_matched_weight") or 0)
+        semantic_answer = float(semantic.get("answer_matched_weight") or 0)
+        semantic_required_answer = float(semantic.get("answer_required_matched_weight") or 0)
+        candidate_recall = _weighted_score_cell(semantic_candidate, semantic_total)
+        final_context_recall = _weighted_score_cell(semantic_final, semantic_total)
+        candidate_to_final_delta = _delta_cell(int(semantic_final), int(semantic_candidate), True)
+        final_to_answer_delta = _delta_cell(int(semantic_answer), int(semantic_final), True)
+        semantic_score = _weighted_score_cell(semantic_answer, semantic_total)
+        semantic_ratio = _weighted_ratio(semantic_answer, semantic_total)
+        answer_completeness = _weighted_score_cell(semantic_required_answer, semantic_required_total)
+        answer_completeness_ratio = _weighted_ratio(semantic_required_answer, semantic_required_total)
+    else:
+        candidate_recall = _ratio_cell(pre_count, total, evidence_scored)
+        final_context_recall = _ratio_cell(final_count, total, evidence_scored)
+        candidate_to_final_delta = _delta_cell(final_count, pre_count, evidence_scored)
+        final_to_answer_delta = _delta_cell(answer_matched_count, final_count, evidence_scored)
+        semantic_score = "n/a"
+        semantic_ratio = None
+        answer_completeness = "n/a"
+        answer_completeness_ratio = None
+    did_answer = _did_answer(answer)
+    answerability = _answerability_bucket(case.get("should_answer"), did_answer)
+    result_valid_for_scoring = bool(completed) and not error
+    failure_layer = _failure_layer(
+        result_valid_for_scoring,
+        answerability,
+        score_mode,
+        coverage,
+        answer_matched_count,
+        semantic,
+    )
+    return {
+        "eval_schema_version": EVAL_SCHEMA_VERSION,
+        "case_schema_version": _case_schema_version(case),
+        "result_valid_for_scoring": result_valid_for_scoring,
+        "verdict": _verdict_for_failure_layer(failure_layer),
+        "health": _health_for_failure_layer(failure_layer),
+        "failure_layer": failure_layer,
+        "candidate_recall": candidate_recall,
+        "final_context_recall": final_context_recall,
+        "candidate_to_final_delta": candidate_to_final_delta,
+        "final_to_answer_delta": final_to_answer_delta,
+        "literal_smoke": _ratio_cell(answer_matched_count, total, evidence_scored),
+        "semantic_score": semantic_score,
+        "semantic_ratio": semantic_ratio,
+        "answer_completeness": answer_completeness,
+        "answer_completeness_ratio": answer_completeness_ratio,
+        "semantic_hits": list(semantic.get("semantic_hits") or []),
+        "semantic_misses": list(semantic.get("semantic_misses") or []),
+        "evidence_source_unverified": bool(semantic.get("evidence_source_unverified")),
+        "did_answer": did_answer,
+        "answerability": answerability,
+    }
+
+
 def _doc_metadata(document: dict[str, Any]) -> dict[str, Any]:
     metadata = document.get("metadata") or {}
     return metadata if isinstance(metadata, dict) else {}
@@ -180,6 +626,20 @@ def _doc_metadata(document: dict[str, Any]) -> dict[str, Any]:
 
 def _doc_text(document: dict[str, Any]) -> str:
     return str(document.get("text") or document.get("content") or document.get("preview") or "")
+
+
+def _doc_search_text(document: dict[str, Any]) -> str:
+    metadata = _doc_metadata(document)
+    haystacks = [
+        _doc_text(document),
+        metadata.get("headingPath"),
+        metadata.get("parentSection"),
+        metadata.get("section"),
+        metadata.get("sourcePath"),
+        metadata.get("source"),
+        metadata.get("ragName"),
+    ]
+    return "\n".join(str(item) for item in haystacks if item)
 
 
 def _doc_source_candidates(document: dict[str, Any]) -> list[str]:
@@ -192,6 +652,19 @@ def _doc_source_candidates(document: dict[str, Any]) -> list[str]:
         metadata.get("ragName"),
     ]
     return [str(item) for item in candidates if item]
+
+
+def _documents_from_retrievals(retrievals: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    first_retrieval = retrievals[0].get("data") if retrievals else {}
+    if not isinstance(first_retrieval, dict):
+        first_retrieval = {}
+    pre_documents = first_retrieval.get(QA_PRE_RERANK_DOCUMENTS) or []
+    final_documents = first_retrieval.get(QA_RETRIEVED_DOCUMENTS) or []
+    if not isinstance(pre_documents, list):
+        pre_documents = []
+    if not isinstance(final_documents, list):
+        final_documents = []
+    return pre_documents, final_documents
 
 
 def _source_file_matches(document: dict[str, Any], expected_source_file: str) -> bool:
@@ -255,15 +728,7 @@ def build_coverage(case: dict[str, Any],
                    answer_matched_count: int) -> dict[str, Any]:
     expected_source_file = str(case.get("source_file") or "")
     expected_section = str(case.get("expected_source_section") or "")
-    first_retrieval = retrievals[0].get("data") if retrievals else {}
-    if not isinstance(first_retrieval, dict):
-        first_retrieval = {}
-    pre_documents = first_retrieval.get(QA_PRE_RERANK_DOCUMENTS) or []
-    final_documents = first_retrieval.get(QA_RETRIEVED_DOCUMENTS) or []
-    if not isinstance(pre_documents, list):
-        pre_documents = []
-    if not isinstance(final_documents, list):
-        final_documents = []
+    pre_documents, final_documents = _documents_from_retrievals(retrievals)
 
     source_file_pre = any(isinstance(doc, dict) and _source_file_matches(doc, expected_source_file) for doc in pre_documents)
     source_file_final = any(isinstance(doc, dict) and _source_file_matches(doc, expected_source_file) for doc in final_documents)
@@ -324,6 +789,9 @@ def run_case(api_url: str, agent_id: str, session_prefix: str, max_step: int, ti
     matched_count, missed_points = keyword_check(answer, expected_points)
     score_mode = case.get("score_mode", "literal")
     coverage = build_coverage(case, retrievals, expected_points, score_mode, matched_count)
+    pre_documents, final_documents = _documents_from_retrievals(retrievals)
+    semantic = evaluate_expected_points_v2(case, answer, pre_documents, final_documents)
+    eval_v2 = build_eval_v2(case, completed, error, answer, score_mode, matched_count, coverage, semantic)
 
     return {
         "id": case_id,
@@ -334,6 +802,7 @@ def run_case(api_url: str, agent_id: str, session_prefix: str, max_step: int, ti
         "expected_source_section": case.get("expected_source_section", ""),
         "expected_source_file": case.get("source_file", ""),
         "expected_points": expected_points,
+        "expected_points_v2": case.get("expected_points_v2") or [],
         "status": status,
         "completed": completed,
         "duration_ms": duration_ms,
@@ -343,6 +812,7 @@ def run_case(api_url: str, agent_id: str, session_prefix: str, max_step: int, ti
         "error": error,
         "retrievals": retrievals,
         "coverage": coverage,
+        "eval_v2": eval_v2,
         "raw_events": events,
     }
 
@@ -452,6 +922,7 @@ def _append_document_list(lines: list[str], data: dict[str, Any], documents_key:
                 "fusionAwareScore=`{fusion_aware_score}`, fusionAwareWeight=`{fusion_aware_weight}`, "
                 "rerankApplied=`{rerank_applied}`, "
                 "rerankMode=`{rerank_mode}`, coverageGuardAdded=`{coverage_guard_added}`, "
+                "coverageGuardReason=`{coverage_guard_reason}`, coverageGuardCues=`{coverage_guard_cues}`, "
                 "rerankVariantHitCount=`{rerank_variant_hit_count}`, "
                 "bestRerankVariantRank=`{best_rerank_variant_rank}`, "
                 "rerankVariantIndexes=`{rerank_variant_indexes}`, "
@@ -485,6 +956,8 @@ def _append_document_list(lines: list[str], data: dict[str, Any], documents_key:
                 rerank_applied=md_escape(_metadata_value(metadata, DOC_RERANK_APPLIED)),
                 rerank_mode=md_escape(_metadata_value(metadata, DOC_RERANK_MODE)),
                 coverage_guard_added=md_escape(_metadata_value(metadata, DOC_COVERAGE_GUARD_ADDED)),
+                coverage_guard_reason=md_escape(_metadata_value(metadata, DOC_COVERAGE_GUARD_REASON)),
+                coverage_guard_cues=md_escape(_metadata_value(metadata, DOC_COVERAGE_GUARD_CUES)),
                 rerank_variant_hit_count=md_escape(_metadata_value(metadata, DOC_RERANK_VARIANT_HIT_COUNT)),
                 best_rerank_variant_rank=md_escape(_metadata_value(metadata, DOC_BEST_RERANK_VARIANT_RANK)),
                 rerank_variant_indexes=md_escape(_metadata_value(metadata, DOC_RERANK_VARIANT_INDEXES)),
@@ -513,6 +986,103 @@ def _append_retrieved_documents(lines: list[str], data: dict[str, Any]) -> None:
     _append_document_list(lines, data, QA_RETRIEVED_DOCUMENTS, "documents")
 
 
+def _rubric_coverage_cell(results: list[dict[str, Any]]) -> str:
+    covered = sum(1 for result in results if (result.get("eval_v2") or {}).get("case_schema_version") == CASE_SCHEMA_VERSION_V2_COMPATIBLE)
+    return f"{covered}/{len(results)}"
+
+
+def _report_case_schema_version(results: list[dict[str, Any]]) -> str:
+    if any((result.get("eval_v2") or {}).get("case_schema_version") == CASE_SCHEMA_VERSION_V2_COMPATIBLE for result in results):
+        return CASE_SCHEMA_VERSION_V2_COMPATIBLE
+    return CASE_SCHEMA_VERSION_V1_COMPATIBLE
+
+
+def _aggregate_recall(results: list[dict[str, Any]], key: str) -> str:
+    matched = 0
+    total = 0
+    coverage_key = "expected_points_in_pre_rerank" if key == "candidate" else "expected_points_in_final_context"
+    for result in results:
+        coverage = result.get("coverage") or {}
+        point_total = int(coverage.get("expected_points_total") or 0)
+        if not _evidence_scored(result.get("score_mode") or "literal", point_total):
+            continue
+        matched += int(coverage.get(coverage_key) or 0)
+        total += point_total
+    return _ratio_cell(matched, total, total > 0)
+
+
+def _aggregate_literal_smoke(results: list[dict[str, Any]]) -> str:
+    matched = 0
+    total = 0
+    for result in results:
+        coverage = result.get("coverage") or {}
+        point_total = int(coverage.get("expected_points_total") or 0)
+        if not _evidence_scored(result.get("score_mode") or "literal", point_total):
+            continue
+        matched += int(result.get("matched_expected_points") or 0)
+        total += point_total
+    return _ratio_cell(matched, total, total > 0)
+
+
+def _aggregate_eval_v2_ratio(results: list[dict[str, Any]], ratio_key: str) -> str:
+    values = [
+        float((result.get("eval_v2") or {}).get(ratio_key))
+        for result in results
+        if (result.get("eval_v2") or {}).get(ratio_key) is not None
+    ]
+    if not values:
+        return "n/a"
+    return f"{sum(values) / len(values):.1%}"
+
+
+def _append_case_type_summary(lines: list[str], results: list[dict[str, Any]]) -> None:
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for result in results:
+        grouped.setdefault(str(result.get("case_type") or "unknown"), []).append(result)
+
+    lines.append("")
+    lines.append("## Eval v2 By Case Type")
+    lines.append("")
+    lines.append("| case_type | cases | runtime_ok | candidate_recall | final_context_recall | semantic_avg | answer_completeness_avg | literal_smoke | failure_layers |")
+    lines.append("|---|---:|---:|---|---|---:|---:|---|---|")
+    for case_type in sorted(grouped):
+        group = grouped[case_type]
+        runtime_ok = sum(1 for item in group if (item.get("eval_v2") or {}).get("result_valid_for_scoring"))
+        failure_counts: dict[str, int] = {}
+        for item in group:
+            layer = str((item.get("eval_v2") or {}).get("failure_layer") or "unknown")
+            failure_counts[layer] = failure_counts.get(layer, 0) + 1
+        failure_cell = ", ".join(f"{name}:{count}" for name, count in sorted(failure_counts.items()))
+        lines.append(
+            "| {case_type} | {cases} | {runtime_ok}/{cases} | {candidate} | {final} | {semantic} | {answer_completeness} | {literal} | {failures} |".format(
+                case_type=md_escape(case_type),
+                cases=len(group),
+                runtime_ok=runtime_ok,
+                candidate=_aggregate_recall(group, "candidate"),
+                final=_aggregate_recall(group, "final"),
+                semantic=_aggregate_eval_v2_ratio(group, "semantic_ratio"),
+                answer_completeness=_aggregate_eval_v2_ratio(group, "answer_completeness_ratio"),
+                literal=_aggregate_literal_smoke(group),
+                failures=md_escape(failure_cell),
+            )
+        )
+
+
+def _append_answerability_matrix(lines: list[str], results: list[dict[str, Any]]) -> None:
+    counts: dict[str, int] = {}
+    for result in results:
+        bucket = str((result.get("eval_v2") or {}).get("answerability") or "n/a")
+        counts[bucket] = counts.get(bucket, 0) + 1
+
+    lines.append("")
+    lines.append("## Answerability Matrix")
+    lines.append("")
+    lines.append("| bucket | count |")
+    lines.append("|---|---:|")
+    for bucket in ["true_answer", "true_refusal", "false_refusal", "false_answer", "n/a"]:
+        lines.append(f"| {bucket} | {counts.get(bucket, 0)} |")
+
+
 def write_markdown(path: Path, results: list[dict[str, Any]], api_url: str, agent_id: str) -> None:
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     lines: list[str] = []
@@ -521,42 +1091,45 @@ def write_markdown(path: Path, results: list[dict[str, Any]], api_url: str, agen
     lines.append(f"- generated_at: `{now}`")
     lines.append(f"- api_url: `{api_url}`")
     lines.append(f"- agent_id: `{agent_id}`")
+    lines.append(f"- eval_schema_version: `{EVAL_SCHEMA_VERSION}`")
+    lines.append(f"- case_schema_version: `{_report_case_schema_version(results)}`")
+    lines.append(f"- rubric_coverage: `{_rubric_coverage_cell(results)}`")
     lines.append("")
     lines.append("## Summary")
     lines.append("")
-    lines.append("> `literal_hit` 仅做字面子串匹配，是 smoke signal。`score_mode=manual` 的 case（拒答 / 改写 / 概念题）不做字面匹配，统一看 `manual_pass`；`score_mode=literal` 的 case（参数 / 公式 / 清单）才参考 `literal_hit`。")
+    lines.append("> Eval v2 把旧 `literal_hit` 降级为 `literal_smoke`，并把一次 RAG 结果拆成 candidate -> final context -> answer 三层漏斗。Step 8.1 仍复用旧 `expected_points` 子串口径计算 candidate/final recall；真正的语义 rubric 从 Step 8.2 开始。")
     lines.append(">")
     lines.append("> `retrieved` / `score` / `empty` 三列的 `—` 表示**没拿到成功的 ChatResponse metadata**，不等价于\"无检索\"。当前实现把 retrieval SSE 帧放在 `.call().chatResponse()` 返回之后才发，所以 LLM 调用失败时（即使 RAG 检索本身成功）三列都会是 `—`。要区分\"检索失败\"和\"生成失败\"，对照 `error` 列 / details 区 / backend log。")
     lines.append(">")
     lines.append("> Details 区的 `pre_rerank_documents` 展开 rerank 前候选池，`documents` 展开最终 top-K chunk attribution；document 行的 `score` 是当前阶段写回的候选分，可能来自 HYBRID RRF、query-variant fusion、per-variant rerank RRF 或 fusion-aware rerank；原始向量分与关键词分分别看 `vectorScore` / `keywordScore`，多 query 召回融合看 `queryFusionScore/queryFusionRank/queryVariantHitCount`；最终 rerank 写回分看 `rerankScore`，多路 rerank 融合分看 `rerankFusionScore/rerankVariantHitCount`，fusion-aware 弱加成看 `queryFusionBoostScore/fusionAwareScore`；rerank 服务状态看 `rerank_runtime` 的 model / endpoint / failure_reason；keyword 分支未参与时看 `keywordSkippedReason`。")
     lines.append("")
-    lines.append("| id | type | completed | duration_ms | should_answer | retrieved | score | empty | literal_hit | source_coverage | missed_points | answer_preview | manual_pass |")
-    lines.append("|---|---|---:|---:|---:|---:|---|---:|---:|---|---|---|---|")
+    lines.append("| id | type | completed | duration_ms | health | failure_layer | candidate_recall | final_context_recall | c2f_delta | f2a_delta | semantic_score | answer_completeness | literal_smoke | answerability | source_coverage | answer_preview |")
+    lines.append("|---|---|---:|---:|---|---|---|---|---:|---:|---|---|---|---|---|---|")
     for r in results:
-        score_mode = r.get("score_mode") or "literal"
-        if score_mode == "manual":
-            literal_cell = "manual"
-            missed_cell = "—"
-        else:
-            literal_cell = f"{r['matched_expected_points']}/{len(r['expected_points'])}"
-            missed_cell = md_escape(", ".join(r["missed_expected_points"]))
-        retrieved_cell, score_cell, empty_cell = _retrieval_summary_cells(r.get("retrievals") or [])
+        eval_v2 = r.get("eval_v2") or {}
         lines.append(
-            "| {id} | {case_type} | {completed} | {duration_ms} | {should_answer} | {retrieved} | {score} | {empty} | {literal} | {coverage} | {missed} | {preview} |  |".format(
+            "| {id} | {case_type} | {completed} | {duration_ms} | {health} | {failure_layer} | {candidate} | {final} | {c2f} | {f2a} | {semantic} | {answer_completeness} | {literal} | {answerability} | {coverage} | {preview} |".format(
                 id=md_escape(r["id"]),
                 case_type=md_escape(r["case_type"]),
                 completed=str(r["completed"]).lower(),
                 duration_ms=r["duration_ms"],
-                should_answer=str(r["should_answer"]).lower(),
-                retrieved=retrieved_cell,
-                score=score_cell,
-                empty=empty_cell,
-                literal=literal_cell,
+                health=md_escape(eval_v2.get("health") or "—"),
+                failure_layer=md_escape(eval_v2.get("failure_layer") or "—"),
+                candidate=eval_v2.get("candidate_recall") or "n/a",
+                final=eval_v2.get("final_context_recall") or "n/a",
+                c2f=eval_v2.get("candidate_to_final_delta") or "n/a",
+                f2a=eval_v2.get("final_to_answer_delta") or "n/a",
+                semantic=eval_v2.get("semantic_score") or "n/a",
+                answer_completeness=eval_v2.get("answer_completeness") or "n/a",
+                literal=eval_v2.get("literal_smoke") or "n/a",
+                answerability=eval_v2.get("answerability") or "n/a",
                 coverage=md_escape(_coverage_summary_cell(r)),
-                missed=missed_cell,
                 preview=md_escape(answer_preview(r["answer"])),
             )
         )
+    lines.append("")
+    _append_case_type_summary(lines, results)
+    _append_answerability_matrix(lines, results)
     lines.append("")
     lines.append("## Details")
     for r in results:
@@ -570,6 +1143,54 @@ def write_markdown(path: Path, results: list[dict[str, Any]], api_url: str, agen
         lines.append(f"- duration_ms: `{r['duration_ms']}`")
         score_mode = r.get("score_mode") or "literal"
         lines.append(f"- score_mode: `{score_mode}`")
+        eval_v2 = r.get("eval_v2") or {}
+        if eval_v2:
+            lines.append(
+                "- eval_v2: verdict `{verdict}` / failure_layer `{failure}` / health `{health}` / valid_for_scoring `{valid}`".format(
+                    verdict=eval_v2.get("verdict"),
+                    failure=eval_v2.get("failure_layer"),
+                    health=eval_v2.get("health"),
+                    valid=str(eval_v2.get("result_valid_for_scoring")).lower(),
+                )
+            )
+            lines.append(
+                "  - case_schema_version `{case_schema}` / semantic_score `{semantic}` / literal_smoke `{literal}`".format(
+                    case_schema=eval_v2.get("case_schema_version"),
+                    semantic=eval_v2.get("semantic_score"),
+                    literal=eval_v2.get("literal_smoke"),
+                )
+            )
+            lines.append(
+                "  - answer_completeness `{answer_completeness}` / evidence_source_unverified `{unverified}`".format(
+                    answer_completeness=eval_v2.get("answer_completeness"),
+                    unverified=str(eval_v2.get("evidence_source_unverified")).lower(),
+                )
+            )
+            lines.append(
+                "  - semantic_hits `{hits}` / semantic_misses `{misses}`".format(
+                    hits=md_escape(" | ".join(str(item) for item in eval_v2.get("semantic_hits") or []) or "—"),
+                    misses=md_escape(" | ".join(str(item) for item in eval_v2.get("semantic_misses") or []) or "—"),
+                )
+            )
+            lines.append(
+                "  - evidence_funnel: candidate `{candidate}` -> final_context `{final}` -> answer `{literal}`".format(
+                    candidate=eval_v2.get("candidate_recall"),
+                    final=eval_v2.get("final_context_recall"),
+                    literal=eval_v2.get("literal_smoke"),
+                )
+            )
+            lines.append(
+                "  - deltas: candidate_to_final `{c2f}` / final_to_answer `{f2a}`".format(
+                    c2f=eval_v2.get("candidate_to_final_delta"),
+                    f2a=eval_v2.get("final_to_answer_delta"),
+                )
+            )
+            lines.append(
+                "  - answerability: bucket `{bucket}` / did_answer `{did_answer}`".format(
+                    bucket=eval_v2.get("answerability"),
+                    did_answer=str(eval_v2.get("did_answer")).lower(),
+                )
+            )
         if r["error"]:
             lines.append(f"- error: `{r['error']}`")
         coverage = r.get("coverage") or {}

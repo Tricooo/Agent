@@ -13,6 +13,7 @@ from .paths import EXTERNAL_CASES_DIR, INTERNAL_CASES_PATH, RAG_EVAL_DIR, RESULT
 
 
 REPORT_PREFIXES = ("rag-eval-result", "rag-eval-retrievalContext", "probe-")
+EMPTY_JSON_ARRAY = "[]"
 
 
 def load_json_cases(path: Path) -> list[dict[str, Any]]:
@@ -53,10 +54,22 @@ def normalize_case(case: dict[str, Any], origin: str, source_case_file: Path) ->
         "source_file": source_file,
         "expected_source_section": case.get("expected_source_section"),
         "expected_points_json": db.to_json(case.get("expected_points") or []),
+        "expected_points_v2_json": db.to_json(case.get("expected_points_v2") or []),
         "origin": origin,
         "family": case.get("family") or case.get("corpus_group") or derive_family(origin, source_file, case_id),
         "source_case_file": str(source_case_file.relative_to(RAG_EVAL_DIR)),
     }
+
+
+def merge_case_record(existing: dict[str, Any] | None, incoming: dict[str, Any]) -> dict[str, Any]:
+    if existing is None:
+        return incoming
+    merged = dict(existing)
+    merged.update(incoming)
+    for key in ("expected_points_json", "expected_points_v2_json"):
+        if incoming.get(key) == EMPTY_JSON_ARRAY and existing.get(key) != EMPTY_JSON_ARRAY:
+            merged[key] = existing[key]
+    return merged
 
 
 def load_case_registry() -> list[dict[str, Any]]:
@@ -64,12 +77,12 @@ def load_case_registry() -> list[dict[str, Any]]:
     for case in load_json_cases(INTERNAL_CASES_PATH):
         normalized = normalize_case(case, "internal", INTERNAL_CASES_PATH)
         if normalized:
-            cases[normalized["case_id"]] = normalized
+            cases[normalized["case_id"]] = merge_case_record(cases.get(normalized["case_id"]), normalized)
     for path in sorted(EXTERNAL_CASES_DIR.glob("*.json")):
         for case in load_json_cases(path):
             normalized = normalize_case(case, "external", path)
             if normalized:
-                cases[normalized["case_id"]] = normalized
+                cases[normalized["case_id"]] = merge_case_record(cases.get(normalized["case_id"]), normalized)
     return sorted(cases.values(), key=lambda item: (item["origin"], item["family"] or "", item["case_id"]))
 
 
@@ -223,9 +236,9 @@ def reindex(conn: sqlite3.Connection) -> dict[str, Any]:
             """
             INSERT INTO cases
               (case_id, question, case_type, score_mode, source_file, expected_source_section,
-               expected_points_json, origin, family, source_case_file)
+               expected_points_json, expected_points_v2_json, origin, family, source_case_file)
             VALUES (:case_id, :question, :case_type, :score_mode, :source_file, :expected_source_section,
-                    :expected_points_json, :origin, :family, :source_case_file)
+                    :expected_points_json, :expected_points_v2_json, :origin, :family, :source_case_file)
             ON CONFLICT(case_id) DO UPDATE SET
               question=excluded.question,
               case_type=excluded.case_type,
@@ -233,6 +246,7 @@ def reindex(conn: sqlite3.Connection) -> dict[str, Any]:
               source_file=excluded.source_file,
               expected_source_section=excluded.expected_source_section,
               expected_points_json=excluded.expected_points_json,
+              expected_points_v2_json=excluded.expected_points_v2_json,
               origin=excluded.origin,
               family=excluded.family,
               source_case_file=excluded.source_case_file
@@ -254,8 +268,9 @@ def reindex(conn: sqlite3.Connection) -> dict[str, Any]:
             """
             INSERT INTO runs
               (run_id, group_name, file_path, generated_at, agent_id, api_url, config_hint,
-               schema_era, case_count, parse_warnings_json)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               schema_era, eval_schema_version, case_schema_version, rubric_coverage,
+               case_count, parse_warnings_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 run_id,
@@ -266,6 +281,9 @@ def reindex(conn: sqlite3.Connection) -> dict[str, Any]:
                 parsed.get("header", {}).get("api_url"),
                 derive_config_hint(run_id, group_name, parsed),
                 parsed.get("schema_era"),
+                parsed.get("header", {}).get("eval_schema_version"),
+                parsed.get("header", {}).get("case_schema_version"),
+                parsed.get("header", {}).get("rubric_coverage"),
                 len(case_results),
                 db.to_json(warnings),
             ),
@@ -276,6 +294,7 @@ def reindex(conn: sqlite3.Connection) -> dict[str, Any]:
             detail = (parsed.get("details") or {}).get(case_id, {})
             event = first_event(detail)
             coverage = detail.get("source_coverage") or {}
+            eval_v2 = detail.get("eval_v2") or {}
             final_hit_count, final_total = point_counts_from_coverage(coverage, "final_context")
             missing_points = missing_points_from_detail(detail, summary.get("missing_points_text"))
             source_file_final = (coverage.get("final_context") or {}).get("source_file")
@@ -283,7 +302,11 @@ def reindex(conn: sqlite3.Connection) -> dict[str, Any]:
             conn.execute(
                 """
                 INSERT INTO case_results
-                  (run_id, case_id, completed, literal_hit, literal_ratio, hit_count, expected_point_count,
+                  (run_id, case_id, completed, health, failure_layer, verdict, result_valid_for_scoring,
+                   literal_hit, literal_ratio, semantic_score, semantic_ratio, semantic_hit_count,
+                   semantic_total, answer_completeness, answer_completeness_ratio, answerability,
+                   did_answer, candidate_recall, final_context_recall, candidate_to_final_delta,
+                   final_to_answer_delta, hit_count, expected_point_count,
                    missing_points_json, answer, answer_preview, retrieved, score_min, score_max, empty,
                    duration_ms, rerank_applied, rerank_mode, rerank_runtime_model,
                    rerank_runtime_failure_reason, profile_version, profile_source,
@@ -291,15 +314,32 @@ def reindex(conn: sqlite3.Connection) -> dict[str, Any]:
                    rewrite_variants_json, source_coverage_label, source_file_in_final_context,
                    expected_section_in_final_context, expected_points_final_hit_count,
                    expected_points_final_total, context_salience_cues_json,
-                   context_salience_expansions, raw_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   context_salience_expansions, semantic_hits_json, semantic_misses_json,
+                   evidence_source_unverified, raw_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     run_id,
                     case_id,
                     bool_to_db(summary.get("completed", detail.get("completed"))),
+                    summary.get("health") or eval_v2.get("health"),
+                    summary.get("failure_layer") or eval_v2.get("failure_layer"),
+                    eval_v2.get("verdict"),
+                    bool_to_db(eval_v2.get("valid_for_scoring")),
                     summary.get("literal_hit"),
                     summary.get("literal_ratio"),
+                    summary.get("semantic_score") or eval_v2.get("semantic_score"),
+                    summary.get("semantic_ratio"),
+                    summary.get("semantic_hit_count"),
+                    summary.get("semantic_total"),
+                    summary.get("answer_completeness") or eval_v2.get("answer_completeness"),
+                    summary.get("answer_completeness_ratio"),
+                    summary.get("answerability") or eval_v2.get("bucket"),
+                    bool_to_db(eval_v2.get("did_answer")),
+                    summary.get("candidate_recall") or eval_v2.get("candidate"),
+                    summary.get("final_context_recall") or eval_v2.get("final_context"),
+                    summary.get("candidate_to_final_delta") or eval_v2.get("candidate_to_final"),
+                    summary.get("final_to_answer_delta") or eval_v2.get("final_to_answer"),
                     summary.get("hit_count"),
                     summary.get("expected_point_count") or len(detail.get("expected_points") or []) or None,
                     db.to_json(missing_points),
@@ -327,6 +367,9 @@ def reindex(conn: sqlite3.Connection) -> dict[str, Any]:
                     final_total,
                     db.to_json(event.get("context_salience_cues") or []),
                     event.get("context_salience_expansions"),
+                    db.to_json(eval_v2.get("semantic_hits") or []),
+                    db.to_json(eval_v2.get("semantic_misses") or []),
+                    bool_to_db(eval_v2.get("evidence_source_unverified")),
                     db.to_json({"summary": summary, "detail": detail, "event": event}),
                 ),
             )

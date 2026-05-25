@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS cases (
   source_file TEXT,
   expected_source_section TEXT,
   expected_points_json TEXT NOT NULL DEFAULT '[]',
+  expected_points_v2_json TEXT NOT NULL DEFAULT '[]',
   origin TEXT NOT NULL,
   family TEXT,
   source_case_file TEXT
@@ -31,6 +32,9 @@ CREATE TABLE IF NOT EXISTS runs (
   api_url TEXT,
   config_hint TEXT,
   schema_era TEXT,
+  eval_schema_version TEXT,
+  case_schema_version TEXT,
+  rubric_coverage TEXT,
   case_count INTEGER NOT NULL DEFAULT 0,
   parse_warnings_json TEXT NOT NULL DEFAULT '[]'
 );
@@ -39,8 +43,24 @@ CREATE TABLE IF NOT EXISTS case_results (
   run_id TEXT NOT NULL,
   case_id TEXT NOT NULL,
   completed INTEGER,
+  health TEXT,
+  failure_layer TEXT,
+  verdict TEXT,
+  result_valid_for_scoring INTEGER,
   literal_hit TEXT,
   literal_ratio REAL,
+  semantic_score TEXT,
+  semantic_ratio REAL,
+  semantic_hit_count INTEGER,
+  semantic_total INTEGER,
+  answer_completeness TEXT,
+  answer_completeness_ratio REAL,
+  answerability TEXT,
+  did_answer INTEGER,
+  candidate_recall TEXT,
+  final_context_recall TEXT,
+  candidate_to_final_delta TEXT,
+  final_to_answer_delta TEXT,
   hit_count INTEGER,
   expected_point_count INTEGER,
   missing_points_json TEXT NOT NULL DEFAULT '[]',
@@ -68,6 +88,9 @@ CREATE TABLE IF NOT EXISTS case_results (
   expected_points_final_total INTEGER,
   context_salience_cues_json TEXT NOT NULL DEFAULT '[]',
   context_salience_expansions INTEGER,
+  semantic_hits_json TEXT NOT NULL DEFAULT '[]',
+  semantic_misses_json TEXT NOT NULL DEFAULT '[]',
+  evidence_source_unverified INTEGER,
   raw_json TEXT NOT NULL DEFAULT '{}',
   PRIMARY KEY (run_id, case_id),
   FOREIGN KEY (run_id) REFERENCES runs(run_id) ON DELETE CASCADE,
@@ -97,15 +120,58 @@ CREATE INDEX IF NOT EXISTS idx_docs_result ON document_hits(run_id, case_id, sta
 
 JSON_FIELDS = {
     "expected_points_json",
+    "expected_points_v2_json",
     "parse_warnings_json",
     "missing_points_json",
     "selected_profile_hints_json",
     "rewrite_variants_json",
     "context_salience_cues_json",
+    "semantic_hits_json",
+    "semantic_misses_json",
     "raw_json",
     "scores_json",
     "metadata_json",
 }
+
+MIGRATION_COLUMNS = {
+    "cases": {
+        "expected_points_v2_json": "TEXT NOT NULL DEFAULT '[]'",
+    },
+    "runs": {
+        "eval_schema_version": "TEXT",
+        "case_schema_version": "TEXT",
+        "rubric_coverage": "TEXT",
+    },
+    "case_results": {
+        "health": "TEXT",
+        "failure_layer": "TEXT",
+        "verdict": "TEXT",
+        "result_valid_for_scoring": "INTEGER",
+        "semantic_score": "TEXT",
+        "semantic_ratio": "REAL",
+        "semantic_hit_count": "INTEGER",
+        "semantic_total": "INTEGER",
+        "answer_completeness": "TEXT",
+        "answer_completeness_ratio": "REAL",
+        "answerability": "TEXT",
+        "did_answer": "INTEGER",
+        "candidate_recall": "TEXT",
+        "final_context_recall": "TEXT",
+        "candidate_to_final_delta": "TEXT",
+        "final_to_answer_delta": "TEXT",
+        "semantic_hits_json": "TEXT NOT NULL DEFAULT '[]'",
+        "semantic_misses_json": "TEXT NOT NULL DEFAULT '[]'",
+        "evidence_source_unverified": "INTEGER",
+    },
+}
+
+
+def ensure_columns(conn: sqlite3.Connection) -> None:
+    for table, columns in MIGRATION_COLUMNS.items():
+        existing = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+        for name, definition in columns.items():
+            if name not in existing:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {definition}")
 
 
 def connect(db_path: Path) -> sqlite3.Connection:
@@ -118,6 +184,7 @@ def connect(db_path: Path) -> sqlite3.Connection:
 
 def init_db(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
+    ensure_columns(conn)
     conn.commit()
 
 
@@ -158,6 +225,9 @@ def decode_row(row: sqlite3.Row | None) -> dict[str, Any] | None:
             "rerank_applied",
             "source_file_in_final_context",
             "expected_section_in_final_context",
+            "result_valid_for_scoring",
+            "did_answer",
+            "evidence_source_unverified",
         } and value is not None:
             out[key] = bool(value)
     return out

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>RAG Eval Experiment Workbench</title>
   <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/styles.css?v=step8-v2-rubric-ui">
 </head>
 <body>
   <header class="topbar">
@@ -40,6 +40,14 @@
         </div>
       </div>
       <div class="metrics" id="dashboard-metrics"></div>
+
+      <div class="panel" style="margin-bottom:20px">
+        <div class="panel-head">
+          <h2>Eval v2 Rubric Cases</h2>
+          <span class="panel-meta" id="rubric-case-meta">rubric coverage</span>
+        </div>
+        <div class="panel-body" id="rubric-case-list"></div>
+      </div>
 
       <div class="panel" style="margin-bottom:20px">
         <div class="panel-head">
@@ -101,6 +109,11 @@
             <option value="literal">literal</option>
             <option value="manual">manual</option>
           </select>
+          <select id="case-rubric-filter" aria-label="filter by rubric">
+            <option value="">all rubrics</option>
+            <option value="v2">v2 rubric only</option>
+            <option value="none">no v2 rubric</option>
+          </select>
         </div>
       </div>
       <div class="table-wrap"><table id="cases-table"></table></div>
@@ -126,6 +139,11 @@
             <option value="manual">manual</option>
           </select>
           <select id="matrix-case-type-filter" aria-label="filter by case type"></select>
+          <select id="matrix-rubric-filter" aria-label="filter by rubric">
+            <option value="">all rubrics</option>
+            <option value="v2">v2 rubric only</option>
+            <option value="none">no v2 rubric</option>
+          </select>
           <select id="matrix-group-filter" aria-label="filter by group"></select>
           <select id="matrix-agent-filter" aria-label="filter by agent"></select>
           <label class="filter-toggle" title="drop rows/columns that have no recorded results">
@@ -215,6 +233,6 @@
     </section>
   </div>
 
-  <script src="/static/app.js"></script>
+  <script src="/static/app.js?v=step8-v2-rubric-ui"></script>
 </body>
 </html>

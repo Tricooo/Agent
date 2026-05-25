@@ -137,7 +137,20 @@ def parse_summary_table(lines: list[str], warnings: list[str]) -> tuple[list[str
 
 
 def parse_parts(body: str) -> dict[str, str]:
-    return {k: v for k, v in re.findall(r"(\w+)\s*`([^`]*)`", body)}
+    return {k: v for k, v in re.findall(r"(\w+)\s+`([^`]*)`", body)}
+
+
+def parse_labeled_parts(label: str, body: str) -> dict[str, str]:
+    values = parse_parts(body)
+    first_value = re.match(r"^\s*`([^`]*)`", body)
+    if first_value:
+        values[label] = first_value.group(1)
+    return values
+
+
+def parse_pipe_list(value: str) -> list[str]:
+    normalized = value.replace("\\|", "|").strip()
+    return [] if normalized in {"", "—"} else [item.strip() for item in normalized.split("|") if item.strip()]
 
 
 def parse_doc_inline_kv(line: str) -> dict[str, Any]:
@@ -256,6 +269,7 @@ def parse_details_section(lines: list[str], start_idx: int, warnings: list[str])
         "pre_rerank_documents": [],
         "documents": [],
         "source_coverage": {},
+        "eval_v2": {},
     }
     i = start_idx + 1
     while i < len(lines):
@@ -276,6 +290,50 @@ def parse_details_section(lines: list[str], start_idx: int, warnings: list[str])
                 detail[key] = parse_number(value)
             else:
                 detail[key] = value
+            i += 1
+            continue
+
+        eval_v2_line = re.match(r"^\s*-\s*(eval_v2|case_schema_version|answer_completeness|semantic_hits|evidence_funnel|deltas|answerability):\s*(.+)$", stripped)
+        if eval_v2_line:
+            label = eval_v2_line.group(1)
+            values = parse_labeled_parts(label, eval_v2_line.group(2))
+            if label == "eval_v2":
+                detail["eval_v2"].update(values)
+                if "valid_for_scoring" in detail["eval_v2"]:
+                    detail["eval_v2"]["valid_for_scoring"] = parse_bool(detail["eval_v2"]["valid_for_scoring"])
+            elif label == "case_schema_version":
+                detail["eval_v2"].update(values)
+            elif label == "answer_completeness":
+                detail["eval_v2"].update(values)
+                if "evidence_source_unverified" in detail["eval_v2"]:
+                    detail["eval_v2"]["evidence_source_unverified"] = parse_bool(detail["eval_v2"]["evidence_source_unverified"])
+            elif label == "semantic_hits":
+                detail["eval_v2"].update(values)
+                for key in ("semantic_hits", "semantic_misses"):
+                    if key in detail["eval_v2"]:
+                        detail["eval_v2"][key] = parse_pipe_list(detail["eval_v2"][key])
+            elif label in {"evidence_funnel", "deltas"}:
+                detail["eval_v2"].update(values)
+            elif label == "answerability":
+                detail["eval_v2"].update(values)
+                if "did_answer" in detail["eval_v2"]:
+                    detail["eval_v2"]["did_answer"] = parse_bool(detail["eval_v2"]["did_answer"])
+            i += 1
+            continue
+
+        eval_v2_extra = re.match(r"^\s*-\s*(case_schema_version|answer_completeness|semantic_hits|evidence_funnel|deltas|answerability)\s+(.+)$", stripped)
+        if eval_v2_extra:
+            label = eval_v2_extra.group(1)
+            values = parse_labeled_parts(label, eval_v2_extra.group(2))
+            detail["eval_v2"].update(values)
+            if label == "answer_completeness" and "evidence_source_unverified" in detail["eval_v2"]:
+                detail["eval_v2"]["evidence_source_unverified"] = parse_bool(detail["eval_v2"]["evidence_source_unverified"])
+            if label == "semantic_hits":
+                for key in ("semantic_hits", "semantic_misses"):
+                    if key in detail["eval_v2"]:
+                        detail["eval_v2"][key] = parse_pipe_list(detail["eval_v2"][key])
+            if label == "answerability" and "did_answer" in detail["eval_v2"]:
+                detail["eval_v2"]["did_answer"] = parse_bool(detail["eval_v2"]["did_answer"])
             i += 1
             continue
 
@@ -465,14 +523,29 @@ def parse_report(path: Path) -> dict[str, Any]:
             continue
         score_min, score_max = parse_score_range(row.get("score"))
         literal_raw, literal_ratio, hit_count, point_count = parse_literal_hit(
-            row.get("literal_hit") or row.get("matched_points")
+            row.get("literal_smoke") or row.get("literal_hit") or row.get("matched_points")
         )
+        semantic_raw, semantic_ratio, semantic_hit_count, semantic_total = parse_literal_hit(row.get("semantic_score"))
+        completeness_raw, completeness_ratio, _, _ = parse_literal_hit(row.get("answer_completeness"))
         results[case_id] = {
             "case_id": case_id,
             "case_type": strip_md_inline(row.get("type")),
             "completed": parse_bool(row.get("completed")),
             "duration_ms": parse_number(row.get("duration_ms")),
             "should_answer": parse_bool(row.get("should_answer")),
+            "health": strip_md_inline(row.get("health")),
+            "failure_layer": strip_md_inline(row.get("failure_layer")),
+            "candidate_recall": strip_md_inline(row.get("candidate_recall")),
+            "final_context_recall": strip_md_inline(row.get("final_context_recall")),
+            "candidate_to_final_delta": strip_md_inline(row.get("c2f_delta")),
+            "final_to_answer_delta": strip_md_inline(row.get("f2a_delta")),
+            "semantic_score": semantic_raw,
+            "semantic_ratio": semantic_ratio,
+            "semantic_hit_count": semantic_hit_count,
+            "semantic_total": semantic_total,
+            "answer_completeness": completeness_raw,
+            "answer_completeness_ratio": completeness_ratio,
+            "answerability": strip_md_inline(row.get("answerability")),
             "retrieved": parse_number(row.get("retrieved")),
             "score_range": strip_md_inline(row.get("score")),
             "score_min": score_min,
@@ -530,6 +603,8 @@ def parse_report(path: Path) -> dict[str, Any]:
 
 def detect_schema_era(headers: list[str]) -> str:
     header_set = set(headers)
+    if {"failure_layer", "candidate_recall", "final_context_recall"} <= header_set:
+        return "eval_v2"
     if {"retrieved", "score", "empty"} <= header_set:
         return "new"
     if "literal_hit" in header_set:

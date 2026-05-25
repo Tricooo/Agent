@@ -130,6 +130,20 @@ function shortEnum(value, maxLen) {
      4. otherwise → manual (waiting human / coverage case) */
 function classifyCell(cell) {
   if (!cell) return "empty";
+  const layer = String(cell.failure_layer || "").toLowerCase();
+  if (["runtime_failure", "false_answer", "false_refusal", "retrieval_miss", "rerank_or_context_loss", "answer_semantic_miss"].includes(layer)) {
+    return "fail";
+  }
+  if (["none", "literal_only_mismatch"].includes(layer)) {
+    return "pass";
+  }
+  const semantic = cell.semantic_ratio;
+  if (semantic !== null && semantic !== undefined && !Number.isNaN(Number(semantic))) {
+    const r = Number(semantic);
+    if (r >= 1) return "pass";
+    if (r > 0) return "partial";
+    return "fail";
+  }
   const label = String(cell.source_coverage_label || "").toLowerCase();
   if (label.includes("mismatch")) return "manual";
   const ratio = cell.literal_ratio;
@@ -148,7 +162,7 @@ function cellMainLabel(cell, cls) {
   if (cls === "pass") return "PASS";
   if (cls === "fail") return cell.completed === false ? "FAIL" : "FAIL";
   if (cls === "partial") {
-    const r = Number(cell.literal_ratio || 0);
+    const r = Number(cell.semantic_ratio ?? cell.literal_ratio ?? 0);
     return `${Math.round(r * 100)}%`;
   }
   if (cls === "manual") {
@@ -162,6 +176,89 @@ function cellMainLabel(cell, cls) {
 
 function badge(text, cls = "muted") {
   return `<span class="badge ${cls}">${escapeHtml(text ?? "—")}</span>`;
+}
+
+function v2Points(caseObj) {
+  const points = caseObj?.expected_points_v2;
+  return Array.isArray(points) ? points : [];
+}
+
+function hasV2Rubric(caseObj) {
+  return v2Points(caseObj).length > 0;
+}
+
+function v2RubricWeight(caseObj) {
+  return v2Points(caseObj).reduce((sum, point) => {
+    const weight = Number(point?.weight ?? 1);
+    return sum + (Number.isFinite(weight) && weight > 0 ? weight : 1);
+  }, 0);
+}
+
+function v2RubricTypes(caseObj) {
+  return Array.from(new Set(v2Points(caseObj).map(point => point?.type).filter(Boolean)));
+}
+
+function rubricBadge(caseObj) {
+  if (!hasV2Rubric(caseObj)) return badge("v1 only", "muted");
+  return badge(`v2 · ${v2RubricWeight(caseObj)} pts`, "info");
+}
+
+function rubricSummary(caseObj) {
+  if (!hasV2Rubric(caseObj)) return "no semantic rubric";
+  const types = v2RubricTypes(caseObj);
+  return `${v2Points(caseObj).length} point(s) · ${types.length ? types.join(", ") : "deterministic"}`;
+}
+
+function filterByRubric(rows, mode, getCase = item => item) {
+  if (!mode) return rows;
+  return rows.filter(item => {
+    const caseObj = getCase(item);
+    return mode === "v2" ? hasV2Rubric(caseObj) : !hasV2Rubric(caseObj);
+  });
+}
+
+const FAILURE_MODE_TEXT = {
+  pass: "answer passed",
+  manual_review_or_unscored: "manual review / unscored",
+  incomplete_or_error: "run incomplete or errored",
+  rerank_runtime_failure: "rerank runtime failure",
+  answer_generation_or_literal_mismatch: "evidence in final context, answer/literal mismatch",
+  literal_only_mismatch: "semantic/evidence ok; literal smoke mismatch",
+  answer_semantic_miss: "final context has evidence; answer semantic miss",
+  runtime_failure: "runtime failure",
+  retrieval_miss: "candidate evidence missing",
+  rerank_or_context_loss: "candidate evidence lost before final context",
+  false_refusal: "should answer but refused",
+  false_answer: "should refuse but answered",
+  manual_review_needed: "manual review needed",
+  none: "pass",
+  candidate_to_final_loss: "candidate evidence lost before final context",
+  final_context_missing_expected_points: "final context missing expected points",
+  section_not_in_final_context: "expected section not in final context",
+  source_not_in_final_context: "expected source not in final context",
+  retrieval_or_filter_missing: "retrieval/filter likely missing source",
+  answer_or_literal_failure: "answer failed literal/manual signal",
+  unknown: "unknown"
+};
+
+function failureModeLabel(mode) {
+  return FAILURE_MODE_TEXT[mode] || mode || "—";
+}
+
+function failureModeClass(mode) {
+  if (!mode) return "muted";
+  if (mode === "pass" || mode === "none") return "ok";
+  if (mode === "manual_review_or_unscored" || mode === "manual_review_needed") return "info";
+  if (mode === "answer_generation_or_literal_mismatch" || mode === "literal_only_mismatch") return "warn";
+  if (mode === "candidate_to_final_loss" || mode === "final_context_missing_expected_points" || mode === "rerank_or_context_loss") return "warn";
+  return "bad";
+}
+
+function renderFeatureFlags(run) {
+  const flags = run?.feature_flags || {};
+  const entries = Object.entries(flags).filter(([, v]) => v && v !== "unknown");
+  if (!entries.length) return "";
+  return `<div class="run-flags">${entries.map(([k, v]) => badge(`${k}:${v}`, "muted")).join("")}</div>`;
 }
 
 function metric(label, value, sub) {
@@ -430,14 +527,41 @@ async function loadBase() {
 async function renderDashboard() {
   const counts = state.health?.counts || {};
   const warningRuns = state.runs.filter(r => (r.parse_warnings || []).length);
+  const v2Cases = state.cases.filter(hasV2Rubric);
+  const v2Runs = state.runs.filter(r => r.rubric_coverage);
   $("#dashboard-metrics").innerHTML = [
     metric("runs", String(counts.runs ?? 0), "indexed markdown reports"),
     metric("cases", String((counts.internal_cases ?? 0) + (counts.external_cases ?? 0)),
       `${counts.internal_cases ?? 0} internal · ${counts.external_cases ?? 0} external`),
+    metric("v2 rubric", `${v2Cases.length}/${state.cases.length || 0}`,
+      `${v2Runs.length} report(s) with rubric metadata`),
     metric("case results", String(counts.case_results ?? 0), "run × case rows"),
     metric("parse warnings", String(warningRuns.length),
       `${counts.document_hits ?? 0} document hits indexed`)
   ].join("");
+
+  $("#rubric-case-meta").textContent = `${v2Cases.length}/${state.cases.length || 0} cases`;
+  $("#rubric-case-list").innerHTML = v2Cases.length
+    ? v2Cases.map(c => `
+        <button class="rubric-case" type="button" data-case="${escapeHtml(c.case_id)}">
+          <span class="rc-case mono">${escapeHtml(c.case_id)}</span>
+          <span class="rc-family">${escapeHtml(c.family || c.origin || "—")}</span>
+          <span class="rc-type">${escapeHtml(c.case_type || "—")}</span>
+          <span class="rc-rubric">${rubricBadge(c)}</span>
+          <span class="rc-summary">${escapeHtml(rubricSummary(c))}</span>
+        </button>`).join("")
+    : emptyState("No v2 rubric cases", "Add expected_points_v2 and reindex.");
+  $$(".rubric-case", $("#rubric-case-list")).forEach(btn => {
+    btn.addEventListener("click", () => {
+      const filter = $("#case-rubric-filter");
+      if (filter) filter.value = "v2";
+      setView("cases");
+      requestAnimationFrame(() => {
+        const row = $(`#cases-table tr[data-case="${CSS.escape(btn.dataset.case)}"]`);
+        if (row) row.scrollIntoView({ block: "center", behavior: "smooth" });
+      });
+    });
+  });
 
   // Recent runs — five
   const recent = state.runs.slice(0, 5);
@@ -446,8 +570,8 @@ async function renderDashboard() {
     ? recent.map(run => `
         <div class="list-item" data-run="${escapeHtml(run.run_id)}">
           <div class="li-title">${escapeHtml(shortRun(run))}</div>
-          <div class="li-meta">${escapeHtml(fmtTime(run.generated_at))} · ${fmtPct(run.literal_pass_rate)}</div>
-          <div class="li-sub">${escapeHtml(run.group_name || "no group")} · ${escapeHtml(run.case_count ?? 0)} cases · ${escapeHtml(run.run_id)}</div>
+          <div class="li-meta">${escapeHtml(fmtTime(run.generated_at))} · sem ${fmtPct(run.semantic_pass_rate)} · lit ${fmtPct(run.literal_pass_rate)}</div>
+          <div class="li-sub">${escapeHtml(run.group_name || "no group")} · ${escapeHtml(run.case_count ?? 0)} cases · rubric ${escapeHtml(run.rubric_coverage || "—")} · ${escapeHtml(run.run_id)}</div>
         </div>`).join("")
     : emptyState("No runs indexed yet", "Drop reports into the workbench folder and Reindex.");
 
@@ -532,7 +656,12 @@ async function renderRuns() {
       <th>group</th>
       <th>agent</th>
       <th>generated</th>
+      <th>scope</th>
+      <th>schema</th>
+      <th>rubric</th>
       <th class="num">cases</th>
+      <th class="num">semantic</th>
+      <th class="num">complete</th>
       <th class="num">literal</th>
       <th class="num">avg dur</th>
       <th>warnings</th>
@@ -547,7 +676,18 @@ async function renderRuns() {
           <td>${escapeHtml(run.group_name || "—")}</td>
           <td>${escapeHtml(run.agent_id || "—")}</td>
           <td class="mono">${escapeHtml(fmtTime(run.generated_at))}</td>
+          <td>
+            ${badge(run.case_scope || "—", run.case_scope === "single-case" ? "warn" : "muted")}
+            ${renderFeatureFlags(run)}
+          </td>
+          <td>
+            ${badge(run.eval_schema_version || run.schema_era || "legacy", run.eval_schema_version === "v2" ? "info" : "muted")}
+            <div class="row-sub">${escapeHtml(run.case_schema_version || "—")}</div>
+          </td>
+          <td class="mono">${escapeHtml(run.rubric_coverage || "—")}</td>
           <td class="num">${escapeHtml(run.case_count ?? 0)}</td>
+          <td class="num">${fmtPct(run.semantic_pass_rate)}</td>
+          <td class="num">${fmtPct(run.answer_completeness_rate)}</td>
           <td class="num">${fmtPct(run.literal_pass_rate)}</td>
           <td class="num">${fmtMs(run.avg_duration_ms)}</td>
           <td>${(run.parse_warnings || []).length
@@ -574,6 +714,7 @@ async function renderCases() {
     $("#cases-table").innerHTML = `<tbody><tr><td>${emptyState("Failed to load cases", err.message)}</td></tr></tbody>`;
     return;
   }
+  cases = filterByRubric(cases, $("#case-rubric-filter").value);
   if (!cases.length) {
     $("#cases-table").innerHTML = `<tbody><tr><td>${emptyState("No cases match the current filters")}</td></tr></tbody>`;
     return;
@@ -585,17 +726,22 @@ async function renderCases() {
       <th>family</th>
       <th>type</th>
       <th>score mode</th>
+      <th>rubric</th>
       <th>source</th>
       <th>question</th>
     </tr></thead>
     <tbody>
       ${cases.map(c => `
-        <tr>
+        <tr data-case="${escapeHtml(c.case_id)}">
           <td><div class="row-title mono">${escapeHtml(c.case_id)}</div></td>
           <td>${badge(c.origin || "—", c.origin === "external" ? "info" : "ok")}</td>
           <td>${escapeHtml(c.family || "—")}</td>
           <td>${escapeHtml(c.case_type || "—")}</td>
           <td>${badge(c.score_mode || "—", c.score_mode === "literal" ? "muted" : "warn")}</td>
+          <td>
+            ${rubricBadge(c)}
+            <div class="row-sub">${escapeHtml(rubricSummary(c))}</div>
+          </td>
           <td class="mono">${escapeHtml(c.source_file || c.expected_source_section || "—")}</td>
           <td>${escapeHtml(c.question || "—")}</td>
         </tr>`).join("")}
@@ -623,9 +769,11 @@ async function renderMatrix() {
   // Client-side filters (score_mode, case_type) — backend may not yet support them.
   const scoreMode = $("#matrix-score-filter").value;
   const caseType = $("#matrix-case-type-filter").value;
+  const rubricMode = $("#matrix-rubric-filter").value;
   let rows = payload.rows || [];
   if (scoreMode) rows = rows.filter(r => (r.case?.score_mode || "") === scoreMode);
   if (caseType) rows = rows.filter(r => (r.case?.case_type || "") === caseType);
+  rows = filterByRubric(rows, rubricMode, row => row.case);
 
   // Sort: origin → family → case_id. Stable so equal keys keep API order.
   rows.sort((x, y) => {
@@ -674,7 +822,7 @@ async function renderMatrix() {
       <tr${isBreak ? ' class="family-break"' : ""}>
         <td class="matrix-case">
           <div class="row-title">${escapeHtml(c.case_id)}</div>
-          <div class="row-sub">${escapeHtml(tail)}${c.score_mode ? ` · ${escapeHtml(c.score_mode)}` : ""}</div>
+          <div class="row-sub">${escapeHtml(tail)}${c.score_mode ? ` · ${escapeHtml(c.score_mode)}` : ""}${hasV2Rubric(c) ? ` · v2 ${escapeHtml(v2RubricWeight(c))}pts` : ""}</div>
         </td>
         ${row.cells.map((cell, colIdx) => renderMatrixCell(cell, runs[colIdx], c, rowIdx, colIdx)).join("")}
       </tr>`;
@@ -688,7 +836,7 @@ async function renderMatrix() {
           <th class="run-head" data-run="${escapeHtml(run.run_id)}">
             <div class="rh-name">${escapeHtml(shortRun(run))}</div>
             <div class="rh-group">${escapeHtml(run.group_name || "—")}</div>
-            <div class="rh-stat">${fmtPct(run.literal_pass_rate)} · ${escapeHtml(run.case_count ?? 0)}</div>
+            <div class="rh-stat">sem ${fmtPct(run.semantic_pass_rate)} · lit ${fmtPct(run.literal_pass_rate)} · ${escapeHtml(run.rubric_coverage || "—")}</div>
           </th>`).join("")}
       </tr>
     </thead>
@@ -732,14 +880,21 @@ function renderMatrixCell(cell, run, rowCase, rowIdx, colIdx) {
   const cls = classifyCell(cell);
   const main = cellMainLabel(cell, cls);
   const sub = [
+    cell.semantic_score ? `sem ${cell.semantic_score}` : null,
     cell.retrieved !== null && cell.retrieved !== undefined ? `docs ${cell.retrieved}` : null,
     cell.score_max !== null && cell.score_max !== undefined ? `s ${Number(cell.score_max).toFixed(3)}` : null,
-    cell.rerank_mode ? shortEnum(cell.rerank_mode, 14) : null
+    cell.rerank_mode ? shortEnum(cell.rerank_mode, 14) : null,
+    cell.failure_layer ? shortEnum(cell.failure_layer.toUpperCase(), 18).toLowerCase() :
+      (cell.failure_mode ? shortEnum(cell.failure_mode.toUpperCase(), 18).toLowerCase() : null)
   ].filter(Boolean).join(" · ");
   const tt = [
     `${rowCase.case_id} × ${shortRun(run)}`,
+    `semantic_score = ${cell.semantic_score ?? "n/a"}`,
+    `answer_completeness = ${cell.answer_completeness ?? "n/a"}`,
     `literal_hit = ${cell.literal_hit ?? "—"}${cell.literal_ratio != null ? ` (${Math.round(cell.literal_ratio * 100)}%)` : ""}`,
+    `failure_layer = ${cell.failure_layer || "—"}`,
     `coverage = ${cell.source_coverage_label || "—"}`,
+    `failure_mode = ${failureModeLabel(cell.failure_mode)}`,
     `retrieved = ${cell.retrieved ?? "—"} · score_max = ${cell.score_max != null ? Number(cell.score_max).toFixed(3) : "—"}`,
     cell.rerank_mode ? `rerank = ${cell.rerank_mode}` : null,
     cell.duration_ms != null ? `duration ${fmtMs(cell.duration_ms)}` : null
@@ -821,10 +976,18 @@ function handleMatrixKeydown(e) {
    `crossRerankNeutral=true` means up/down is meaningless when rerank backends
    differ (e.g. RRF vs LOCAL_BGE — score_max has different scale). */
 const COMPARE_METRICS = [
+  { key: "semantic_score", label: "semantic score", kind: "str" },
+  { key: "semantic_ratio", label: "semantic ratio", kind: "num", good: "high",
+    fmt: v => v == null ? "—" : `${Math.round(Number(v) * 100)}%` },
+  { key: "answer_completeness", label: "answer completeness", kind: "str" },
   { key: "literal_hit", label: "literal hit", kind: "str" },
   { key: "literal_ratio", label: "literal ratio", kind: "num", good: "high",
     fmt: v => v == null ? "—" : `${Math.round(Number(v) * 100)}%` },
+  { key: "failure_layer", label: "failure layer", kind: "str",
+    fmt: v => failureModeLabel(v) },
   { key: "source_coverage_label", label: "coverage label", kind: "str" },
+  { key: "failure_mode", label: "failure mode", kind: "str",
+    fmt: v => failureModeLabel(v) },
   { key: "expected_points_final_hit_count", label: "expected hit", kind: "num", good: "high",
     fmt: v => v == null ? "—" : String(v) },
   { key: "retrieved", label: "retrieved", kind: "num", good: "neutral" },
@@ -832,7 +995,7 @@ const COMPARE_METRICS = [
     crossRerankNeutral: true,
     fmt: v => v == null ? "—" : Number(v).toFixed(3) },
   { key: "empty", label: "empty", kind: "bool", good: "false" },
-  { key: "duration_ms", label: "duration", kind: "num", good: "low", fmt: fmtMs },
+  { key: "duration_ms", label: "duration", kind: "num", good: "low", verdict: false, fmt: fmtMs },
   { key: "rerank_mode", label: "rerank mode", kind: "str" },
   { key: "profile_source", label: "profile source", kind: "str" },
   { key: "query_rewrite_mode", label: "rewrite mode", kind: "str" }
@@ -937,8 +1100,8 @@ async function renderCompare() {
     });
     // verdict: clear A win, clear B regression, mixed (both directions),
     // shift (only neutral changes), or flat (everything equal).
-    const hasUp = metricRows.some(x => x.delta.cls === "up");
-    const hasDown = metricRows.some(x => x.delta.cls === "down");
+    const hasUp = metricRows.some(x => x.metric.verdict !== false && x.delta.cls === "up");
+    const hasDown = metricRows.some(x => x.metric.verdict !== false && x.delta.cls === "down");
     const hasShift = metricRows.some(x => x.delta.cls === "shift");
     let verdict = "flat";
     if (hasUp && hasDown) verdict = "mixed";
@@ -967,6 +1130,7 @@ async function renderCompare() {
 
   // Summary bar (verdict-based buckets)
   renderCompareSummary(perCase, summary);
+  renderCompareWarnings(payload.warnings || [], summary);
 
   if (!rows.length) {
     list.innerHTML = emptyState("No overlapping cases between these runs");
@@ -1015,11 +1179,27 @@ async function renderCompare() {
     });
     block.querySelectorAll("[data-drill-run]").forEach(btn => {
       btn.addEventListener("click", e => {
+        e.preventDefault();
         e.stopPropagation();
         openDrilldown(btn.dataset.drillRun, cid);
       });
     });
   });
+}
+
+function renderCompareWarnings(warnings, host) {
+  if (!host || !warnings.length) return;
+  const html = `
+    <div class="compare-warnings">
+      ${warnings.map(w => `
+        <div class="compare-warning ${escapeHtml(w.level || "warn")}">
+          <div class="cw-code">${escapeHtml(w.code || "warning")}</div>
+          <div class="cw-msg">${escapeHtml(w.message || "")}</div>
+          ${w.shared_count !== undefined ? `<div class="cw-meta">shared ${escapeHtml(w.shared_count)} · A-only ${escapeHtml(w.a_only_count ?? 0)} · B-only ${escapeHtml(w.b_only_count ?? 0)}</div>` : ""}
+          ${w.run_a_scope || w.run_b_scope ? `<div class="cw-meta">A ${escapeHtml(w.run_a_scope || "—")} · B ${escapeHtml(w.run_b_scope || "—")}</div>` : ""}
+        </div>`).join("")}
+    </div>`;
+  host.insertAdjacentHTML("beforeend", html);
 }
 
 function renderCompareCase(p, payload) {
@@ -1157,9 +1337,11 @@ function renderCompareCardMeta(elId, run) {
     <div><div class="k">group</div><div class="v">${escapeHtml(run.group_name || "—")}</div></div>
     <div><div class="k">literal</div><div class="v">${fmtPct(run.literal_pass_rate)}</div></div>
     <div><div class="k">cases</div><div class="v">${escapeHtml(run.case_count ?? "—")}</div></div>
+    <div><div class="k">scope</div><div class="v">${escapeHtml(run.case_scope || "—")}</div></div>
     <div><div class="k">generated</div><div class="v mono" style="font-size:11px">${escapeHtml(fmtTime(run.generated_at))}</div></div>
     <div><div class="k">agent</div><div class="v mono" style="font-size:11px">${escapeHtml(run.agent_id || "—")}</div></div>
-    <div><div class="k">duration</div><div class="v">${fmtMs(run.avg_duration_ms)}</div></div>`;
+    <div><div class="k">duration</div><div class="v">${fmtMs(run.avg_duration_ms)}</div></div>
+    <div class="rc-flags">${renderFeatureFlags(run)}</div>`;
 }
 
 async function renderPresetRow() {
@@ -1203,10 +1385,13 @@ async function renderInsights() {
     <thead><tr>
       <th>run</th>
       <th class="num">completed</th>
+      <th class="num">semantic</th>
+      <th class="num">complete</th>
       <th class="num">literal</th>
       <th class="num">avg dur</th>
       <th class="num">rerank fail</th>
       <th class="num">profile use</th>
+      <th>dominant mode</th>
     </tr></thead>
     <tbody>
       ${runs.map(run => `
@@ -1216,10 +1401,13 @@ async function renderInsights() {
             <div class="row-sub">${escapeHtml(run.group_name || "—")}</div>
           </td>
           <td class="num">${escapeHtml(run.completed_count ?? 0)}/${escapeHtml(run.result_count ?? 0)}</td>
+          <td class="num">${fmtPct(run.semantic_pass_rate)}</td>
+          <td class="num">${fmtPct(run.answer_completeness_rate)}</td>
           <td class="num">${fmtPct(run.literal_pass_rate)}</td>
           <td class="num">${fmtMs(run.avg_duration_ms)}</td>
           <td class="num">${escapeHtml(run.rerank_failure_count ?? 0)}</td>
           <td class="num">${escapeHtml(run.profile_usage_count ?? 0)}</td>
+          <td>${badge(failureModeLabel(run.dominant_failure_mode), failureModeClass(run.dominant_failure_mode))}</td>
         </tr>`).join("")}
     </tbody>` : `<tbody><tr><td>${emptyState("No insights yet")}</td></tr></tbody>`;
 
@@ -1229,10 +1417,13 @@ async function renderInsights() {
     <thead><tr>
       <th>case</th>
       <th>origin</th>
+      <th>rubric</th>
       <th class="num">runs</th>
+      <th class="num">semantic</th>
       <th class="num">literal fail</th>
       <th class="num">mismatch</th>
       <th class="num">coverage vol.</th>
+      <th>dominant mode</th>
     </tr></thead>
     <tbody>
       ${cases.map(c => `
@@ -1242,10 +1433,13 @@ async function renderInsights() {
             <div class="row-sub">${escapeHtml(c.family || "—")}</div>
           </td>
           <td>${badge(c.origin || "—", c.origin === "external" ? "info" : "ok")}</td>
+          <td>${c.has_v2_rubric ? badge("v2", "info") : badge("v1", "muted")}</td>
           <td class="num">${escapeHtml(c.run_count ?? 0)}</td>
+          <td class="num">${fmtPct(c.semantic_pass_rate)}</td>
           <td class="num">${escapeHtml(c.literal_failure_count ?? 0)}</td>
           <td class="num">${escapeHtml(c.literal_mismatch_count ?? 0)}</td>
           <td class="num">${escapeHtml(c.coverage_volatility ?? 0)}</td>
+          <td>${badge(failureModeLabel(c.dominant_failure_mode), failureModeClass(c.dominant_failure_mode))}</td>
         </tr>`).join("")}
     </tbody>` : `<tbody><tr><td>${emptyState("No case insights")}</td></tr></tbody>`;
 }
@@ -1372,16 +1566,38 @@ function renderDrilldown(result, caseObj) {
 
   return `
     <div class="drill-grid">
+      ${drillMetric("semantic", result.semantic_score || "n/a",
+        result.semantic_ratio !== null && result.semantic_ratio !== undefined ? fmtPct(result.semantic_ratio) : "rubric n/a")}
+      ${drillMetric("completeness", result.answer_completeness || "n/a",
+        result.answer_completeness_ratio !== null && result.answer_completeness_ratio !== undefined ? fmtPct(result.answer_completeness_ratio) : "required n/a")}
       ${drillMetric("literal", result.literal_hit || "—",
         `${result.score_mode || "—"}${result.literal_ratio !== null && result.literal_ratio !== undefined ? " · " + fmtPct(result.literal_ratio) : ""}`)}
       ${drillMetric("coverage", result.source_coverage_label || "—", result.source_file || caseObj.source_file || "—")}
+      ${drillMetric("failure layer", failureModeLabel(result.failure_layer || result.failure_mode), result.failure_layer || result.failure_mode || "—")}
       ${drillMetric("rerank", result.rerank_mode || "—", result.rerank_runtime_model || "—")}
       ${drillMetric("profile", result.profile_source || "—",
         `${(result.selected_profile_hints || []).length} hint(s)`)}
     </div>
 
+    ${renderDiagnosis(result)}
+
     <section class="drill-section">
-      <h3>Expected points <span class="h3-tag">${expected.length} total · ${missing.length} missing</span></h3>
+      <h3>Eval v2 <span class="h3-tag">rubric / failure layer</span></h3>
+      <table class="kv-table">
+        <tr><th>failure layer</th><td>${badge(failureModeLabel(result.failure_layer || result.failure_mode), failureModeClass(result.failure_layer || result.failure_mode))}</td></tr>
+        <tr><th>health</th><td>${escapeHtml(result.health || "—")}</td></tr>
+        <tr><th>candidate recall</th><td>${escapeHtml(result.candidate_recall || "n/a")}</td></tr>
+        <tr><th>final context recall</th><td>${escapeHtml(result.final_context_recall || "n/a")}</td></tr>
+        <tr><th>semantic score</th><td>${escapeHtml(result.semantic_score || "n/a")}</td></tr>
+        <tr><th>answer completeness</th><td>${escapeHtml(result.answer_completeness || "n/a")}</td></tr>
+        <tr><th>answerability</th><td>${escapeHtml(result.answerability || "n/a")}</td></tr>
+        <tr><th>semantic hits</th><td>${renderPillList(result.semantic_hits || [])}</td></tr>
+        <tr><th>semantic misses</th><td>${renderPillList(result.semantic_misses || [])}</td></tr>
+      </table>
+    </section>
+
+    <section class="drill-section">
+      <h3>Expected points <span class="h3-tag">${expected.length} total · ${missing.length} answer-missing</span></h3>
       ${expected.length ? `<ul class="expected-list">
         ${expected.map(p => {
           const text = typeof p === "string" ? p : (p?.text || p?.point || JSON.stringify(p));
@@ -1443,6 +1659,50 @@ function renderDrilldown(result, caseObj) {
       ${renderDocsTable(finalDocs, caseObj, true)}
     </section>
   `;
+}
+
+function renderDiagnosis(result) {
+  const mode = result.failure_mode || "unknown";
+  const hitN = Number(result.expected_points_final_hit_count ?? NaN);
+  const hitT = Number(result.expected_points_final_total ?? NaN);
+  const finalComplete = !Number.isNaN(hitN) && !Number.isNaN(hitT) && hitT > 0 && hitN >= hitT;
+  const literalIncomplete = result.literal_ratio !== null && result.literal_ratio !== undefined && Number(result.literal_ratio) < 1;
+
+  let title = failureModeLabel(mode);
+  let body = "";
+  let cls = failureModeClass(mode);
+  if (mode === "literal_only_mismatch") {
+    body = "The v2 rubric matched semantically while the legacy literal smoke score stayed incomplete. Treat this as evaluator wording drift, not a retrieval regression.";
+  } else if (mode === "answer_semantic_miss") {
+    body = "Final context contains enough evidence, but the answer did not satisfy the semantic rubric. This is an answer generation or context-use issue.";
+  } else if (mode === "retrieval_miss") {
+    body = "The candidate pool did not contain the expected evidence. Start with query rewrite, filters, corpus upload, and retrieval parameters.";
+  } else if (mode === "rerank_or_context_loss") {
+    body = "The candidate pool had evidence, but final context lost it. Inspect rerank, finalTopK, and evidence preservation before changing generation.";
+  } else if (mode === "false_refusal") {
+    body = "The case should be answerable, but the model refused. Check answerability prompts and whether final context actually contains enough evidence.";
+  } else if (mode === "false_answer") {
+    body = "The case should refuse, but the model answered. Check weak-related boundaries and grounding constraints.";
+  } else if (finalComplete && literalIncomplete) {
+    title = "Evidence is present; answer/evaluator is the likely issue";
+    body = "Expected source and points are already visible in final context, but literal scoring is still incomplete. Do not treat this as retrieval/rerank/profile failure.";
+    cls = "warn";
+  } else if (mode === "candidate_to_final_loss") {
+    body = "The candidate pool had relevant evidence, but final context did not preserve it. Check rerank policy, finalTopK, or evidence-type coverage before changing rewrite.";
+  } else if (mode === "final_context_missing_expected_points") {
+    body = "Final context does not contain every expected point. Inspect pre-rerank vs final documents to decide whether this is retrieval or candidate-to-final selection.";
+  } else if (mode === "rerank_runtime_failure") {
+    body = "Rerank runtime reported a failure; this run cannot be used as a clean BGE comparison.";
+  } else if (mode === "pass") {
+    body = "Literal or available scoring indicates this case passed.";
+  } else {
+    body = "Use the source coverage and document tables below to locate the exact layer before changing pipeline logic.";
+  }
+
+  return `<section class="diagnosis ${cls}">
+    <div class="diag-title">${escapeHtml(title)}</div>
+    <div class="diag-body">${escapeHtml(body)}</div>
+  </section>`;
 }
 
 function renderBoolPill(value) {
@@ -1522,10 +1782,10 @@ function bindEvents() {
 
   ["run-group-filter", "run-agent-filter"].forEach(id =>
     $(`#${id}`).addEventListener("change", renderRuns));
-  ["case-origin-filter", "case-family-filter", "case-score-filter"].forEach(id =>
+  ["case-origin-filter", "case-family-filter", "case-score-filter", "case-rubric-filter"].forEach(id =>
     $(`#${id}`).addEventListener("change", renderCases));
   ["matrix-origin-filter", "matrix-family-filter", "matrix-score-filter",
-   "matrix-case-type-filter", "matrix-group-filter", "matrix-agent-filter"].forEach(id =>
+   "matrix-case-type-filter", "matrix-rubric-filter", "matrix-group-filter", "matrix-agent-filter"].forEach(id =>
     $(`#${id}`).addEventListener("change", renderMatrix));
   const hideEmptyBox = $("#matrix-hide-empty");
   if (hideEmptyBox) {
