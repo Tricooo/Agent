@@ -126,22 +126,6 @@
     ]
   },
   {
-    "id": "EXT-ARTEMIS-03",
-    "case_type": "answerable_long_context",
-    "score_mode": "manual",
-    "source_file": "corpus/nasa/artemis-i-mission-timeline.md",
-    "question": "Artemis I 在返回阶段如何逐步准备溅落？",
-    "should_answer": true,
-    "expected_source_section": "Return Phase Overview / Flight Day 20-26",
-    "expected_points": [
-      "返回月球近旁飞越",
-      "轨道修正",
-      "系统检查",
-      "回收团队到位",
-      "再入和溅落"
-    ]
-  },
-  {
     "id": "EXT-ARTEMIS-04",
     "case_type": "weak_related",
     "score_mode": "manual",
@@ -179,63 +163,6 @@
           }
         ]
       }
-    ]
-  },
-  {
-    "id": "EXT-APOLLO13-01",
-    "case_type": "answerable",
-    "score_mode": "manual",
-    "source_file": "corpus/nasa/apollo-13-mission-details.md",
-    "question": "Apollo 13 原计划的任务目标是什么，为什么最终没有登月？",
-    "should_answer": true,
-    "expected_source_section": "Mission Objective",
-    "expected_points": [
-      "Fra Mauro",
-      "第三次 lunar landing attempt",
-      "爆炸",
-      "绕月返回"
-    ]
-  },
-  {
-    "id": "EXT-APOLLO13-02",
-    "case_type": "answerable_deep_section",
-    "score_mode": "literal",
-    "source_file": "corpus/nasa/apollo-13-mission-details.md",
-    "question": "Apollo 13 发射早期 S-II 中央发动机发生了什么，后续发动机如何补偿？",
-    "should_answer": true,
-    "expected_source_section": "Mission Highlights",
-    "expected_points": [
-      "center engine",
-      "34 seconds longer",
-      "nine seconds longer"
-    ]
-  },
-  {
-    "id": "EXT-APOLLO13-03",
-    "case_type": "paraphrase",
-    "score_mode": "manual",
-    "source_file": "corpus/nasa/apollo-13-mission-details.md",
-    "question": "用自己的话说明 Apollo 13 为什么常被视为一次失败任务中的成功救援。",
-    "should_answer": true,
-    "expected_source_section": "Emergency Return",
-    "expected_points": [
-      "登月失败",
-      "乘员绕月",
-      "地面与飞船协作",
-      "安全返回"
-    ]
-  },
-  {
-    "id": "EXT-APOLLO13-04",
-    "case_type": "unanswerable",
-    "score_mode": "manual",
-    "source_file": "corpus/nasa/apollo-13-mission-details.md",
-    "question": "根据这篇 Apollo 13 文档，事故后每名宇航员的长期健康检查结果是什么？",
-    "should_answer": false,
-    "expected_source_section": "Boundary Notes",
-    "expected_points": [
-      "文档未提供长期健康检查结果",
-      "不能编造"
     ]
   },
   {
@@ -305,21 +232,6 @@
           }
         ]
       }
-    ]
-  },
-  {
-    "id": "EXT-RFC9110-02",
-    "case_type": "answerable_deep_section",
-    "score_mode": "literal",
-    "source_file": "corpus/protocols/rfc-9110-http-semantics.md",
-    "question": "RFC 9110 如何说明 HTTP core semantics 和 wire format 的关系？",
-    "should_answer": true,
-    "expected_source_section": "Core Semantics And Wire Format",
-    "expected_points": [
-      "core semantics",
-      "wire",
-      "protocol versions",
-      "extension points"
     ]
   },
   {
@@ -429,20 +341,6 @@
           }
         ]
       }
-    ]
-  },
-  {
-    "id": "EXT-K8S-PV-01",
-    "case_type": "answerable",
-    "score_mode": "manual",
-    "source_file": "corpus/kubernetes/kubernetes-persistent-volumes.md",
-    "question": "Kubernetes 中 PV 和 PVC 分别是什么？",
-    "should_answer": true,
-    "expected_source_section": "Introduction",
-    "expected_points": [
-      "PV 是集群存储资源",
-      "PVC 是用户存储请求",
-      "PV 生命周期独立于 Pod"
     ]
   },
   {
@@ -664,78 +562,6 @@
     ]
   },
   {
-    "id": "EXT-K8S-ROLL-01",
-    "case_type": "answerable",
-    "score_mode": "manual",
-    "source_file": "corpus/kubernetes/kubernetes-rolling-update.md",
-    "question": "Kubernetes rolling update 的目标是什么？",
-    "should_answer": true,
-    "expected_source_section": "Objective",
-    "expected_points": [
-      "Trigger a rolling update",
-      "Monitor rollout progress",
-      "Pause and resume",
-      "Roll back"
-    ]
-  },
-  {
-    "id": "EXT-K8S-ROLL-02",
-    "case_type": "answerable_deep_section",
-    "score_mode": "literal",
-    "source_file": "corpus/kubernetes/kubernetes-rolling-update.md",
-    "question": "Deployment 的什么字段变化会触发 rolling update？",
-    "should_answer": true,
-    "expected_source_section": "Trigger",
-    "expected_points": [
-      ".spec.template"
-    ]
-  },
-  {
-    "id": "EXT-K8S-ROLL-03",
-    "case_type": "paraphrase",
-    "score_mode": "manual",
-    "source_file": "corpus/kubernetes/kubernetes-rolling-update.md",
-    "question": "用自己的话解释 rolling update 为什么能减少停机风险。",
-    "should_answer": true,
-    "expected_source_section": "Availability Reasoning",
-    "expected_points": [
-      "逐步替换旧 Pod",
-      "新旧 Pod 过渡",
-      "持续可用",
-      "可监控和回滚"
-    ]
-  },
-  {
-    "id": "EXT-OWASP-01",
-    "case_type": "answerable",
-    "score_mode": "literal",
-    "source_file": "corpus/security/owasp-top10-a01-a03-a05.md",
-    "question": "OWASP A01 Broken Access Control 的典型失败形式有哪些？",
-    "should_answer": true,
-    "expected_source_section": "A01 Broken Access Control",
-    "expected_points": [
-      "least privilege",
-      "URL or parameter tampering",
-      "IDOR",
-      "Missing access controls",
-      "Privilege escalation"
-    ]
-  },
-  {
-    "id": "EXT-OWASP-02",
-    "case_type": "answerable",
-    "score_mode": "literal",
-    "source_file": "corpus/security/owasp-top10-a01-a03-a05.md",
-    "question": "OWASP A03 Injection 中应用在哪些情况下容易受到注入攻击？",
-    "should_answer": true,
-    "expected_source_section": "A03 Injection",
-    "expected_points": [
-      "user-supplied data is not validated, filtered, or sanitized",
-      "dynamic queries",
-      "non-parameterized calls"
-    ]
-  },
-  {
     "id": "EXT-OWASP-03",
     "case_type": "answerable_deep_section",
     "score_mode": "manual",
@@ -820,90 +646,6 @@
           }
         ]
       }
-    ]
-  },
-  {
-    "id": "EXT-OWASP-04",
-    "case_type": "weak_related",
-    "score_mode": "manual",
-    "source_file": "corpus/security/owasp-top10-a01-a03-a05.md",
-    "question": "根据 OWASP A01/A03/A05，OAuth 2.1 authorization code flow 的完整报文是什么？",
-    "should_answer": false,
-    "expected_source_section": "Boundary Notes",
-    "expected_points": [
-      "不定义 OAuth 2.1",
-      "不能提供完整 OAuth protocol sequence"
-    ]
-  },
-  {
-    "id": "EXT-NIST-01",
-    "case_type": "answerable",
-    "score_mode": "manual",
-    "source_file": "corpus/ai-governance/nist-ai-rmf-1-0.md",
-    "question": "NIST AI RMF 1.0 的目标是什么？",
-    "should_answer": true,
-    "expected_source_section": "Framework Goal",
-    "expected_points": [
-      "管理 AI 风险",
-      "可信和负责任 AI",
-      "design, develop, deploy, or use AI systems"
-    ]
-  },
-  {
-    "id": "EXT-NIST-02",
-    "case_type": "answerable_deep_section",
-    "score_mode": "literal",
-    "source_file": "corpus/ai-governance/nist-ai-rmf-1-0.md",
-    "question": "NIST AI RMF 1.0 被描述成哪些性质？",
-    "should_answer": true,
-    "expected_source_section": "Framework Goal",
-    "expected_points": [
-      "voluntary",
-      "rights-preserving",
-      "non-sector specific",
-      "use-case agnostic"
-    ]
-  },
-  {
-    "id": "EXT-NIST-03",
-    "case_type": "answerable_long_context",
-    "score_mode": "manual",
-    "source_file": "corpus/ai-governance/nist-ai-rmf-1-0.md",
-    "question": "NIST AI RMF 页面列出了哪些配套资源或后续 profile？",
-    "should_answer": true,
-    "expected_source_section": "Companion Resources",
-    "expected_points": [
-      "AI RMF Playbook",
-      "AI RMF Roadmap",
-      "AI RMF Crosswalk",
-      "AI Resource Center",
-      "Generative AI Profile"
-    ]
-  },
-  {
-    "id": "EXT-NIST-04",
-    "case_type": "unanswerable",
-    "score_mode": "manual",
-    "source_file": "corpus/ai-governance/nist-ai-rmf-1-0.md",
-    "question": "根据 AI RMF 1.0，某个具体公司的模型上线审批单该怎么填？",
-    "should_answer": false,
-    "expected_source_section": "Boundary Notes",
-    "expected_points": [
-      "不包含具体公司的内部审批单",
-      "只能给通用风险管理方向"
-    ]
-  },
-  {
-    "id": "EXT-PG-01",
-    "case_type": "answerable",
-    "score_mode": "literal",
-    "source_file": "corpus/database/postgresql-generated-columns-version-contrast.md",
-    "question": "PostgreSQL 18 文档中 generated column 有哪两类？",
-    "should_answer": true,
-    "expected_source_section": "PostgreSQL 18 Generated Columns",
-    "expected_points": [
-      "stored",
-      "virtual"
     ]
   },
   {
@@ -1007,21 +749,6 @@
           }
         ]
       }
-    ]
-  },
-  {
-    "id": "EXT-PG-03",
-    "case_type": "answerable_deep_section",
-    "score_mode": "manual",
-    "source_file": "corpus/database/postgresql-generated-columns-version-contrast.md",
-    "question": "PostgreSQL 18 generated column 的表达式有哪些限制？",
-    "should_answer": true,
-    "expected_source_section": "PostgreSQL 18 Restrictions",
-    "expected_points": [
-      "immutable functions",
-      "不能用 subqueries",
-      "不能引用其他 generated column",
-      "不能作为 partition key"
     ]
   },
   {

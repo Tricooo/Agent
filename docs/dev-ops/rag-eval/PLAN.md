@@ -1,7 +1,7 @@
 # RAG Eval 自动化 — 计划与状态
 
 > 这份文档是 RAG 评测链路工作的 single source of truth。任何接手会话先读这里。
-> 最后更新：2026-05-25（D33：Step 8.4 v2 rubric live calibration）
+> 最后更新：2026-05-26（D37：Step 8.8 external v2 N=3 stability）
 
 ## 目录组织
 
@@ -46,6 +46,8 @@ docs/dev-ops/rag-eval/
     ├── step6.8-knowledge-base-profile/ ← 自动 KnowledgeBaseProfile + query-time selection（May 23）
     ├── step6.9-llm-profile/        ← LLM profile hybrid-v2 验证（May 23）
     ├── step7-answer-context-salience/ ← Answer Generation / Context Salience 首轮验证（May 23）
+    ├── step8-eval-v2/              ← Eval v2 rubric cases / 校准样本（May 25-26）
+    ├── step8.5-v2-ablation-matrix/ ← Eval v2 clean 消融矩阵（May 25）
     └── external-ablation/          ← 外部样本消融验证，计划中
 ```
 
@@ -325,6 +327,36 @@ docs/dev-ops/rag-eval/
   - PG 稳定性发现：`EXT-PG-04` 多轮 PG-only rerun 在同一配置下出现 `semantic_score=3/5 -> 5/5` 摆动；主要来自生成措辞与要点展开不稳定，而不是 rerank/Profile 未生效。已补充 alias、PG16/PG18 URL evidence anchor，并让 evidence matcher 同时检查 document metadata 的 `headingPath/parentSection/section/sourcePath/source/ragName`，但该 case 仍应作为 stability / repeated-run 触发器，不宜用单次结果做模块胜负判断。
   - 验证与索引：JSON 校验、`python3 -m py_compile docs/dev-ops/rag-eval/rag_eval_runner.py docs/dev-ops/rag-eval/experiment-workbench/app.py docs/dev-ops/rag-eval/experiment-workbench/workbench/*.py`、`node --check docs/dev-ops/rag-eval/experiment-workbench/static/app.js`、`git diff --check` 均通过；清理中间 rerun 后，workbench reindex 为 76 runs / 45 cases / 409 case_results / 2097 document_hits / parse_warning_count=0。
   - 决策：下一步不直接扩大 prompt 或硬调 PG rubric；先把 ablation 矩阵建立在 v2 rubric + failure_layer + stability 视角上。至少对 PG 这类 version-conflict case 做 N=3 或 majority 标注，再评价 rewrite/rerank/profile/salience 的边际收益。
+- **D34 Step 8.5 Eval v2 消融矩阵首轮（2026-05-25）**：
+  - 目标：用 v2 semantic rubric / answer completeness / failure_layer 重新审视 `Hybrid`、`BGE rerank`、`LLM rewrite`、`auto profile`、`context salience` 的边际作用，避免继续拿 `literal_smoke` 做单一成功指标。
+  - 关键纠偏：首轮 pilot 发现 `no profile` 配置仍落到 `MANUAL_CONFIG`，因为旧 `queryRewriteDomainHints` 还在 advisor extParam 里。正式矩阵脚本已在临时 advisor 配置中显式清空 `queryRewriteDomainHints=[]`，所以 `no profile` 才是真无手工 hints 污染。
+  - Rubric 修正：`ordered_steps` 原先仍偏连续子串匹配，导致 `EXT-K8S-PV-03` 中“重新创建一个比 PV 当前容量更小的 PVC”未命中 `重新创建 PVC`。已改为多 token 按顺序、同句/同列表项、80 字符窗口内匹配；仍要求所有 required steps 命中且顺序严格单调。
+  - 有效产物：`results/step8.5-v2-ablation-matrix/`，包含 10 组 clean 报告与 `step8.5-v2-ablation-matrix-summary.md`。
+  - 运行有效性：10 组均 `completed=6/6`；rewrite 组均实际 `LLM_MULTI_QUERY:6`；profile 组均实际 `AUTO_PROFILE:6`；BGE 报告无 `rerank_runtime.failure_reason`；矩阵结束后 `rag_advisor_grafana_llm_v2` 已恢复为 Grafana-only filter，手工 hints 数恢复为 9。
+  - 结果概览：`L0 vector only=12/22`，`L1 hybrid only=16/22`，`L2 hybrid+BGE=15/22`，`L3 rewrite no profile=16/22`，`L4 profile no salience=16/22`，`L5 current best=15/22`，`A1 no rerank=18/22`，`A2 no rewrite=14/22`，`A3 no profile=13/22`，`A4 no salience=9/22`。
+  - 主要结论 1：Eval v2 证明新尺子有价值。`EXT-RFC9110-03` 在 `L1 hybrid only` 下 `semantic=3/3` 但旧 literal 仍低，属于 `literal_only_mismatch`，旧指标会误伤正确答案。
+  - 主要结论 2：`LLM_MULTI_QUERY` 对 `RAG-10` 有明确正向证据，`L2` 为 `2/5`，`L3` 变为 `5/5`，aggregate candidate/final coverage 从 `18/22` 到 `21/22`。但它不是所有外部样本答案表达的稳定提升器。
+  - 主要结论 3：`auto profile` 已确认进入 query-time selection，但 6-case 单次矩阵未证明稳定净提升。`L3` 与 `L4` 同为 `16/22`，`L5` vs `A3 no profile` 为 `15/22` vs `13/22`，case 级正负混合。
+  - 主要结论 4：`context salience` 方向性最明显。`L5 current best=15/22`，`A4 no salience=9/22`，尤其 `EXT-K8S-PV-03` 从 `0/5` 到 `5/5`。这支持继续把 salience 作为 answer-side evidence usage 层，而不是把问题继续推回 rewrite/profile。
+  - 主要结论 5：BGE rerank 在这 6 条单次样本上未证明净抬分。`A1 no rerank=18/22` 高于 `L5=15/22`，但两者 candidate/final 都是 `21/22`，更像生成波动和小样本效应，不能直接得出“移除 rerank”的产品结论。
+  - 后续决策：不要用 6-case 单次矩阵发布最终模块排名。下一步应扩 v2 rubric 覆盖（至少 external 12 条以上），并对 PG/version-conflict、Artemis/date、RFC/spec 这类波动样本做 N=3 / majority，再计算 module lift。
+- **D35 Step 8.6 v2 rubric 覆盖扩展（2026-05-26）**：
+  - 目标：先扩评测尺子，再扩大消融矩阵。Step 8.5 的 6-case 矩阵已经能证明新指标有价值，但样本太少，不适合给 rewrite/rerank/profile/salience 做最终排名。
+  - 覆盖变化：internal 保持 `RAG-10 / RAG-14` 2 条；external 从 4 条扩到 12 条。当前 workbench registry 可识别 v2 rubric case 共 14 条。
+  - 新增 external rubric：`EXT-ARTEMIS-02 / EXT-ARTEMIS-04 / EXT-RFC9110-01 / EXT-RFC9110-04 / EXT-K8S-PV-02 / EXT-K8S-PV-04 / EXT-OWASP-03 / EXT-PG-02`。
+  - 样本意图：补足深层时间线、弱相关拒答、规范定义、框架边界拒答、流程顺序、安全概念区分、版本差异等类型，避免只围绕 Grafana/RAG-10 或 PG 单点调参。
+  - 产物：`docs/dev-ops/rag-eval/results/step8-eval-v2/step8.6-v2-rubric-12-external-cases.json`，用于下一轮 external v2 smoke / N=3 / 消融矩阵。
+  - 验证：`external-sample-cases.json` 与 12-case 文件 JSON 校验通过；离线 matcher smoke 覆盖 8 条新增 case，均能在构造答案上 full match；workbench reindex 后 SQLite registry 显示 v2 rubric case=14，且无 parse warnings。
+  - 边界：这一步不证明 RAG 主链路变强，也没有跑 live eval；它只是把后续“模块是否有用”的判断从 6 条样本扩大到更均衡的 rubric 集。
+- **D36 Step 8.7 external v2 current-best smoke（2026-05-26）**：
+  - 目标：用真实 Java 后端、真实 BGE reranker、真实 `LLM_MULTI_QUERY`、真实 `AUTO_PROFILE`，跑 12 条 external v2 rubric current-best smoke，验证 Step 8.6 rubric 在真实答案上的可用性。
+  - 运行配置：临时把 `rag_advisor_grafana_llm_v2` filter 切到 5 个 external tag，并清空手工 `queryRewriteDomainHints`；跑完后已恢复为 `knowledge == 'rag-profile-llm-v2-dedicated-20260523'`，manual hints 恢复为 9 条，`rewritePolicy=LLM_MULTI_QUERY`、`rerankPolicy=LOCAL_BGE`、`rerankQueryPolicy=PER_VARIANT_RERANK_RRF`。
+  - 报告产物：`docs/dev-ops/rag-eval/results/step8-eval-v2/rag-eval-result-step8.6-v2-rubric-12-current-best-smoke.md`。
+  - 运行有效性：12/12 completed；12/12 `rerank_runtime.failure_reason` 为空；12/12 rerank mode 为 `PER_VARIANT_RERANK_RRF`；12/12 query rewrite 为 `LLM_MULTI_QUERY`；12/12 profile source 为 `AUTO_PROFILE`。
+  - 最终结果：semantic total `32/35 = 91.4%`；health `ok=10 / fail=2`；failure layer 为 `none=8`、`literal_only_mismatch=2`、`answer_semantic_miss=1`、`retrieval_miss=1`；answerability 为 `true_answer=9`、`true_refusal=3`、`false_answer=0`、`false_refusal=0`。
+  - 评测校准：live smoke 暴露了中文日期、HTTP/1.0 客户端、Retain 手工回收、OWASP 授权失败、PG 默认 virtual 等表达差异；已补充通用 alias / regex / evidence anchor。这个动作是修正评测尺子，不改变 Java RAG 主链路。
+  - 关键结论：旧 literal 继续产生误杀，例如 `EXT-ARTEMIS-01` 与 `EXT-K8S-PV-02` 语义 full match 但 literal 仍为 0；v2 能把它们标为 `literal_only_mismatch` 而不是 RAG 失败。
+  - 剩余风险：`EXT-PG-02` 与 `EXT-PG-04` 在单次 run 中仍出现 PG 版本/生成列表达波动，且 `EXT-PG-04` 的 evidence funnel 为 `4/5 -> 4/5`。这不适合继续靠单次 alias 追分，应进入 N=3 repeated-run / majority / consistency，再决定是否需要 LLM judge second opinion。
 
 ### 2.2 关键认知（必读，否则会重复踩坑）
 
@@ -1186,6 +1218,197 @@ Workbench 接入：
 - 进入 v2 指标下的消融矩阵前，先把 `EXT-PG-04` 这类高波动 case 标为 stability-sensitive；至少 N=3 或 majority 后再看模块 lift。
 - 对常规 ablation，优先比较 `semantic_score`、`answer_completeness`、`failure_layer`、`candidate_recall`、`final_context_recall`、`runtime_validity`，literal 只保留 smoke。
 
+### Step 8.5 Eval v2 Ablation Matrix（已完成首轮 clean 矩阵）
+
+2026-05-25 对 6 条 v2 rubric case 跑了 10 组 clean 消融矩阵。目标不是宣布哪一层“赢了”，而是验证新指标能把模块收益、运行有效性和小样本波动拆开。
+
+实验配置：
+
+- cases 文件：`docs/dev-ops/rag-eval/results/step8-eval-v2/step8.4-v2-rubric-6-cases.json`
+- 输出目录：`docs/dev-ops/rag-eval/results/step8.5-v2-ablation-matrix/`
+- 摘要文件：`docs/dev-ops/rag-eval/results/step8.5-v2-ablation-matrix/step8.5-v2-ablation-matrix-summary.md`
+- 临时 filter：Grafana profile v2 + Artemis + RFC9110 + K8S PV + PostgreSQL generated columns。
+- 关键保护：每轮临时 mutation 都显式 `queryRewriteDomainHints=[]`，避免旧手工 hints 污染 `no profile` 对照；结束后恢复原 advisor。
+
+有效性检查：
+
+- 10 组报告均 `completed=6/6`。
+- 带 rewrite 的组均实际 `LLM_MULTI_QUERY:6`，没有把 timeout fallback 当 rewrite 效果。
+- 带 auto profile 的组均实际 `AUTO_PROFILE:6`。
+- Rerank 报告没有非空 `rerank_runtime.failure_reason`。
+- 结束后 `rag_advisor_grafana_llm_v2` 恢复到 `knowledge == 'rag-profile-llm-v2-dedicated-20260523'`，原手工 hints 数为 9。
+
+首轮结果：
+
+| run | semantic |
+|---|---:|
+| L0 vector only | 12/22 |
+| L1 hybrid only | 16/22 |
+| L2 hybrid+BGE | 15/22 |
+| L3 rewrite no profile | 16/22 |
+| L4 profile no salience | 16/22 |
+| L5 current best | 15/22 |
+| A1 current no rerank | 18/22 |
+| A2 current no rewrite | 14/22 |
+| A3 current no profile | 13/22 |
+| A4 current no salience | 9/22 |
+
+归因结论：
+
+- `literal_smoke` 已不能作为主指标。`EXT-RFC9110-03` 在 `L1 hybrid only` 下 `semantic=3/3`，但旧 literal 仍会低估，这是 v2 指标替代旧口径的直接证据。
+- `LLM_MULTI_QUERY` 对 `RAG-10` 有明确作用：`L2=2/5`，`L3=5/5`，aggregate candidate/final coverage 从 `18/22` 提升到 `21/22`。但外部样本上，它没有稳定改善所有答案表达。
+- `auto profile` 进入了真实 query-time selection，但 6-case 单次矩阵没有证明稳定净收益。它是检索导航层，不应被包装成 answer fact layer。
+- `context salience` 是本轮最有方向性的 answer-side 信号：`L5=15/22`，`A4 no salience=9/22`，特别是 `EXT-K8S-PV-03` 从 `0/5` 到 `5/5`。
+- BGE rerank 在这 6 条单次样本上没有体现净抬分；`A1 no rerank=18/22` 高于 `L5=15/22`。但两组 candidate/final 都是 `21/22`，说明差异更多落在生成波动 / 小样本上，不能直接得出“rerank 没用”或“应该移除 rerank”。
+- `EXT-PG-04` 仍是 stability-sensitive。各组在 `3/5` 到 `5/5` 之间摆动，适合 N=3 majority 后再判断 module lift。
+
+评测器修正：
+
+- `ordered_steps` matcher 支持多 token alias 在同句 / 同列表项内按顺序命中，窗口默认 80 字符。
+- 这个修正解决了 `重新创建一个比 PV 当前容量更小的 PVC` 不能命中 `重新创建 PVC` 的假阴性，同时仍禁止跨句把不同步骤拼接成一步。
+
+下一步：
+
+- 刷新 workbench 索引，把 Step 8.5 clean 矩阵纳入 Dashboard / Runs / Matrix。
+- 扩大 v2 rubric case 覆盖；external 至少补到 12 条以上，再展示 case_type 维度的 module lift。
+- 对 PG / Artemis / RFC 这类波动样本做 N=3 repeated-run，再用 majority 和 consistency 指标决定是否进入 LLM judge second opinion。
+
+### Step 8.6 Eval v2 Rubric Coverage Expansion（已完成离线扩展）
+
+2026-05-26 对 external sample pack 补充 v2 rubric，把下一轮评估从 6 条 v2 case 扩到 14 条 v2 case。目标是提高评测分辨率，而不是调 RAG 主链路。
+
+覆盖结果：
+
+- Internal v2 rubric：`RAG-10`、`RAG-14`，共 2 条。
+- External v2 rubric：从 4 条扩到 12 条。
+- Workbench registry 当前识别 v2 rubric case 共 14 条。
+- 新 12-case 文件：`docs/dev-ops/rag-eval/results/step8-eval-v2/step8.6-v2-rubric-12-external-cases.json`。
+
+新增 external rubric：
+
+| case | 覆盖意图 | matcher |
+|---|---|---|
+| `EXT-ARTEMIS-02` | 深层时间线与事件顺序 | `ordered_steps` |
+| `EXT-ARTEMIS-04` | Artemis II roster 弱相关拒答 | `refusal` |
+| `EXT-RFC9110-01` | HTTP status code 定义三要点 | `alias` |
+| `EXT-RFC9110-04` | RFC vs Spring Boot 框架实现边界 | `refusal` |
+| `EXT-K8S-PV-02` | Retain manual reclaim 操作顺序 | `ordered_steps` |
+| `EXT-K8S-PV-04` | Kubernetes PV vs InnoDB 调优拒答 | `refusal` |
+| `EXT-OWASP-03` | A01/A03/A05 相似安全概念区分 | `alias` |
+| `EXT-PG-02` | stored vs virtual generated column 差异 | `regex` + `alias` |
+
+为什么先做这一步：
+
+- Step 8.5 的 6-case 矩阵已经证明旧 `literal_smoke` 不够用，但样本过窄，不能稳定评价模块边际收益。
+- 新增 case 覆盖定义、流程、边界拒答、概念区分、版本差异，比只围绕 Grafana/RAG-10 更能暴露 rewrite/rerank/profile/salience 的真实适用边界。
+- 这一步仍是离线指标扩展，不改变 Java RAG 链路、不改变 answer prompt、不改变 rerank/rewrite/profile 策略。
+
+验证：
+
+- `python3 -m json.tool docs/dev-ops/rag-eval/external-samples/cases/external-sample-cases.json`
+- `python3 -m json.tool docs/dev-ops/rag-eval/results/step8-eval-v2/step8.6-v2-rubric-12-external-cases.json`
+- 离线 matcher smoke：8 条新增 case 的构造答案均 full match。
+- Workbench reindex 后 SQLite registry：`v2_count=14`，parse warnings 为 0。
+
+下一步：
+
+- 先跑 12 条 external v2 的 current-best smoke，确认新增 rubric 在真实答案上不是过严或过松。
+- 再对 PG / Artemis / RFC 等波动 case 做 N=3 repeated-run，形成 majority / consistency 口径。
+- 最后用 14 条 v2 rubric 重跑消融矩阵，计算更可靠的 module lift。
+
+### Step 8.7 External v2 Current-best Smoke（已完成首轮 live 校准）
+
+2026-05-26 对 12 条 external v2 rubric case 跑了 current-best live smoke。目标不是继续证明某个模块一定有效，而是确认新增 rubric、runtime validity、rewrite/profile/rerank 观测在真实链路里能同时工作。
+
+运行配置：
+
+- Agent：`rag_profile_v2_demo`。
+- Cases：`docs/dev-ops/rag-eval/results/step8-eval-v2/step8.6-v2-rubric-12-external-cases.json`。
+- Report：`docs/dev-ops/rag-eval/results/step8-eval-v2/rag-eval-result-step8.6-v2-rubric-12-current-best-smoke.md`。
+- 临时 external filter：`ext-artemis-i-20260523 / ext-rfc9110-20260523 / ext-k8s-pv-20260523 / ext-owasp-top10-20260523 / ext-postgresql-generated-columns-20260523`。
+- 运行后已恢复 `rag_advisor_grafana_llm_v2` 为 Grafana-only filter，手工 hints 恢复为 9 条。
+
+运行有效性：
+
+- 12/12 completed。
+- 12/12 `rerank_runtime.failure_reason` 为空。
+- 12/12 rerank mode 为 `PER_VARIANT_RERANK_RRF`。
+- 12/12 query rewrite 为 `LLM_MULTI_QUERY`。
+- 12/12 profile source 为 `AUTO_PROFILE`。
+
+最终结果：
+
+- Semantic total：`32/35 = 91.4%`。
+- Health：`ok=10 / fail=2`。
+- Failure layer：`none=8`、`literal_only_mismatch=2`、`answer_semantic_miss=1`、`retrieval_miss=1`。
+- Answerability：`true_answer=9`、`true_refusal=3`、`false_answer=0`、`false_refusal=0`。
+
+关键观察：
+
+- `EXT-ARTEMIS-01` 和 `EXT-K8S-PV-02` 语义 full match，但旧 literal 为 0；这再次证明 literal 只能做 smoke，不能当最终成果指标。
+- `EXT-RFC9110-03` 在校准后能正确识别中文/英文混合的 HTTP/1.0 与 1xx 边界，不再被 `HTTP/1.0 client` 的字面形式误杀。
+- `EXT-K8S-PV-04`、`EXT-RFC9110-04`、`EXT-ARTEMIS-04` 都落在 `true_refusal`，说明 profile/rewrite 没把弱相关问题强行拉成答案。
+- `EXT-PG-02` 与 `EXT-PG-04` 仍暴露出单次生成稳定性和 deterministic matcher 边界：答案多次语义接近正确，但表达会在“写入/插入更新”“不要跨版本套用”等措辞上变化。
+
+决策：
+
+- 不继续用单次 run 的 alias 追分，否则 v2 rubric 会过拟合单次答案。
+- 下一步优先对 PG/version-conflict、PG stored/virtual、Artemis date、RFC spec 做 N=3 repeated-run，计算 majority 与 answer consistency。
+- N=3 后再重跑 14 条 v2 rubric 消融矩阵；在这之前不要发布 rewrite/rerank/profile/salience 的最终模块排名。
+
+### Step 8.8 External v2 N=3 Stability（已完成首轮稳定性验证）
+
+2026-05-26 对 12 条 external v2 rubric case 跑了 current-best N=3 repeated-run。目标是验证两件事：一是 runtime 是否稳定走真实 BGE/rewrite/profile；二是 v2 rubric 在多次生成下是否能把“系统能力波动”和“评测 matcher 误差”区分开。
+
+运行配置：
+
+- Agent：`rag_profile_v2_demo`。
+- Reports：
+  - `docs/dev-ops/rag-eval/results/step8.8-v2-stability/rag-eval-result-step8.8-v2-stability-current-best-run1.md`
+  - `docs/dev-ops/rag-eval/results/step8.8-v2-stability/rag-eval-result-step8.8-v2-stability-current-best-run2.md`
+  - `docs/dev-ops/rag-eval/results/step8.8-v2-stability/rag-eval-result-step8.8-v2-stability-current-best-run3.md`
+- 临时 external filter：`ext-artemis-i-20260523 / ext-rfc9110-20260523 / ext-k8s-pv-20260523 / ext-owasp-top10-20260523 / ext-postgresql-generated-columns-20260523`。
+- 运行后已恢复 `rag_advisor_grafana_llm_v2` 为 Grafana-only filter，手工 hints 恢复为 9 条。
+
+Runtime 有效性：
+
+- 3 轮共 36 个 case row 均 completed。
+- 36/36 `rerank_runtime.failure_reason` 为空。
+- 36/36 rerank mode 为 `PER_VARIANT_RERANK_RRF`。
+- 36/36 query rewrite 为 `LLM_MULTI_QUERY`。
+- 36/36 profile source 为 `AUTO_PROFILE`。
+
+原始 report 结果：
+
+| run | semantic total | health | failure layers | answerability |
+| --- | ---: | --- | --- | --- |
+| run1 | `34/35 = 97.1%` | ok=10 / refusal_issue=1 / fail=1 | literal_only_mismatch=4 / none=6 / false_answer=1 / retrieval_miss=1 | true_answer=9 / true_refusal=2 / false_answer=1 |
+| run2 | `26/35 = 74.3%` | ok=8 / fail=4 | literal_only_mismatch=3 / none=5 / answer_semantic_miss=3 / retrieval_miss=1 | true_answer=9 / true_refusal=3 |
+| run3 | `30/35 = 85.7%` | ok=8 / fail=4 | literal_only_mismatch=3 / none=5 / answer_semantic_miss=3 / retrieval_miss=1 | true_answer=9 / true_refusal=3 |
+
+关键结论：
+
+- Runtime 已经健康：这次不再是 BGE 未启动、PASSTHROUGH、旧 jar 或 SSE EOF 导致的无效测试。
+- 稳定正例：`EXT-ARTEMIS-01/02/04`、`EXT-RFC9110-01`、`EXT-K8S-PV-04`、`EXT-PG-02` 在三轮中语义或拒答表现稳定；多处 `literal_only_mismatch` 证明 literal 只是 smoke。
+- `EXT-PG-04` 三轮答案语义都命中 `5/5`，但 failure_layer 仍是 `retrieval_miss`，原因是 v2 evidence recall 只认 anchor evidence，候选/final context 中少一个 anchor。这个 case 说明 v2 的 answer score 与 evidence recall 是两条独立信号，不能混成一个分数。
+- `EXT-K8S-PV-02`、`EXT-K8S-PV-03`、`EXT-RFC9110-04`、`EXT-OWASP-03` 暴露出 deterministic matcher 的二次校准点：答案人工看基本正确，但旧 matcher 会因步骤别名提前命中、`删除 PV` 误命中 `删除 PVC`、`无法直接回答` 未在拒答模板中、授权策略表达带括号或空格而误判。
+
+已做的评测层校准：
+
+- `ordered_steps` 改为按步骤顺序选择“上一步之后的最早命中”，并避开 ASCII token 前后缀误伤，例如 `删除 PV` 不再命中 `删除 PVC`。
+- 拒答模板补充 `无法直接回答`。
+- 12 条 external rubric 补充少量通用别名：Retain 手动回收、PVC 扩容恢复、OWASP 授权策略表达。
+
+面试口径：
+
+> 到 Step 8.8 为止，我可以把 RAG 主线作为一个工程闭环收尾来讲：入库切分、Hybrid/RRF、BGE rerank、LLM rewrite、KnowledgeBaseProfile、final context evidence preservation、eval v2 分层指标都已经形成可验证链路。更成熟的地方不是“每个模块都涨分”，而是我能把失败拆到 runtime、candidate recall、final context、answer semantic、literal mismatch、refusal 六层。当前结论是 current-best 相比裸向量已经具备明显的工程能力，但最终答案生成仍存在 wording/stability 波动，评测 matcher 也需要继续用真实答案校准；这属于后续 production hardening，不应再回头硬调 rewrite/profile。
+
+下一步：
+
+- 用校准后的 runner 对 12 条 external v2 重新跑一轮 N=3，确认修正是否消除明显 false negative。
+- 然后再做 v2 指标下的消融矩阵：L0 vector only、+hybrid、+rerank、+rewrite、+profile、+salience/current-best。
+- 讲面试时，先讲完整闭环和断点诊断，不把当前 deterministic rubric 包装成最终生产级评测系统。
+
 ## 5. 关键约束 / 隐藏陷阱
 
 - 业务代码 / 对外文档不使用 emoji（CLI 提示文案例外）
@@ -1213,7 +1436,7 @@ Workbench 接入：
 
 1. Read 这份 `PLAN.md` 全文（特别是 §3 D10-D16：Hybrid、Rerank、A/B 归因与 Step 5.4 工程化收口）
 2. 确认 §3 commit 范围是否已落地（`git log --oneline -10` 看 `cc20ba4`、`176abc5`、`c95aabd`、`631ffd2` 等 Step 5 提交）
-3. 当前游标：**Step 8.2/8.3 Eval v2 semantic rubric + workbench 接入已完成离线验证**。后续评估 rewrite/rerank/profile/salience 时，先看 `semantic_score`、`answer_completeness`、`failure_layer`、`candidate_recall`、`final_context_recall`，不要再只用 `literal_hit/literal_smoke` 判断功能是否有效。
+3. 当前游标：**Step 8.6 v2 rubric coverage expansion 已完成离线验证**。后续评估 rewrite/rerank/profile/salience 时，先用 14 条 v2 rubric case 看 `semantic_score`、`answer_completeness`、`failure_layer`、`candidate_recall`、`final_context_recall`，不要再只用 `literal_hit/literal_smoke` 判断功能是否有效。
 4. 如果改 yml / 重启 backend / 重灌向量库后再跑 eval：必须先预热 `POST http://localhost:8099/api/v1/agent/armory_agent` body `{"agentId":"rag_demo"}`（未预热直接打 auto_agent 会 HTTP 500，duration ~5ms，看似 endpoint 死了）
 5. **不要**自行重跑 v1/v2/v3 中任何一轮——Phase A 已锁定参数 250/109，重跑只会消耗 LLM 配额且 score 必然飘动（embedding 不变 score 应稳定，LLM 输出会因 sampling 飘）
 

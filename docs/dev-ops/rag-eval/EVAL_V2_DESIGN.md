@@ -201,11 +201,14 @@ did_answer =
   and not matches_refusal_template(answer)
 ```
 
-拒答模板匹配在 normalize 后做 substring 判断。
+拒答模板匹配在 normalize 后做 substring 判断，但 v1 实现必须保持 prefix-biased：强拒答措辞只看答案开头窗口，弱拒答措辞只看第一句。长答案后半段的局部 caveat，例如“具体限制细节上下文未提供”，不能把一个已经回答主体问题的答案误判成 `false_refusal`。
+
+如果 case 有 `type=refusal` 的 v2 rubric point，且该 point 的 `answer_match` / `aliases` 命中答案，则 answerability 层优先把它视为 `did_answer=false`。这样拒答判断不完全依赖全局拒答模板，避免因为模型用了“无法回答”“无法依据所给资料回答”“文档不包含”等不同措辞而误判为 `false_answer`。
 
 拒答模板第一版包含：
 
 - `无法基于`
+- `无法直接回答`
 - `当前知识库没有`
 - `知识库未涉及`
 - `文档没有指定`
@@ -216,6 +219,8 @@ did_answer =
 - `not provided in the document`
 
 如果答案同时包含拒答模板和具体无依据答案，以 `false_answer` 优先。例如“文档没有说明，但可能是 AWS”应判为 `did_answer=true` 并进入 `false_answer / hallucination` 风险。
+
+注意：全局拒答模板只能兜底高频表达；每个拒答 case 仍应在 v2 rubric 中写清 case-specific 的拒答证据和 forbidden specific answers。
 
 拒答指标：
 
@@ -348,8 +353,16 @@ final context recall 同理，只是 document 集合换成 final `documents`。
 | `alias` | `aliases` 中任一 normalized alias 出现在 normalized answer |
 | `regex` | 任一 regex 匹配 raw answer；regex 必须在 case 中显式声明 |
 | `numeric_alias` | alias 命中，且 value 在 alias 附近窗口命中 |
-| `ordered_steps` | 所有 required steps 必须 100% 命中；按每步首次命中位置判断，要求严格单调递增；v1 不给 partial credit |
+| `ordered_steps` | 所有 required steps 必须 100% 命中；按步骤顺序依次选择“上一步之后的最早命中位置”，要求严格单调递增；v1 不给 partial credit |
 | `refusal` | 命中拒答语义，且没有 unsupported specific answer |
+
+`ordered_steps` 的 alias 匹配允许两种形式：
+
+- normalized alias 作为连续子串出现在 answer。
+- alias 由多个空格分隔 token 组成时，允许这些 token 在同一句 / 同一列表项内按顺序出现，整体跨度不超过 80 字符；token 之间不能跨 `。`、`;`、`!`、`?` 等句子边界。
+- 连续子串命中需要避开 ASCII token 前后缀误伤，例如 `删除 PV` 不能命中 `删除 PVC`。
+
+这样 `重新创建 PVC` 可以命中 `重新创建一个比 PV 当前容量更小的 PVC`，但不会把上一条步骤里的 `删除 PVC` 和下一条步骤里的 `claimRef` 错拼成同一步。
 
 #### 5.3.4 numeric_alias 窗口
 
@@ -394,6 +407,15 @@ distance(alias, value) =
 - 拒答 case 仍可按 answerability 四象限判定
 
 这条规则确保未补 rubric 的历史 case 不会被 v2 指标伪装成完整语义评测。
+
+#### 5.3.6 Rubric 校准原则
+
+v2 rubric 不是天然真相，live smoke 后允许校准，但只能补通用表达，不为单次答案硬编码：
+
+- 可以补：中英文同义词、中文日期格式、`HTTP/1.0 client` / `HTTP/1.0 客户端` 这类等价表达、流程步骤的自然语言改写。
+- 可以补：更短但仍指向同一证据的 `anchor_text`，用于降低 chunk preview / metadata 截断带来的 evidence false negative。
+- 不可以补：只在某一次答案中出现、但不代表预期语义的冗余句子。
+- 不可以因为单次 run 没全绿就持续追 alias；同一 case 多次波动时，应转入 N=3 repeated-run / majority / consistency。
 
 ## 6. Report v2 结构
 

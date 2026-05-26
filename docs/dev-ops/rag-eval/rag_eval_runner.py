@@ -101,15 +101,33 @@ CASE_SCHEMA_VERSION_V2_COMPATIBLE = "v2-compatible"
 
 REFUSAL_TEMPLATES = [
     "无法基于",
+    "无法回答",
+    "无法直接回答",
+    "无法从",
+    "无法根据",
+    "不能回答",
+    "没有提供",
+    "未提供",
     "当前知识库没有",
     "知识库未涉及",
     "文档没有指定",
     "不能从文档回答",
+    "cannot answer",
     "cannot be answered",
+    "does not contain",
     "does not specify",
     "does not identify",
     "not provided in the document",
 ]
+
+WEAK_REFUSAL_TEMPLATES = {
+    "没有提供",
+    "未提供",
+    "does not contain",
+    "does not specify",
+    "does not identify",
+    "not provided in the document",
+}
 
 
 def normalize_text(value: Any) -> str:
@@ -215,7 +233,17 @@ def _case_schema_version(case: dict[str, Any]) -> str:
 
 def _matches_refusal_template(answer: str) -> bool:
     normalized = normalize_text(answer)
-    return any(template in normalized for template in REFUSAL_TEMPLATES)
+    if not normalized:
+        return False
+    # Global refusal templates are only a coarse did_answer signal. Keep them
+    # prefix-biased so a substantive answer with a later caveat such as
+    # "specific details are not provided" is not counted as a full refusal.
+    prefix = normalized[:240]
+    strong_templates = [template for template in REFUSAL_TEMPLATES if template not in WEAK_REFUSAL_TEMPLATES]
+    if any(template in prefix for template in strong_templates):
+        return True
+    first_sentence = re.split(r"[。.!?；;\n]", normalized, maxsplit=1)[0]
+    return any(template in first_sentence for template in WEAK_REFUSAL_TEMPLATES)
 
 
 def _did_answer(answer: str) -> bool:
@@ -286,6 +314,59 @@ def _match_any(text: str, tokens: list[Any]) -> bool:
     return any(normalize_match_text(token) and normalize_match_text(token) in normalized for token in tokens)
 
 
+def _is_ascii_word_char(value: str) -> bool:
+    return bool(value) and bool(re.match(r"[a-z0-9_]", value))
+
+
+def _valid_alias_span(text: str, start: int, end: int, alias: str) -> bool:
+    if _is_ascii_word_char(alias[0]) and start > 0 and _is_ascii_word_char(text[start - 1]):
+        return False
+    if _is_ascii_word_char(alias[-1]) and end < len(text) and _is_ascii_word_char(text[end]):
+        return False
+    return True
+
+
+def _ordered_alias_position(normalized_text: str, alias: Any, max_span: int = 80) -> int:
+    normalized_alias = normalize_match_text(alias)
+    if not normalized_alias:
+        return -1
+    start_from = 0
+    while True:
+        exact_position = normalized_text.find(normalized_alias, start_from)
+        if exact_position < 0:
+            break
+        exact_end = exact_position + len(normalized_alias)
+        if _valid_alias_span(normalized_text, exact_position, exact_end, normalized_alias):
+            return exact_position
+        start_from = exact_position + 1
+
+    parts = [part for part in normalized_alias.split(" ") if part]
+    if len(parts) <= 1:
+        return -1
+    start_from = 0
+    while True:
+        first_position = normalized_text.find(parts[0], start_from)
+        if first_position < 0:
+            return -1
+        search_from = first_position + len(parts[0])
+        last_end = search_from
+        matched = True
+        for part in parts[1:]:
+            position = normalized_text.find(part, search_from)
+            if position < 0:
+                matched = False
+                break
+            between = normalized_text[last_end:position]
+            if re.search(r"[。；;.!?]", between):
+                matched = False
+                break
+            last_end = position + len(part)
+            search_from = last_end
+        if matched and last_end - first_position <= max_span:
+            return first_position
+        start_from = first_position + len(parts[0])
+
+
 def _regex_any(text: str, patterns: list[Any]) -> bool:
     for pattern in patterns:
         try:
@@ -332,6 +413,7 @@ def _numeric_alias_match(answer: str, aliases: list[Any], values: list[Any]) -> 
 def _ordered_steps_match(answer: str, steps: list[Any]) -> bool:
     normalized_answer = normalize_match_text(answer)
     positions: list[int] = []
+    previous_position = -1
     for step in steps:
         aliases: list[Any]
         if isinstance(step, dict):
@@ -342,16 +424,13 @@ def _ordered_steps_match(answer: str, steps: list[Any]) -> bool:
                 aliases.append(step.get("text"))
         else:
             aliases = [step]
-        step_positions = [
-            normalized_answer.find(normalize_match_text(alias))
-            for alias in aliases
-            if normalize_match_text(alias)
-        ]
-        step_positions = [pos for pos in step_positions if pos >= 0]
+        step_positions = [_ordered_alias_position(normalized_answer, alias) for alias in aliases]
+        step_positions = sorted(pos for pos in step_positions if pos > previous_position)
         if not step_positions:
             return False
-        positions.append(min(step_positions))
-    return all(left < right for left, right in zip(positions, positions[1:]))
+        previous_position = step_positions[0]
+        positions.append(previous_position)
+    return True
 
 
 def _refusal_match(answer: str, point: dict[str, Any]) -> bool:
@@ -420,6 +499,7 @@ def evaluate_expected_points_v2(case: dict[str, Any],
             "semantic_hits": [],
             "semantic_misses": [],
             "evidence_source_unverified": False,
+            "refusal_answer_matched": False,
         }
 
     total_weight = 0.0
@@ -431,6 +511,7 @@ def evaluate_expected_points_v2(case: dict[str, Any],
     hits: list[str] = []
     misses: list[str] = []
     evidence_source_unverified = False
+    refusal_answer_matched = False
 
     for index, raw_point in enumerate(points, start=1):
         if not isinstance(raw_point, dict):
@@ -448,11 +529,14 @@ def evaluate_expected_points_v2(case: dict[str, Any],
             candidate_weight += weight
         if _point_evidence_hit(point, final_documents):
             final_weight += weight
-        if _answer_point_matches(answer, point):
+        answer_hit = _answer_point_matches(answer, point)
+        if answer_hit:
             answer_weight += weight
             if required:
                 required_answer_weight += weight
             hits.append(point_id)
+            if str(point.get("type") or "") == "refusal":
+                refusal_answer_matched = True
         else:
             misses.append(point_id)
 
@@ -467,6 +551,7 @@ def evaluate_expected_points_v2(case: dict[str, Any],
         "semantic_hits": hits,
         "semantic_misses": misses,
         "evidence_source_unverified": evidence_source_unverified,
+        "refusal_answer_matched": refusal_answer_matched,
     }
 
 
@@ -585,6 +670,8 @@ def build_eval_v2(case: dict[str, Any],
         answer_completeness = "n/a"
         answer_completeness_ratio = None
     did_answer = _did_answer(answer)
+    if case.get("should_answer") is False and semantic.get("refusal_answer_matched"):
+        did_answer = False
     answerability = _answerability_bucket(case.get("should_answer"), did_answer)
     result_valid_for_scoring = bool(completed) and not error
     failure_layer = _failure_layer(
